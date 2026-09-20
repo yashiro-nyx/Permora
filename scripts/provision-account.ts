@@ -5,6 +5,63 @@ import { hashPassword } from "../lib/server/password";
 
 type Role = "student" | "faculty" | "approver" | "admin";
 
+const HELP = `Permora account provisioning
+
+Usage:
+  npm run account:provision -- --email <email> --name <full-name> --role <role> [options] (--bootstrap-admin | --authorized-admin <admin-internal-uuid>)
+
+Required flags:
+  --email <email>                 Login email for the new account.
+  --name <full-name>              Display name for the new account.
+  --role <role>                   One of: admin, approver, student, faculty.
+
+Authorization flags:
+  --bootstrap-admin               Create the first administrator only. The role
+                                  must be admin, and no active administrator may
+                                  already exist. Do not combine with
+                                  --authorized-admin.
+  --authorized-admin <internal-uuid>
+                                  Required for every non-bootstrap account. The
+                                  value must identify an active administrator;
+                                  it is not an email or institutional number.
+
+Optional profile and institutional identifier flags:
+  --department <department>       Department or organizational unit.
+  --identifier-type <type>        One of: student_number, staff_number.
+  --identifier <value>            Institutional identifier value.
+  --issuer <namespace>            Institution-controlled identifier namespace.
+
+  The three identifier flags must be supplied together. Institutional identifiers
+  remain separate from Permora's internal user UUID.
+
+Examples:
+  # First administrator
+  npm run account:provision -- --email <admin-email> --name "<admin-name>" --role admin --department "<department>" --bootstrap-admin
+
+  # Approver
+  npm run account:provision -- --email <approver-email> --name "<approver-name>" --role approver --department "<department>" --identifier-type staff_number --identifier <staff-number> --issuer <institution-namespace> --authorized-admin <admin-internal-uuid>
+
+  # Student
+  npm run account:provision -- --email <student-email> --name "<student-name>" --role student --department "<department>" --identifier-type student_number --identifier <student-number> --issuer <institution-namespace> --authorized-admin <admin-internal-uuid>
+
+  # Faculty
+  npm run account:provision -- --email <faculty-email> --name "<faculty-name>" --role faculty --department "<department>" --identifier-type staff_number --identifier <staff-number> --issuer <institution-namespace> --authorized-admin <admin-internal-uuid>
+
+Passwords are requested twice through hidden terminal input and must contain
+12–128 characters. Passwords must never be passed as command-line arguments.`;
+
+const valueArguments = new Set([
+  "email",
+  "name",
+  "role",
+  "department",
+  "authorized-admin",
+  "identifier-type",
+  "identifier",
+  "issuer",
+]);
+const booleanArguments = new Set(["bootstrap-admin"]);
+
 function safeFailureMessage(error: unknown) {
   if (!(error instanceof Error)) return "Unknown error.";
   if ("code" in error)
@@ -12,19 +69,87 @@ function safeFailureMessage(error: unknown) {
   return error.message;
 }
 
-function argumentsMap() {
+function argumentsMap(argv: string[]) {
   const values = new Map<string, string | true>();
-  for (let index = 2; index < process.argv.length; index++) {
-    const key = process.argv[index];
-    if (!key.startsWith("--")) throw new Error(`Unexpected argument: ${key}`);
-    const next = process.argv[index + 1];
-    if (!next || next.startsWith("--")) values.set(key.slice(2), true);
-    else {
-      values.set(key.slice(2), next);
-      index++;
+  for (let index = 0; index < argv.length; index++) {
+    const argument = argv[index];
+    if (!argument.startsWith("--") || argument.includes("="))
+      throw new Error("Unknown argument. Use --help to see supported flags.");
+    const key = argument.slice(2);
+    if (!valueArguments.has(key) && !booleanArguments.has(key))
+      throw new Error(`Unknown argument --${key}. Use --help for usage.`);
+    if (values.has(key)) throw new Error(`Argument --${key} was supplied twice.`);
+    if (booleanArguments.has(key)) {
+      const next = argv[index + 1];
+      if (next && !next.startsWith("--"))
+        throw new Error(`--${key} does not accept a value.`);
+      values.set(key, true);
+      continue;
     }
+    const next = argv[index + 1];
+    if (!next || next.startsWith("--"))
+      throw new Error(`Missing value for --${key}.`);
+    values.set(key, next);
+    index++;
   }
   return values;
+}
+
+function requiredString(args: Map<string, string | true>, key: string) {
+  const value = args.get(key);
+  if (typeof value !== "string" || !value.trim())
+    throw new Error(`Missing required argument: --${key}.`);
+  return value.trim();
+}
+
+function validatedArguments(argv: string[]) {
+  const args = argumentsMap(argv);
+  const email = requiredString(args, "email").toLowerCase();
+  const name = requiredString(args, "name");
+  const role = requiredString(args, "role") as Role;
+  const department = String(args.get("department") ?? "").trim();
+  const bootstrap = args.get("bootstrap-admin") === true;
+  const authorizedAdmin = String(args.get("authorized-admin") ?? "").trim();
+  const identifierType = args.get("identifier-type");
+  const identifier = String(args.get("identifier") ?? "").trim();
+  const issuer = String(args.get("issuer") ?? "").trim();
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    throw new Error("--email must be valid.");
+  if (name.length < 2) throw new Error("--name must contain at least 2 characters.");
+  if (!["student", "faculty", "approver", "admin"].includes(role))
+    throw new Error("--role must be student, faculty, approver, or admin.");
+  if (bootstrap && role !== "admin")
+    throw new Error("--bootstrap-admin can only create an administrator.");
+  if (bootstrap && authorizedAdmin)
+    throw new Error(
+      "--bootstrap-admin and --authorized-admin cannot be used together.",
+    );
+  if (!bootstrap && !authorizedAdmin)
+    throw new Error(
+      "--authorized-admin is required for non-bootstrap provisioning.",
+    );
+  if (identifierType || identifier || issuer) {
+    if (
+      !["student_number", "staff_number"].includes(String(identifierType)) ||
+      !identifier ||
+      !issuer
+    )
+      throw new Error(
+        "--identifier-type, --identifier, and --issuer must be supplied together; supported types are student_number and staff_number.",
+      );
+  }
+  return {
+    email,
+    name,
+    role,
+    department,
+    bootstrap,
+    authorizedAdmin,
+    identifierType,
+    identifier,
+    issuer,
+  };
 }
 
 async function hiddenPrompt(label: string) {
@@ -63,29 +188,25 @@ async function hiddenPrompt(label: string) {
 }
 
 async function main() {
+  const argv = process.argv.slice(2);
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(HELP);
+    return;
+  }
+  const {
+    email,
+    name,
+    role,
+    department,
+    bootstrap,
+    authorizedAdmin,
+    identifierType,
+    identifier,
+    issuer,
+  } = validatedArguments(argv);
   loadEnvConfig(process.cwd());
-  const args = argumentsMap();
   const connectionString = process.env.DATABASE_MIGRATION_URL;
   if (!connectionString) throw new Error("DATABASE_MIGRATION_URL is required.");
-  const email = String(args.get("email") ?? "")
-    .trim()
-    .toLowerCase();
-  const name = String(args.get("name") ?? "").trim();
-  const role = String(args.get("role") ?? "") as Role;
-  const department = String(args.get("department") ?? "").trim();
-  const bootstrap = args.get("bootstrap-admin") === true;
-  const authorizedAdmin = String(args.get("authorized-admin") ?? "").trim();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-    throw new Error("--email must be valid.");
-  if (name.length < 2) throw new Error("--name is required.");
-  if (!["student", "faculty", "approver", "admin"].includes(role))
-    throw new Error("--role must be student, faculty, approver, or admin.");
-  if (bootstrap && role !== "admin")
-    throw new Error("--bootstrap-admin can only create an administrator.");
-  if (!bootstrap && !authorizedAdmin)
-    throw new Error(
-      "--authorized-admin is required for non-bootstrap provisioning.",
-    );
   const password = await hiddenPrompt("New account password (input hidden): ");
   const confirmation = await hiddenPrompt("Confirm password (input hidden): ");
   if (password !== confirmation) throw new Error("Passwords do not match.");
@@ -150,20 +271,7 @@ async function main() {
         `INSERT INTO account (id, "userId", "accountId", "providerId", password, "createdAt", "updatedAt") VALUES ($1,$2::uuid,$2::text,'credential',$3,$4,$4)`,
         [randomUUID(), id, passwordHash, now],
       );
-      const identifierType = args.get("identifier-type");
-      const identifier = String(args.get("identifier") ?? "").trim();
-      const issuer = String(args.get("issuer") ?? "").trim();
       if (identifierType || identifier || issuer) {
-        if (
-          !["student_number", "staff_number"].includes(
-            String(identifierType),
-          ) ||
-          !identifier ||
-          !issuer
-        )
-          throw new Error(
-            "--identifier-type, --identifier, and --issuer must be supplied together.",
-          );
         await client.query(
           "INSERT INTO institutional_identifier (id, user_id, identifier_type, issuer, normalized_value) VALUES ($1,$2,$3,$4,$5)",
           [randomUUID(), id, identifierType, issuer, identifier.toUpperCase()],
