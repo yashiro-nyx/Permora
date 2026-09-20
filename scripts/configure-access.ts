@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 import { loadEnvConfig } from "@next/env";
 import { Pool, type PoolClient } from "pg";
 
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function safeFailureMessage(error: unknown) {
   if (!(error instanceof Error)) return "Unknown error.";
   if ("code" in error)
@@ -24,7 +27,7 @@ function argumentsMap() {
 
 async function requireAdministrator(client: PoolClient, actor: string) {
   const result = await client.query(
-    `SELECT 1 FROM user_role ur JOIN user_profile p ON p.user_id = ur.user_id WHERE ur.user_id::text = $1 AND ur.role = 'admin' AND p.active`,
+    `SELECT 1 FROM user_role ur JOIN user_profile p ON p.user_id = ur.user_id WHERE ur.user_id = $1::uuid AND ur.role = 'admin' AND p.active`,
     [actor],
   );
   if (!result.rows[0])
@@ -47,9 +50,14 @@ async function main() {
     if (!value) throw new Error(`--${name} is required.`);
     return value;
   };
+  const requiredUuid = (name: string) => {
+    const value = required(name);
+    if (!UUID.test(value)) throw new Error(`--${name} must be a valid UUID.`);
+    return value;
+  };
   const connectionString = process.env.DATABASE_MIGRATION_URL;
   if (!connectionString) throw new Error("DATABASE_MIGRATION_URL is required.");
-  const actor = required("actor");
+  const actor = requiredUuid("actor");
 
   const pool = new Pool({ connectionString, max: 1 });
   let client;
@@ -82,16 +90,18 @@ async function main() {
         successMessage = `Created scope option ${id}.`;
       } else if (command === "assignment") {
         const id = randomUUID();
+        const user = requiredUuid("user");
+        const scope = requiredUuid("scope");
         await client.query(
           `INSERT INTO requester_assignment (id, user_id, resource_id, scope_option_id, permission_id, evidence, valid_from, valid_until, assigned_by)
       SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9
-      WHERE EXISTS (SELECT 1 FROM user_profile WHERE user_id::text = $2 AND active)
-        AND EXISTS (SELECT 1 FROM scope_option WHERE id::text = $4 AND resource_id = $3)`,
+      WHERE EXISTS (SELECT 1 FROM user_profile WHERE user_id = $2::uuid AND active)
+        AND EXISTS (SELECT 1 FROM scope_option WHERE id = $4::uuid AND resource_id = $3)`,
           [
             id,
-            required("user"),
+            user,
             required("resource"),
-            required("scope"),
+            scope,
             args.get("permission") ?? null,
             required("evidence"),
             args.get("valid-from") ?? new Date().toISOString(),
@@ -111,11 +121,14 @@ async function main() {
         successMessage = `Created requester assignment ${id}.`;
       } else if (command === "approver") {
         const id = randomUUID();
+        const approver = requiredUuid("approver");
         const resource = required("resource");
         const scopeIds = (args.get("scopes") ?? args.get("scope") ?? "")
           .split(",")
           .map((value) => value.trim())
           .filter(Boolean);
+        if (scopeIds.some((scopeId) => !UUID.test(scopeId)))
+          throw new Error("--scope and --scopes must contain valid UUIDs.");
         const validScopes = scopeIds.length
           ? await client.query<{ id: string }>(
               `SELECT id FROM scope_option
@@ -133,10 +146,10 @@ async function main() {
         await client.query(
           `INSERT INTO approver_responsibility (id, approver_user_id, resource_id, permission_id, scope_option_id, valid_from, valid_until, assigned_by)
       SELECT $1,$2,$3,$4,$5,$6,$7,$8
-      WHERE EXISTS (SELECT 1 FROM user_profile p JOIN user_role ur ON ur.user_id = p.user_id WHERE p.user_id::text = $2 AND p.active AND ur.role IN ('approver','admin'))`,
+      WHERE EXISTS (SELECT 1 FROM user_profile p JOIN user_role ur ON ur.user_id = p.user_id WHERE p.user_id = $2::uuid AND p.active AND ur.role IN ('approver','admin'))`,
           [
             id,
-            required("approver"),
+            approver,
             resource,
             args.get("permission") ?? null,
             scopeIds[0] ?? null,
@@ -165,13 +178,15 @@ async function main() {
           );
         successMessage = `Created approver responsibility ${id}.`;
       } else {
-        const user = required("user");
+        const user = requiredUuid("user");
         const resource = required("resource");
         const permission = required("permission");
         const scopeIds = (args.get("scopes") ?? "")
           .split(",")
           .map((value) => value.trim())
           .filter(Boolean);
+        if (scopeIds.some((scopeId) => !UUID.test(scopeId)))
+          throw new Error("--scopes must contain valid UUIDs.");
         const scopes = scopeIds.length
           ? await client.query<{ id: string; field_name: string }>(
               "SELECT id, field_name FROM scope_option WHERE id = ANY($1::uuid[]) AND resource_id = $2",
