@@ -18,7 +18,9 @@ export class ApprovalDomainError extends Error {
       | "invalid_reason"
       | "not_assigned"
       | "invalid_transition"
-      | "stale_decision",
+      | "stale_decision"
+      | "idempotency_conflict"
+      | "approval_revalidation_failed",
   ) {
     super(message);
     this.name = "ApprovalDomainError";
@@ -275,6 +277,7 @@ export async function applyApprovalDecision(
     expectedVersion: number;
     decision: ApprovalDecision;
     reason?: string;
+    idempotencyKey: string;
   },
 ) {
   const reason = input.reason?.trim() || null;
@@ -291,18 +294,67 @@ export async function applyApprovalDecision(
       "The decision reason must be 2,000 characters or fewer.",
       "invalid_reason",
     );
+  await client.query(
+    "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+    [`${actorUserId}:${input.idempotencyKey}`],
+  );
+  const replay = await client.query<{
+    id: string;
+    request_id: string;
+    action: ApprovalDecision;
+    reason: string | null;
+    previous_version: number;
+    resulting_status: Exclude<ApprovalRequestStatus, "pending_routing" | "pending_review" | "expired" | "cancelled">;
+    resulting_version: number;
+  }>(
+    `SELECT id, request_id, action, reason, previous_version,
+            resulting_status, resulting_version
+       FROM request_decision
+      WHERE actor_user_id = $1 AND idempotency_key = $2`,
+    [actorUserId, input.idempotencyKey],
+  );
+  const prior = replay.rows[0];
+  if (prior) {
+    if (
+      prior.request_id !== input.requestId ||
+      prior.action !== input.decision ||
+      prior.reason !== reason ||
+      prior.previous_version !== input.expectedVersion
+    )
+      throw new ApprovalDomainError(
+        "This idempotency key was already used for another decision command.",
+        "idempotency_conflict",
+      );
+    return {
+      decisionId: prior.id,
+      status: prior.resulting_status,
+      version: prior.resulting_version,
+      replayed: true,
+    };
+  }
   const requestResult = await client.query<{
     requester_user_id: string;
     resource_id: string;
     permission_id: string;
+    resource_name: string;
+    permission_label: string;
     policy_version_id: string;
     display_id: string;
+    starts_at: Date;
+    expires_at: Date;
+    scope_fingerprint: string;
     status: ApprovalRequestStatus;
     version: number;
   }>(
-    `SELECT requester_user_id, resource_id, permission_id, policy_version_id,
-            display_id, status, version
-       FROM access_request WHERE id = $1 FOR UPDATE`,
+    `SELECT request.requester_user_id, request.resource_id,
+            request.permission_id, request.policy_version_id,
+            resource.name AS resource_name,
+            permission.label AS permission_label,
+            display_id, starts_at, expires_at, scope_fingerprint, status, version
+       FROM access_request request
+       JOIN catalog_resource resource ON resource.id = request.resource_id
+       JOIN catalog_permission permission ON permission.id = request.permission_id
+      WHERE request.id = $1 FOR UPDATE OF request`,
     [input.requestId],
   );
   const request = requestResult.rows[0];
@@ -321,8 +373,18 @@ export async function applyApprovalDecision(
       "This request is not awaiting a decision.",
       "invalid_transition",
     );
-  const scopes = await client.query<{ scope_option_id: string }>(
-    "SELECT scope_option_id FROM access_request_scope WHERE request_id = $1",
+  if (request.requester_user_id === actorUserId)
+    throw new ApprovalDomainError(
+      "Self-approval is not permitted.",
+      "not_assigned",
+    );
+  const scopes = await client.query<{
+    scope_option_id: string;
+    field_name: string;
+    display_snapshot: string;
+  }>(
+    `SELECT scope_option_id, field_name, display_snapshot
+       FROM access_request_scope WHERE request_id = $1 ORDER BY field_name`,
     [input.requestId],
   );
   const assignmentResult = await client.query<{
@@ -380,6 +442,133 @@ export async function applyApprovalDecision(
       "Only the currently assigned eligible approver may decide this request.",
       "not_assigned",
     );
+  let currentPolicyVersionId = request.policy_version_id;
+  if (input.decision === "approve") {
+    const eligible = await client.query<{
+      policy_version_id: string;
+      max_days: number;
+      requester_role: "student" | "faculty";
+    }>(
+      `SELECT policy.id AS policy_version_id, policy.max_days,
+              profile.requester_role
+         FROM user_profile profile
+         JOIN catalog_resource resource ON resource.id = $2 AND resource.available
+         JOIN catalog_permission permission
+           ON permission.id = $3 AND permission.resource_id = resource.id
+          AND permission.enabled
+         JOIN catalog_permission_role permitted
+           ON permitted.permission_id = permission.id
+          AND permitted.requester_role = profile.requester_role
+         JOIN catalog_policy_version policy ON policy.resource_id = resource.id
+          AND policy.effective_from <= now()
+          AND (policy.effective_until IS NULL OR policy.effective_until > now())
+        WHERE profile.user_id = $1 AND profile.active
+          AND profile.requester_role IS NOT NULL
+        ORDER BY policy.version DESC
+        LIMIT 1`,
+      [request.requester_user_id, request.resource_id, request.permission_id],
+    );
+    const current = eligible.rows[0];
+    const requestedDays =
+      (request.expires_at.getTime() - request.starts_at.getTime()) / 86_400_000;
+    if (
+      !current ||
+      request.expires_at <= new Date() ||
+      requestedDays > current.max_days
+    )
+      throw new ApprovalDomainError(
+        "The request no longer satisfies the current access policy.",
+        "approval_revalidation_failed",
+      );
+    currentPolicyVersionId = current.policy_version_id;
+
+    const requiredScopes = await client.query<{
+      field_name: string;
+      request_scope_id: string | null;
+      active_option: boolean;
+      active_assignment: boolean;
+    }>(
+      `SELECT field.field_name,
+              requested.scope_option_id AS request_scope_id,
+              (option.id IS NOT NULL) AS active_option,
+              EXISTS (
+                SELECT 1 FROM requester_assignment assigned
+                 WHERE assigned.user_id = $1
+                   AND assigned.resource_id = $2
+                   AND assigned.scope_option_id = requested.scope_option_id
+                   AND (assigned.permission_id IS NULL OR assigned.permission_id = $3)
+                   AND assigned.valid_from <= now()
+                   AND (assigned.valid_until IS NULL OR assigned.valid_until > now())
+              ) AS active_assignment
+         FROM catalog_scope_field field
+         LEFT JOIN access_request_scope requested
+           ON requested.request_id = $4 AND requested.field_name = field.field_name
+         LEFT JOIN scope_option option
+           ON option.id = requested.scope_option_id
+          AND option.resource_id = field.resource_id
+          AND option.field_name = field.field_name
+          AND option.active
+          AND (option.valid_from IS NULL OR option.valid_from <= now())
+          AND (option.valid_until IS NULL OR option.valid_until > now())
+        WHERE field.resource_id = $2 AND field.required`,
+      [
+        request.requester_user_id,
+        request.resource_id,
+        request.permission_id,
+        input.requestId,
+      ],
+    );
+    if (
+      requiredScopes.rows.some(
+        (scope) =>
+          !scope.request_scope_id ||
+          !scope.active_option ||
+          !scope.active_assignment,
+      ) ||
+      (request.resource_id === "r-student-portal" &&
+        request.scope_fingerprint !== `own-account:${request.requester_user_id}`)
+    )
+      throw new ApprovalDomainError(
+        "The requester no longer holds every assignment required for this scope.",
+        "approval_revalidation_failed",
+      );
+
+    const conflict = await client.query(
+      `SELECT 1
+         FROM ordinary_entitlement entitlement
+        WHERE entitlement.user_id = $1
+          AND entitlement.resource_id = $2
+          AND entitlement.permission_id = $3
+          AND entitlement.scope_fingerprint = $4
+          AND entitlement.valid_from < $6
+          AND (entitlement.valid_until IS NULL OR entitlement.valid_until > $5)
+       UNION ALL
+       SELECT 1
+         FROM access_request other
+        WHERE other.id <> $7
+          AND other.requester_user_id = $1
+          AND other.resource_id = $2
+          AND other.permission_id = $3
+          AND other.scope_fingerprint = $4
+          AND other.status = 'approved_pending_activation'
+          AND other.starts_at < $6 AND other.expires_at > $5
+       LIMIT 1`,
+      [
+        request.requester_user_id,
+        request.resource_id,
+        request.permission_id,
+        request.scope_fingerprint,
+        request.starts_at,
+        request.expires_at,
+        input.requestId,
+      ],
+    );
+    if (conflict.rows[0])
+      throw new ApprovalDomainError(
+        "The requested access now conflicts with existing or approved access.",
+        "approval_revalidation_failed",
+      );
+  }
   const resultingStatus =
     input.decision === "approve"
       ? "approved_pending_activation"
@@ -397,8 +586,9 @@ export async function applyApprovalDecision(
   await client.query(
     `INSERT INTO request_decision
       (id, request_id, assignment_id, actor_user_id, action, reason,
-       previous_status, resulting_status, previous_version, resulting_version)
-     VALUES ($1,$2,$3,$4,$5,$6,'pending_review',$7,$8,$9)`,
+       previous_status, resulting_status, previous_version, resulting_version,
+       idempotency_key)
+     VALUES ($1,$2,$3,$4,$5,$6,'pending_review',$7,$8,$9,$10)`,
     [
       decisionId,
       input.requestId,
@@ -409,6 +599,7 @@ export async function applyApprovalDecision(
       resultingStatus,
       request.version,
       resultingVersion,
+      input.idempotencyKey,
     ],
   );
   const updated = await client.query(
@@ -431,8 +622,16 @@ export async function applyApprovalDecision(
   const metadata = {
     displayId: request.display_id,
     resourceId: request.resource_id,
+    resourceName: request.resource_name,
     permissionId: request.permission_id,
+    permissionLabel: request.permission_label,
+    scopes: scopes.rows.map((scope) => ({
+      fieldName: scope.field_name,
+      value: scope.display_snapshot,
+    })),
     policyVersionId: request.policy_version_id,
+    currentPolicyVersionId,
+    idempotencyKey: input.idempotencyKey,
     assignmentId: assignment.assignment_id,
     responsibilityId: assignment.responsibility_id,
     decisionId,
@@ -441,12 +640,13 @@ export async function applyApprovalDecision(
     previousVersion: request.version,
     resultingVersion,
   };
+  const requestEventId = randomUUID();
   await client.query(
     `INSERT INTO request_event
       (id, request_id, actor_user_id, event_type, detail, metadata)
      VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
     [
-      randomUUID(),
+      requestEventId,
       input.requestId,
       actorUserId,
       eventType,
@@ -467,5 +667,43 @@ export async function applyApprovalDecision(
       JSON.stringify(metadata),
     ],
   );
-  return { decisionId, status: resultingStatus, version: resultingVersion };
+  const notification =
+    input.decision === "approve"
+      ? {
+          type: "request_approved_pending_activation",
+          title: "Request approved — awaiting activation",
+          body: "Your request was approved. Access is not active until activation is completed.",
+        }
+      : input.decision === "deny"
+        ? {
+            type: "request_denied",
+            title: "Access request denied",
+            body: reason as string,
+          }
+        : {
+            type: "request_returned_for_revision",
+            title: "Revision requested",
+            body: reason as string,
+          };
+  await client.query(
+    `INSERT INTO user_notification
+      (id, recipient_user_id, request_id, request_event_id,
+       notification_type, title, body)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+    [
+      randomUUID(),
+      request.requester_user_id,
+      input.requestId,
+      requestEventId,
+      notification.type,
+      notification.title,
+      notification.body,
+    ],
+  );
+  return {
+    decisionId,
+    status: resultingStatus,
+    version: resultingVersion,
+    replayed: false,
+  };
 }

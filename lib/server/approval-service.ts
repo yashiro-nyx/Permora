@@ -9,6 +9,7 @@ export function decideAssignedRequest(
     expectedVersion: number;
     decision: ApprovalDecision;
     reason?: string;
+    idempotencyKey: string;
   },
 ) {
   return transaction((client) =>

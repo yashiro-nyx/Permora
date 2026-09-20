@@ -42,6 +42,7 @@ async function main() {
     "tests/stage2a-postgres.integration.test.ts",
     "tests/stage2b-approval.integration.test.ts",
     "tests/stage2b-read-model.integration.test.ts",
+    "tests/stage2b-decision-routes.integration.test.ts",
   ]) {
     const child: ChildProcess = spawn(
       process.execPath,

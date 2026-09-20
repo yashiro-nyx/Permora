@@ -5,7 +5,8 @@ import path from "node:path";
 import test, { after, before } from "node:test";
 import { Pool, type PoolClient } from "pg";
 import {
-  applyApprovalDecision,
+  applyApprovalDecision as applyApprovalDecisionDomain,
+  type ApprovalDecision,
   ApprovalDomainError,
   previewRequestRoute,
   routePendingRequest,
@@ -36,6 +37,22 @@ function requiredSafeTestDatabaseUrl() {
 const testDatabase = requiredSafeTestDatabaseUrl();
 const legacyPendingRequestId = "20000000-0000-4000-8000-000000000001";
 let pool: Pool;
+
+function applyApprovalDecision(
+  client: PoolClient,
+  actorUserId: string,
+  input: {
+    requestId: string;
+    expectedVersion: number;
+    decision: ApprovalDecision;
+    reason?: string;
+  },
+) {
+  return applyApprovalDecisionDomain(client, actorUserId, {
+    ...input,
+    idempotencyKey: randomUUID(),
+  });
+}
 
 async function applyMigrations(connection: Pool) {
   const client = await connection.connect();
@@ -245,6 +262,14 @@ async function seedRoutedLabRequest(requester: string, approver: string) {
   const suffix = randomUUID();
   const laboratory = await seedScope("r-lab", "laboratory", suffix);
   const software = await seedScope("r-lab", "software", suffix);
+  for (const scopeOptionId of [laboratory, software])
+    await pool.query(
+      `INSERT INTO requester_assignment
+        (id,user_id,resource_id,permission_id,scope_option_id,evidence,valid_from,assigned_by)
+       VALUES ($1,$2,'r-lab','lab:course-software',$3,
+         'Isolated approval-domain fixture','2026-01-01T00:00:00Z',$2)`,
+      [randomUUID(), requester, scopeOptionId],
+    );
   await seedResponsibility(approver, "r-lab", "lab:course-software", [
     laboratory,
     software,

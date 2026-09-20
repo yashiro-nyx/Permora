@@ -285,15 +285,17 @@ before(async () => {
   const { hashPassword } = await import("../lib/server/password");
   passwordHash = await hashPassword(password);
 
-  const users = await Promise.all([
-    seedUser("student", "Requester One"),
-    seedUser("approver", "Approver Alpha"),
-    seedUser("approver", "Approver Beta"),
-    seedUser("admin", "Admin Assigned"),
-    seedUser("admin", "Admin Observer"),
-    seedUser("approver", "Inactive Approver"),
-    seedUser("admin", "Inactive Admin"),
-  ]);
+  const users = [];
+  for (const [role, name] of [
+    ["student", "Requester One"],
+    ["approver", "Approver Alpha"],
+    ["approver", "Approver Beta"],
+    ["admin", "Admin Assigned"],
+    ["admin", "Admin Observer"],
+    ["approver", "Inactive Approver"],
+    ["admin", "Inactive Admin"],
+  ] as const)
+    users.push(await seedUser(role, name));
   [
     requester,
     approverA,
@@ -303,6 +305,9 @@ before(async () => {
     inactiveApprover,
     inactiveAdmin,
   ] = users.map((user) => user.id);
+  const cookies: string[] = [];
+  for (const [index, user] of users.entries())
+    cookies.push(await login(user.email, index + 10));
   [
     cookieRequester,
     cookieApproverA,
@@ -311,7 +316,7 @@ before(async () => {
     cookieAdminUnassigned,
     cookieInactiveApprover,
     cookieInactiveAdmin,
-  ] = await Promise.all(users.map((user, index) => login(user.email, index + 10)));
+  ] = cookies;
 
   const lab = await seedScope("laboratory", "main");
   const software = await seedScope("software", "analysis");
