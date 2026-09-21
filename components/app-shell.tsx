@@ -131,9 +131,6 @@ export function AppShell({
               </Link>
             )}
             {logout}
-            <div className="sidebar-note">
-              <span className="status-dot" /> Authenticated session
-            </div>
           </div>
         </aside>
       )}

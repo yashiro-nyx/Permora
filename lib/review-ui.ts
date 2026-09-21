@@ -1,4 +1,9 @@
 import type { ApprovalDecision } from "./approval-domain";
+import type { ReviewQueueStatus } from "./server/approval-read-types";
+
+export function reviewQueueActionLabel(status: ReviewQueueStatus) {
+  return status === "pending_review" ? "Review" : "View details";
+}
 
 export function validateDecisionReason(
   decision: ApprovalDecision,

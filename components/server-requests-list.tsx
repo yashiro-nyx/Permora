@@ -50,7 +50,7 @@ export function ServerRequestsList({
             value: counts.approved,
             icon: "check",
             tone: "success",
-            hint: "Approval is deferred in Stage 2A",
+            hint: "Approved requests awaiting activation",
           },
           {
             label: "Expired",

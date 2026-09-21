@@ -3,6 +3,7 @@ import test from "node:test";
 import { navigationForIdentity } from "../lib/navigation";
 import {
   decisionFailureMessage,
+  reviewQueueActionLabel,
   validateDecisionReason,
 } from "../lib/review-ui";
 import type { TrustedIdentity } from "../lib/auth-types";
@@ -53,6 +54,19 @@ test("requester navigation is preserved", () => {
     ),
     ["Dashboard", "My Requests", "Request Access"],
   );
+});
+
+test("only pending reviews use the actionable queue label", () => {
+  assert.equal(reviewQueueActionLabel("pending_review"), "Review");
+  for (const status of [
+    "approved_pending_activation",
+    "denied",
+    "returned_for_revision",
+    "expired",
+    "cancelled",
+  ] as const) {
+    assert.equal(reviewQueueActionLabel(status), "View details");
+  }
 });
 
 test("denial and revision reasons are trimmed, required, and bounded", () => {

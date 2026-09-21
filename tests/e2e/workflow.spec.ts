@@ -40,6 +40,8 @@ test("request submission, deterministic routing, approval, and requester status 
     .fill(
       "Access to subscribed materials for an independent literature review.",
     );
+  await requesterPage.getByLabel("Access starts").fill("2026-09-23");
+  await requesterPage.getByLabel("Expiration date").fill("2026-10-20");
   await requesterPage
     .getByRole("button", { name: "Review request" })
     .click();
@@ -56,6 +58,9 @@ test("request submission, deterministic routing, approval, and requester status 
   );
   const requestId = new URL(requesterPage.url()).pathname.split("/").pop();
   expect(requestId).toBeTruthy();
+  const headingPath = await requesterPage.locator(".page-heading .eyebrow").textContent();
+  const displayId = headingPath?.match(/REQ-\d{4}-\d{6}/)?.[0];
+  expect(displayId).toBeTruthy();
   await expect(requesterPage.locator(".alert.tone-success")).toContainText(
     "assigned for review",
   );
@@ -98,6 +103,17 @@ test("request submission, deterministic routing, approval, and requester status 
   await expect(
     requesterPage.getByText(/active entitlement/i),
   ).toBeVisible();
+
+  await requesterPage.goto("/requests");
+  const approvedRow = requesterPage.getByRole("row", {
+    name: new RegExp(displayId!),
+  });
+  await expect(approvedRow).toContainText("Sep 23, 2026");
+  await expect(approvedRow).toContainText("Oct 20, 2026");
+  await expect(approvedRow).toContainText("Approved — awaiting activation");
+  await expect(
+    requesterPage.getByRole("region", { name: "Request summary" }),
+  ).toContainText("Approved requests awaiting activation");
 });
 
 test("server role boundaries keep requester and administrator routes separate", async () => {
@@ -125,25 +141,27 @@ test("server role boundaries keep requester and administrator routes separate", 
 });
 
 test("current requester and administrator pages remain responsive", async () => {
-  for (const [target, routes] of [
-    [requesterPage, ["/dashboard", "/requests", "/requests/new"]],
-    [
-      adminPage,
-      ["/dashboard", "/review", "/admin/unassigned", "/users"],
-    ],
-  ] as const) {
-    await target.setViewportSize({ width: 320, height: 844 });
-    for (const route of routes) {
-      await target.goto(route);
-      await expect(target.locator("main h1")).toBeVisible();
-      expect(
-        await target.evaluate(
-          () =>
-            document.documentElement.scrollWidth <=
-            document.documentElement.clientWidth,
-        ),
-        `${route} should fit a 320px viewport`,
-      ).toBe(true);
+  for (const width of [1440, 390, 320]) {
+    for (const [target, routes] of [
+      [requesterPage, ["/dashboard", "/requests", "/requests/new"]],
+      [
+        adminPage,
+        ["/dashboard", "/review", "/admin/unassigned", "/users"],
+      ],
+    ] as const) {
+      await target.setViewportSize({ width, height: 844 });
+      for (const route of routes) {
+        await target.goto(route);
+        await expect(target.locator("main h1")).toBeVisible();
+        expect(
+          await target.evaluate(
+            () =>
+              document.documentElement.scrollWidth <=
+              document.documentElement.clientWidth,
+          ),
+          `${route} should fit a ${width}px viewport`,
+        ).toBe(true);
+      }
     }
   }
 });

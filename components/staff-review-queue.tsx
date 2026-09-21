@@ -7,6 +7,7 @@ import type {
   ReviewQueueItemDto,
   UnassignedRequestDto,
 } from "@/lib/server/approval-read-types";
+import { reviewQueueActionLabel } from "@/lib/review-ui";
 import { Badge, Card, Empty, LinkButton, PageHeading } from "./ui";
 
 type QueueData =
@@ -231,7 +232,7 @@ export function StaffReviewQueue({
                             href={`/review/${encodeURIComponent(item.requestId)}`}
                             className="table-link"
                           >
-                            Review
+                            {reviewQueueActionLabel(assigned.status)}
                             <span className="sr-only">
                               {" "}
                               {item.displayId}

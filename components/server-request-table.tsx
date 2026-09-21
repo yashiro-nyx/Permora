@@ -87,11 +87,8 @@ export function ServerRequestTable({
                   </td>
                   {!compact && (
                     <td className="date-cell">
-                      <span aria-hidden="true">—</span>
-                      <span className="sr-only">
-                        Requested period shown in details; no grant has been
-                        activated
-                      </span>
+                      {dateLabel(request.startsAt)}–
+                      {dateLabel(request.expiresAt)}
                     </td>
                   )}
                   <td>

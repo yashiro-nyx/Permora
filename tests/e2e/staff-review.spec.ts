@@ -24,6 +24,9 @@ test.afterAll(async () => {
 
 test("approver dashboard and queue use scoped live data and validated filters", async () => {
   await expect(page.getByRole("heading", { name: "Your review workspace" })).toBeVisible();
+  await expect(page.locator(".header-user")).toContainText("Reese Approver");
+  await expect(page.locator(".header-user")).toContainText("Approver");
+  await expect(page.getByText("Authenticated session")).toHaveCount(0);
   await expect(page.getByText("Assigned pending reviews")).toBeVisible();
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
   await expect(navigation.getByText("Review Requests")).toBeVisible();
@@ -159,6 +162,20 @@ test("confirmed approval records a decision without claiming activation", async 
   await expect(page.getByText("Approved — awaiting activation").first()).toBeVisible();
   await expect(page.getByText("No decision controls available")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Immutable decision history" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Deny", exact: true })).toHaveCount(0);
+
+  await page.goto("/review");
+  const terminalRow = page.getByRole("row", { name: /E2E-APPROVE/ });
+  await expect(terminalRow).toContainText("Approved — awaiting activation");
+  await expect(
+    terminalRow.getByRole("link", { name: "View details E2E-APPROVE" }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("row", { name: /E2E-RETRY/ })
+      .getByRole("link", { name: "Review E2E-RETRY" }),
+  ).toBeVisible();
 });
 
 for (const width of [768, 390, 320]) {
@@ -187,6 +204,9 @@ test("only administrators can view unassigned routing failures", async () => {
   await expect(page).toHaveURL(/\/dashboard\?unavailable=administrator/);
   await page.getByRole("button", { name: "Log out" }).click();
   await signIn(page, E2E.administrator.email);
+  await expect(page.locator(".header-user")).toContainText("Avery Administrator");
+  await expect(page.locator(".header-user")).toContainText("Administrator");
+  await expect(page.getByText("Authenticated session")).toHaveCount(0);
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
   await expect(navigation.getByText("Unassigned Requests")).toBeVisible();
   await expect(navigation.getByText("Audit Logs")).toBeVisible();

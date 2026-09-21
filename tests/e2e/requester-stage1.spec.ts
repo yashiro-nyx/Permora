@@ -27,9 +27,15 @@ test("request history, filters, and accessible details use persisted records", a
   await expect(
     page.getByRole("heading", { name: "My access requests" }),
   ).toBeVisible();
+  await expect(page.locator(".header-user")).toContainText("Sam Requester");
+  await expect(page.locator(".header-user")).toContainText("Student");
+  await expect(page.getByText("Authenticated session")).toHaveCount(0);
   await expect(
     page.getByRole("region", { name: "Request summary" }),
   ).toContainText("05");
+  await expect(
+    page.getByRole("region", { name: "Request summary" }),
+  ).toContainText("Approved requests awaiting activation");
 
   const view = page.locator(
     `button[aria-controls="history-${E2E.requests.retry}"]`,
@@ -45,6 +51,12 @@ test("request history, filters, and accessible details use persisted records", a
   await expect(details).toContainText("capstone literature review");
   await expect(details).toContainText("Request submitted");
   await expect(details).toContainText("Assigned for review");
+  const requestRow = page.getByRole("row", { name: /E2E-RETRY/ }).first();
+  await expect(requestRow).toContainText("Sep 22, 2026");
+  await expect(requestRow).toContainText("Oct 22, 2026");
+  await expect(requestRow).not.toContainText(
+    "Requested period shown in details",
+  );
   await view.press("Space");
   await expect(details).toBeHidden();
 
