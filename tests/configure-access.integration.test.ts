@@ -94,16 +94,26 @@ async function seedUser(role: "admin" | "approver" | "student") {
 }
 
 async function runConfigureAccess(args: string[]) {
+  const environment: NodeJS.ProcessEnv = {
+    ...process.env,
+    NODE_ENV: "test",
+    TEST_DATABASE_URL: testDatabase.value,
+  };
+  delete environment.DATABASE_URL;
+  delete environment.DATABASE_MIGRATION_URL;
   return execFileAsync(
     process.execPath,
-    ["--import", "tsx", script, ...args],
+    [
+      "--import",
+      "tsx",
+      script,
+      ...args,
+      "--database-target",
+      "test",
+    ],
     {
       cwd: process.cwd(),
-      env: {
-        ...process.env,
-        NODE_ENV: "test",
-        DATABASE_MIGRATION_URL: testDatabase.value,
-      },
+      env: environment,
       timeout: 30_000,
     },
   );

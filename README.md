@@ -12,11 +12,31 @@ Use Node.js 22 LTS, pinned by `.nvmrc` and `engines.node`, with isolated develop
 npm ci
 cp .env.example .env.local
 # Replace placeholders locally; never commit .env.local.
-npm run db:migrate
+npm run db:migrate -- --database-target development
 npm run dev
 ```
 
 Open the exact origin configured in `APP_URL`, normally `http://localhost:3000/login`. Accounts are provisioned by an authorized administrator; there is no public registration or demo login in the real application flow.
+
+## Database CLI safety
+
+Every database CLI requires `--database-target development`, `test`, or
+`production`. Development loads `.env.local` and verifies that `DATABASE_URL`
+and `DATABASE_MIGRATION_URL` identify the same protocol, database, and host;
+Neon pooled/direct hostnames for the same branch are accepted. Test uses only
+`TEST_DATABASE_URL` and requires a database name ending in `_test`.
+
+Production never loads database URLs from `.env.local`. Inject both production
+URLs into the current process through an approved secret manager and add the
+explicit confirmation flag:
+
+```sh
+npm run db:migrate -- --database-target production --confirm-production
+npm run account:provision -- --database-target production --confirm-production <account-flags>
+```
+
+The CLIs reject a missing URL or mixed runtime/migration targets before opening
+a database connection. Run each command with `--help` for its complete syntax.
 
 ## Checks
 

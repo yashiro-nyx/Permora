@@ -1,43 +1,40 @@
-import { loadEnvConfig } from "@next/env";
 import { Pool, type PoolClient } from "pg";
 import {
   previewRequestRoute,
   routePendingRequest,
 } from "../lib/approval-domain";
+import {
+  extractDatabaseTargetOptions,
+  resolveCliDatabase,
+} from "./database-target";
 
-type Target = "test" | "development";
+const HELP = `Permora approval-routing reconciliation
 
-function argumentsMap() {
+Usage:
+  npm run approvals:reconcile -- --database-target <development|test|production> [--confirm-production] [--confirm-database-name <name>] [--apply]
+
+The command is a dry run unless --apply is present. Development additionally
+requires --confirm-database-name. Test uses only TEST_DATABASE_URL and requires
+a database ending in _test. Production requires both URLs in the current process
+and --confirm-production; .env.local is not loaded.`;
+
+function argumentsMap(argv: string[]) {
   const values = new Map<string, string>();
   const flags = new Set<string>();
-  for (let index = 2; index < process.argv.length; index++) {
-    const key = process.argv[index];
+  for (let index = 0; index < argv.length; index++) {
+    const key = argv[index];
     if (!key.startsWith("--")) throw new Error(`Unexpected argument ${key}.`);
     if (key === "--apply") {
       flags.add("apply");
       continue;
     }
-    const value = process.argv[index + 1];
+    const value = argv[index + 1];
     if (!value || value.startsWith("--"))
       throw new Error(`Expected a value after ${key}.`);
     values.set(key.slice(2), value);
     index++;
   }
   return { values, flags };
-}
-
-function databaseName(connectionString: string, variable: string) {
-  let parsed: URL;
-  try {
-    parsed = new URL(connectionString);
-  } catch {
-    throw new Error(`${variable} must be a valid PostgreSQL URL.`);
-  }
-  if (!["postgres:", "postgresql:"].includes(parsed.protocol))
-    throw new Error(`${variable} must use the postgres protocol.`);
-  const name = decodeURIComponent(parsed.pathname.replace(/^\//, ""));
-  if (!name) throw new Error(`${variable} must identify a database.`);
-  return name;
 }
 
 async function inTransaction<T>(
@@ -59,26 +56,17 @@ async function inTransaction<T>(
 }
 
 async function main() {
-  loadEnvConfig(process.cwd());
-  const { values, flags } = argumentsMap();
-  const target = values.get("database") as Target | undefined;
-  if (target !== "test" && target !== "development")
-    throw new Error("--database must be explicitly set to test or development.");
-  const variable =
-    target === "test" ? "TEST_DATABASE_URL" : "DATABASE_MIGRATION_URL";
-  const connectionString = process.env[variable];
-  if (!connectionString) throw new Error(`${variable} is required.`);
-  const expectedName = databaseName(connectionString, variable);
-  if (target === "test" && !expectedName.endsWith("_test"))
-    throw new Error(
-      "Refusing unsafe test target: database name must end with _test.",
-    );
+  const argv = process.argv.slice(2);
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(HELP);
+    return;
+  }
+  const { options: databaseOptions, remaining } =
+    extractDatabaseTargetOptions(argv);
+  const { values, flags } = argumentsMap(remaining);
+  const { target, connectionString, databaseName: expectedName } =
+    resolveCliDatabase(databaseOptions);
   if (target === "development") {
-    if (
-      process.env.NODE_ENV === "production" ||
-      /(^|[_-])prod(uction)?($|[_-])/i.test(expectedName)
-    )
-      throw new Error("Refusing to reconcile an apparent production database.");
     if (values.get("confirm-database-name") !== expectedName)
       throw new Error(
         "Development reconciliation requires --confirm-database-name with the exact parsed database name.",

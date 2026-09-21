@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/demo-service.test.ts tests/health.test.ts tests/login-error.test.ts tests/provision-account-cli.test.ts tests/resource-catalog.test.ts tests/review-ui.test.ts tests/stage2a-security.test.ts",
+    "test": "tsx --test tests/database-target.test.ts tests/demo-service.test.ts tests/health.test.ts tests/login-error.test.ts tests/provision-account-cli.test.ts tests/resource-catalog.test.ts tests/review-ui.test.ts tests/stage2a-security.test.ts",
     "test:integration": "tsx scripts/run-integration-tests.ts",
     "test:e2e": "playwright test",
     "db:migrate": "tsx scripts/migrate.ts",

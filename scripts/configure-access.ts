@@ -1,6 +1,24 @@
 import { randomUUID } from "node:crypto";
-import { loadEnvConfig } from "@next/env";
 import { Pool, type PoolClient } from "pg";
+import {
+  extractDatabaseTargetOptions,
+  resolveCliDatabase,
+} from "./database-target";
+
+const HELP = `Permora access configuration
+
+Usage:
+  npm run access:configure -- <scope|assignment|approver|entitlement> --database-target <development|test|production> [command flags] [--confirm-production]
+
+Database targets:
+  development  Loads and validates DATABASE_URL plus DATABASE_MIGRATION_URL.
+  test         Uses only guarded TEST_DATABASE_URL; its name must end in _test.
+  production   Requires both URLs in the current process and the explicit
+               --confirm-production flag. .env.local is not loaded.
+
+Examples:
+  npm run access:configure -- approver --database-target development --actor <admin-uuid> --approver <approver-uuid> --resource <resource-id> --permission <permission-id>
+  npm run access:configure -- assignment --database-target production --confirm-production --actor <admin-uuid> --user <requester-uuid> --resource <resource-id> --scope <scope-uuid> --evidence "<verified-evidence>"`;
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -12,11 +30,11 @@ function safeFailureMessage(error: unknown) {
   return error.message;
 }
 
-function argumentsMap() {
+function argumentsMap(argv: string[]) {
   const values = new Map<string, string>();
-  for (let index = 3; index < process.argv.length; index++) {
-    const key = process.argv[index];
-    const value = process.argv[index + 1];
+  for (let index = 0; index < argv.length; index++) {
+    const key = argv[index];
+    const value = argv[index + 1];
     if (!key.startsWith("--") || !value || value.startsWith("--"))
       throw new Error(`Expected a value after ${key}.`);
     values.set(key.slice(2), value);
@@ -35,8 +53,12 @@ async function requireAdministrator(client: PoolClient, actor: string) {
 }
 
 async function main() {
-  loadEnvConfig(process.cwd());
-  const command = process.argv[2];
+  const argv = process.argv.slice(2);
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(HELP);
+    return;
+  }
+  const command = argv[0];
   if (
     !command ||
     !["scope", "assignment", "approver", "entitlement"].includes(command)
@@ -44,7 +66,9 @@ async function main() {
     throw new Error(
       "Command must be scope, assignment, approver, or entitlement.",
     );
-  const args = argumentsMap();
+  const { options: databaseOptions, remaining } =
+    extractDatabaseTargetOptions(argv.slice(1));
+  const args = argumentsMap(remaining);
   const required = (name: string) => {
     const value = args.get(name)?.trim();
     if (!value) throw new Error(`--${name} is required.`);
@@ -55,9 +79,8 @@ async function main() {
     if (!UUID.test(value)) throw new Error(`--${name} must be a valid UUID.`);
     return value;
   };
-  const connectionString = process.env.DATABASE_MIGRATION_URL;
-  if (!connectionString) throw new Error("DATABASE_MIGRATION_URL is required.");
   const actor = requiredUuid("actor");
+  const { connectionString } = resolveCliDatabase(databaseOptions);
 
   const pool = new Pool({ connectionString, max: 1 });
   let client;

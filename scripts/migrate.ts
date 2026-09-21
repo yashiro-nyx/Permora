@@ -1,13 +1,36 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
-import { loadEnvConfig } from "@next/env";
 import { Pool } from "pg";
+import {
+  extractDatabaseTargetOptions,
+  resolveCliDatabase,
+} from "./database-target";
+
+const HELP = `Permora database migration
+
+Usage:
+  npm run db:migrate -- --database-target <development|test|production> [--confirm-production]
+
+Targets:
+  development  Loads DATABASE_URL and DATABASE_MIGRATION_URL from the current
+               process or .env.local and verifies that both target the same database.
+  test         Uses only TEST_DATABASE_URL and requires a database ending in _test.
+  production   Requires DATABASE_URL and DATABASE_MIGRATION_URL in the current
+               process plus --confirm-production. .env.local is not loaded.
+
+Production example (inject both values through an approved secret manager):
+  npm run db:migrate -- --database-target production --confirm-production`;
 
 async function main() {
-  loadEnvConfig(process.cwd());
-  const connectionString = process.env.DATABASE_MIGRATION_URL;
-  if (!connectionString)
-    throw new Error("DATABASE_MIGRATION_URL is required.");
+  const argv = process.argv.slice(2);
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(HELP);
+    return;
+  }
+  const { options, remaining } = extractDatabaseTargetOptions(argv);
+  if (remaining.length)
+    throw new Error(`Unknown argument ${remaining[0]}. Use --help for usage.`);
+  const { connectionString } = resolveCliDatabase(options);
 
   const pool = new Pool({ connectionString, max: 1 });
   let client;

@@ -1,14 +1,23 @@
 import { randomUUID } from "node:crypto";
-import { loadEnvConfig } from "@next/env";
 import { Pool } from "pg";
 import { hashPassword } from "../lib/server/password";
+import {
+  extractDatabaseTargetOptions,
+  resolveCliDatabase,
+} from "./database-target";
 
 type Role = "student" | "faculty" | "approver" | "admin";
 
 const HELP = `Permora account provisioning
 
 Usage:
-  npm run account:provision -- --email <email> --name <full-name> --role <role> [options] (--bootstrap-admin | --authorized-admin <admin-internal-uuid>)
+  npm run account:provision -- --database-target <development|test|production> [--confirm-production] --email <email> --name <full-name> --role <role> [options] (--bootstrap-admin | --authorized-admin <admin-internal-uuid>)
+
+Database safety flags:
+  --database-target <target>     Required. One of: development, test, production.
+  --confirm-production           Required only for production. Production also
+                                 requires both database URLs in the current process
+                                 and never loads them from .env.local.
 
 Required flags:
   --email <email>                 Login email for the new account.
@@ -36,16 +45,19 @@ Optional profile and institutional identifier flags:
 
 Examples:
   # First administrator
-  npm run account:provision -- --email <admin-email> --name "<admin-name>" --role admin --department "<department>" --bootstrap-admin
+  npm run account:provision -- --database-target development --email <admin-email> --name "<admin-name>" --role admin --department "<department>" --bootstrap-admin
 
   # Approver
-  npm run account:provision -- --email <approver-email> --name "<approver-name>" --role approver --department "<department>" --identifier-type staff_number --identifier <staff-number> --issuer <institution-namespace> --authorized-admin <admin-internal-uuid>
+  npm run account:provision -- --database-target development --email <approver-email> --name "<approver-name>" --role approver --department "<department>" --identifier-type staff_number --identifier <staff-number> --issuer <institution-namespace> --authorized-admin <admin-internal-uuid>
 
   # Student
-  npm run account:provision -- --email <student-email> --name "<student-name>" --role student --department "<department>" --identifier-type student_number --identifier <student-number> --issuer <institution-namespace> --authorized-admin <admin-internal-uuid>
+  npm run account:provision -- --database-target development --email <student-email> --name "<student-name>" --role student --department "<department>" --identifier-type student_number --identifier <student-number> --issuer <institution-namespace> --authorized-admin <admin-internal-uuid>
 
   # Faculty
-  npm run account:provision -- --email <faculty-email> --name "<faculty-name>" --role faculty --department "<department>" --identifier-type staff_number --identifier <staff-number> --issuer <institution-namespace> --authorized-admin <admin-internal-uuid>
+  npm run account:provision -- --database-target development --email <faculty-email> --name "<faculty-name>" --role faculty --department "<department>" --identifier-type staff_number --identifier <staff-number> --issuer <institution-namespace> --authorized-admin <admin-internal-uuid>
+
+  # Production bootstrap (supply both URLs in the current process)
+  npm run account:provision -- --database-target production --confirm-production --email <admin-email> --name "<admin-name>" --role admin --bootstrap-admin
 
 Passwords are requested twice through hidden terminal input and must contain
 12–128 characters. Passwords must never be passed as command-line arguments.`;
@@ -193,6 +205,8 @@ async function main() {
     console.log(HELP);
     return;
   }
+  const { options: databaseOptions, remaining } =
+    extractDatabaseTargetOptions(argv);
   const {
     email,
     name,
@@ -203,10 +217,8 @@ async function main() {
     identifierType,
     identifier,
     issuer,
-  } = validatedArguments(argv);
-  loadEnvConfig(process.cwd());
-  const connectionString = process.env.DATABASE_MIGRATION_URL;
-  if (!connectionString) throw new Error("DATABASE_MIGRATION_URL is required.");
+  } = validatedArguments(remaining);
+  const { connectionString } = resolveCliDatabase(databaseOptions);
   const password = await hiddenPrompt("New account password (input hidden): ");
   const confirmation = await hiddenPrompt("Confirm password (input hidden): ");
   if (password !== confirmation) throw new Error("Passwords do not match.");

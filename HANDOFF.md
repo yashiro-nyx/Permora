@@ -91,25 +91,28 @@ cd Permora
 npm ci
 cp .env.example .env.local
 # Replace placeholders locally; never commit this file.
-npm run db:migrate
+npm run db:migrate -- --database-target development
 ```
 
 Bootstrap the first administrator; the command requests a hidden password twice and refuses overwrite:
 
 ```sh
-npm run account:provision -- --email <admin-email> --name "<admin-name>" \
+npm run account:provision -- --database-target development \
+  --email <admin-email> --name "<admin-name>" \
   --role admin --department "<department>" --bootstrap-admin
 ```
 
 Provision later accounts using the internal administrator UUID:
 
 ```sh
-npm run account:provision -- --email <student-email> --name "<student-name>" \
+npm run account:provision -- --database-target development \
+  --email <student-email> --name "<student-name>" \
   --role student --department "<department>" --identifier-type student_number \
   --identifier <student-number> --issuer <institution-namespace> \
   --authorized-admin <admin-internal-uuid>
 
-npm run account:provision -- --email <approver-email> --name "<approver-name>" \
+npm run account:provision -- --database-target development \
+  --email <approver-email> --name "<approver-name>" \
   --role approver --department "<department>" --identifier-type staff_number \
   --identifier <staff-number> --issuer <institution-namespace> \
   --authorized-admin <admin-internal-uuid>
@@ -120,14 +123,17 @@ Faculty uses `--role faculty`. Internal UUIDs remain separate from institutional
 Configure scoped eligibility and approval responsibility with placeholders:
 
 ```sh
-npm run access:configure -- scope --actor <admin-uuid> --resource <resource-id> \
+npm run access:configure -- scope --database-target development \
+  --actor <admin-uuid> --resource <resource-id> \
   --field <scope-field> --code <institutional-code> --name "<display-name>"
 
-npm run access:configure -- assignment --actor <admin-uuid> --user <requester-uuid> \
+npm run access:configure -- assignment --database-target development \
+  --actor <admin-uuid> --user <requester-uuid> \
   --resource <resource-id> --scope <scope-option-uuid> \
   --permission <permission-id> --evidence "<verified-evidence>"
 
-npm run access:configure -- approver --actor <admin-uuid> --approver <approver-uuid> \
+npm run access:configure -- approver --database-target development \
+  --actor <admin-uuid> --approver <approver-uuid> \
   --resource <resource-id> --permission <permission-id> \
   --scopes <comma-separated-scope-option-uuids>
 ```
@@ -160,6 +166,14 @@ Never use `NEXT_PUBLIC_` for secrets.
 
 Commented SIS/LMS/research names in `.env.example` are future placeholders and are not currently read.
 
+Every database CLI requires `--database-target development`, `test`, or
+`production`. Development may load the two development URLs from `.env.local`,
+but it rejects different protocols, database names, or normalized hosts. Neon
+direct and `-pooler` hostnames for the same branch match; database usernames may
+differ. Test uses only `TEST_DATABASE_URL` and retains the `_test` suffix guard.
+Production never loads database URLs from `.env.local`: both URLs must already
+exist in the current process and `--confirm-production` is mandatory.
+
 ## H. Neon topology
 
 ```text
@@ -179,7 +193,7 @@ npm run test:e2e          # Playwright requester/staff/workflow tests
 npm run lint
 npm run typecheck
 npm run build
-npm run db:migrate        # applies pending migrations; not a dry run
+npm run db:migrate -- --database-target development # applies pending migrations; not a dry run
 git diff --check
 ```
 
@@ -195,15 +209,15 @@ All package scripts and their intended use:
 | `npm test` | Unit/domain/CLI safety suite |
 | `npm run test:integration` | Guarded isolated PostgreSQL integration suite |
 | `npm run test:e2e` | Guarded Playwright browser suite on port 3200 |
-| `npm run db:migrate` | Apply append-only migrations to `DATABASE_MIGRATION_URL` |
+| `npm run db:migrate -- --database-target <target>` | Apply append-only migrations after target validation |
 | `npm run account:provision -- --help` | Account-provisioning usage without database access |
-| `npm run account:provision -- <flags>` | Transactionally provision one account with hidden password input |
-| `npm run access:configure -- <command> <flags>` | Administrator-controlled scope, assignment, responsibility, or entitlement record |
-| `npm run approvals:reconcile -- <flags>` | Dry-run-by-default pending-routing reconciliation; `--apply` is explicit |
+| `npm run account:provision -- --database-target <target> <flags>` | Transactionally provision one account with hidden password input |
+| `npm run access:configure -- <command> --database-target <target> <flags>` | Administrator-controlled scope, assignment, responsibility, or entitlement record |
+| `npm run approvals:reconcile -- --database-target <target> <flags>` | Dry-run-by-default pending-routing reconciliation; `--apply` is explicit |
 
 Integration tests load `.env.local`, require only `TEST_DATABASE_URL`, delete inherited development/migration variables, validate PostgreSQL plus `_test`, recreate only the test schema, and run sequentially. Playwright has the same guard, uses port 3200, and one worker. Both are destructive to the configured test database.
 
-`db:migrate` uses only `DATABASE_MIGRATION_URL`, takes an advisory transaction lock, applies files lexically, and tracks `schema_migration`. Inspect status safely with:
+`db:migrate` validates the selected target before using its migration connection, takes an advisory transaction lock, applies files lexically, and tracks `schema_migration`. Development and production require a matching runtime/migration pair; test uses only its guarded test URL. Inspect status safely with:
 
 ```sh
 psql "$DATABASE_MIGRATION_URL" -c \
@@ -275,8 +289,8 @@ Use public visibility only after approval. Do not rewrite history. The repositor
 6. Generate a unique production secret through an approved secret manager.
 7. Use pooled Neon `DATABASE_URL` for Vercel runtime.
 8. Use direct `DATABASE_MIGRATION_URL` only in a protected migration/provisioning environment, preferably not the Vercel runtime. Never expose it to browser code.
-9. Back up production, validate on non-production, review pending SQL, explicitly run `npm run db:migrate` once from the controlled environment, and inspect `schema_migration`. Never run migrations on every Vercel build.
-10. Bootstrap one production administrator from a secured operator machine using hidden password entry. Never provision demo student/approver accounts in production.
+9. Back up production, validate on non-production, review pending SQL, inject both production database URLs into the current operator process, and explicitly run `npm run db:migrate -- --database-target production --confirm-production` once. Inspect `schema_migration`. Never run migrations on every Vercel build.
+10. Bootstrap one production administrator from a secured operator machine using hidden password entry and `npm run account:provision -- --database-target production --confirm-production <account-flags>`. Never provision demo student/approver accounts in production.
 11. Verify `/api/health`, login errors, logout revocation, ownership, assignee isolation, admin-only unassigned access, routing, decisions, audit history, `approved_pending_activation`, rate limiting, and absence of an active entitlement after approval.
 12. Roll back application code through the Vercel dashboard or `vercel rollback <deployment-id>`/`vercel promote <previous-url>`. Migrations are forward-only: deploy a corrective migration or use authorized Neon PITR/restore, and keep application/schema versions compatible.
 
@@ -293,6 +307,7 @@ The health route is an availability probe, not a disclosure endpoint or substitu
 - Commit decision, request version/status, assignment completion, immutable events, and notification atomically.
 - Preserve optimistic versions and UUID idempotency; reject stale, duplicate, unauthorized, self, partial, and unassigned decisions.
 - Redact database URLs, secrets, passwords/hashes, cookies, tokens, institutional IDs, and unnecessary personal data from logs.
+- Require an explicit database target for every database CLI. Production requires both process-level URLs plus `--confirm-production`; development still rejects mixed endpoints.
 - Define backup retention, RPO/RTO, restore authority, and periodic isolated restore tests.
 
 ## N. Troubleshooting
@@ -304,13 +319,14 @@ The health route is an availability probe, not a disclosure endpoint or substitu
 | Test database does not end `_test` | Create/select an isolated `_test` database; never bypass the guard. |
 | Neon cold start/transient closure | Confirm branch/compute, then retry once. Diagnose persistent failures; do not start with broad retries, sleeps, or larger pools. |
 | Migration failure | Confirm intended direct URL and schema-owner rights; inspect sanitized error and tracking table; fix with a new migration. |
+| Database endpoints do not match | Supply runtime and migration URLs for the same protocol, database, and Neon branch. Different database roles are allowed; values are never echoed. |
 | `pending_routing` | Configure a non-self full-scope responsibility; run reconciliation dry-run first, then explicitly add `--apply` after review. |
 | Port 3000 occupied | Pick another port and update `APP_URL` to the exact origin. |
 | Admin/approver navigation limited | Confirm active profile, trusted role, and current responsibility. Admin alone does not grant review scope. |
 | Vercel origin mismatch | Set exact HTTPS `APP_URL` for that deployment and redeploy. Ensure preview isolation. |
 | `/api/health` returns 503 | Confirm the runtime database variable, Neon branch/compute, and connectivity. The response intentionally omits internal details; use protected server/Neon logs. |
 
-Development reconciliation example: `npm run approvals:reconcile -- --database development --confirm-database-name <development-database-name>`; add `--apply` only after inspecting the dry run.
+Development reconciliation example: `npm run approvals:reconcile -- --database-target development --confirm-database-name <development-database-name>`; add `--apply` only after inspecting the dry run. Production also requires `--confirm-production` and both URLs in the current process.
 
 ## O. Team handoff checklist
 
