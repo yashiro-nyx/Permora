@@ -291,6 +291,7 @@ export function Confirm({
   onConfirm,
   label = "Confirm",
   danger = false,
+  busy = false,
 }: {
   title: string;
   children: ReactNode;
@@ -298,15 +299,20 @@ export function Confirm({
   onConfirm: () => void;
   label?: string;
   danger?: boolean;
+  busy?: boolean;
 }) {
   return (
     <Modal title={title} onClose={onClose}>
       <div className="modal-body">{children}</div>
       <div className="modal-actions">
-        <Button variant="outline" onClick={onClose} autoFocus>
+        <Button variant="outline" onClick={onClose} disabled={busy} autoFocus>
           Cancel
         </Button>
-        <Button variant={danger ? "danger" : "primary"} onClick={onConfirm}>
+        <Button
+          variant={danger ? "danger" : "primary"}
+          onClick={onConfirm}
+          disabled={busy}
+        >
           {label}
         </Button>
       </div>

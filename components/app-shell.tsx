@@ -6,20 +6,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import type { TrustedIdentity } from "@/lib/auth-types";
 import { Alert, Button, Icon, Modal } from "./ui";
-import { initials, roleLabels, type Role } from "@/lib/model";
-
-const requesterNav = [
-  ["/dashboard", "Dashboard", "dashboard"],
-  ["/requests", "My Requests", "requests"],
-  ["/requests/new", "Request Access", "key"],
-] as const;
-const staffNav = [["/dashboard", "Stage 2A status", "dashboard"]] as const;
-
-function primaryRole(identity: TrustedIdentity): Role {
-  if (identity.roles.includes("admin")) return "admin";
-  if (identity.roles.includes("approver")) return "approver";
-  return identity.requesterRole ?? "student";
-}
+import { initials, roleLabels } from "@/lib/model";
+import {
+  navigationForIdentity,
+  primaryRole,
+  requesterNavigation,
+} from "@/lib/navigation";
 
 export function AppShell({
   children,
@@ -34,9 +26,9 @@ export function AppShell({
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
   const role = primaryRole(identity);
-  const requester = Boolean(identity.requesterRole);
+  const requester = role !== "admin" && role !== "approver";
   const focused = path === "/requests/new";
-  const navigation = requester ? requesterNav : staffNav;
+  const navigation = navigationForIdentity(identity);
   const active = (href: string) =>
     href === "/requests"
       ? path === href || (path.startsWith("/requests/") && !focused)
@@ -100,7 +92,7 @@ export function AppShell({
           </span>
           {requester && (
             <nav className="top-nav" aria-label="Quick navigation">
-              {requesterNav.slice(0, 3).map(([href, label]) => (
+              {requesterNavigation.slice(0, 3).map(([href, label]) => (
                 <Link
                   key={href}
                   href={href}
@@ -132,10 +124,12 @@ export function AppShell({
           <nav aria-label="Main navigation">{navLinks}</nav>
           <div className="sidebar-bottom">
             <span className="eyebrow">Support</span>
-            <Link className="nav-link" href="/help">
-              <Icon name="help" />
-              Help & guidelines
-            </Link>
+            {requester && (
+              <Link className="nav-link" href="/help">
+                <Icon name="help" />
+                Help & guidelines
+              </Link>
+            )}
             {logout}
             <div className="sidebar-note">
               <span className="status-dot" /> Authenticated session
@@ -168,14 +162,16 @@ export function AppShell({
         >
           <nav aria-label="Mobile navigation">
             {navLinks}
-            <Link
-              href="/help"
-              className="nav-link"
-              onClick={() => setDrawer(false)}
-            >
-              <Icon name="help" />
-              Help & guidelines
-            </Link>
+            {requester && (
+              <Link
+                href="/help"
+                className="nav-link"
+                onClick={() => setDrawer(false)}
+              >
+                <Icon name="help" />
+                Help & guidelines
+              </Link>
+            )}
             {logout}
           </nav>
         </Modal>

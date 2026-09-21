@@ -1,11 +1,12 @@
 import { StaffReviewQueue } from "@/components/staff-review-queue";
 import {
   ApprovalQueryError,
-  listAssignedReviewRequests,
+  listUnassignedRoutingFailures,
   parseApprovalListFilters,
 } from "@/lib/server/approval-read-service";
-import { requireApprover } from "@/lib/server/identity";
-export const metadata = { title: "Review requests" };
+import { requireAdmin } from "@/lib/server/identity";
+
+export const metadata = { title: "Unassigned requests" };
 export const dynamic = "force-dynamic";
 
 function paramsOf(values: Record<string, string | string[] | undefined>) {
@@ -22,22 +23,26 @@ export default async function Page({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const identity = await requireApprover();
+  await requireAdmin();
   try {
     const filters = parseApprovalListFilters(
       paramsOf(await searchParams),
-      "assigned",
+      "unassigned",
     );
-    const data = await listAssignedReviewRequests(identity, filters);
-    return <StaffReviewQueue data={data} filters={filters} />;
+    const data = await listUnassignedRoutingFailures(filters);
+    return <StaffReviewQueue data={data} filters={filters} mode="unassigned" />;
   } catch (error) {
     if (error instanceof ApprovalQueryError) {
-      const filters = parseApprovalListFilters(new URLSearchParams(), "assigned");
-      const data = await listAssignedReviewRequests(identity, filters);
+      const filters = parseApprovalListFilters(
+        new URLSearchParams(),
+        "unassigned",
+      );
+      const data = await listUnassignedRoutingFailures(filters);
       return (
         <StaffReviewQueue
           data={data}
           filters={filters}
+          mode="unassigned"
           invalidMessage={error.message}
         />
       );

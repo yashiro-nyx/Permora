@@ -4,13 +4,13 @@ export function DeferredFeature({ title }: { title: string }) {
   return (
     <>
       <PageHeading
-        eyebrow="STAGE 2A"
+        eyebrow="DEFERRED"
         title={title}
-        description="This authenticated area is reserved for a later implementation stage."
+        description="This protected area is reserved for a later implementation milestone."
       />
       <Alert title="No operation is available" tone="info">
-        Approval decisions, access activation, notifications, and administrative
-        management are deferred. This page does not read or mutate demo data.
+        This page intentionally provides no management controls and does not
+        imply that an unfinished server operation is available.
       </Alert>
     </>
   );

@@ -51,9 +51,10 @@ export default function Page() {
         <section className="card card-body prose">
           <h2>Stage boundary</h2>
           <p>
-            Approval decisions, downstream activation, scheduled expiration
-            enforcement, notifications, and full administrator screens are
-            deferred.
+            Assigned staff can now record approval, denial, or revision
+            decisions. Approval remains separate from downstream activation.
+            Provisioning, expiration enforcement, external notifications, and
+            full administrator management remain deferred.
           </p>
           <Link className="text-link" href="/dashboard">
             Return to dashboard →

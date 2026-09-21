@@ -6,7 +6,11 @@ declare global {
 }
 
 function createPool() {
-  const isTest = process.env.NODE_ENV === "test";
+  const isBrowserTest =
+    process.env.PERMORA_E2E_DATABASE === "isolated-test";
+  const isTest =
+    process.env.NODE_ENV === "test" ||
+    isBrowserTest;
   if (isTest && !process.env.TEST_DATABASE_URL) {
     throw new Error("TEST_DATABASE_URL is required in the test environment.");
   }
@@ -16,7 +20,7 @@ function createPool() {
       "postgresql://unconfigured:unconfigured@127.0.0.1:1/permora_unconfigured");
   return new Pool({
     connectionString,
-    max: isTest ? 1 : 10,
+    max: isBrowserTest ? 3 : isTest ? 1 : 10,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: isTest ? 30_000 : 5_000,
   });

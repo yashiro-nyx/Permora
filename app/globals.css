@@ -671,6 +671,100 @@ h3 {
 .admin-shell .notification-button > span:last-child:not(.icon) {
   border-color: white;
 }
+.staff-metric-grid {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+.staff-review-table {
+  min-width: 1040px;
+}
+.staff-review-table th:last-child,
+.staff-review-table td:last-child {
+  text-align: right;
+}
+.table-secondary {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 4px;
+}
+.staff-pagination nav {
+  align-items: center;
+}
+.disabled-link {
+  pointer-events: none;
+  opacity: 0.5;
+}
+.review-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(300px, 0.85fr);
+  gap: 28px;
+  align-items: start;
+}
+.review-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.decision-panel {
+  box-shadow: var(--panel-shadow);
+}
+.decision-panel .card-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.decision-actions {
+  display: grid;
+  gap: 10px;
+}
+.decision-actions .button {
+  width: 100%;
+}
+.reason-counter {
+  margin-top: -20px;
+  text-align: right;
+  color: var(--muted);
+  font-size: 12px;
+}
+.confirmation-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  line-height: 1.7;
+}
+.decision-history {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.compact-empty {
+  padding-block: 36px;
+}
+.staff-loading {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-height: 220px;
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+}
+.staff-loading p {
+  color: var(--muted);
+  margin-top: 8px;
+}
+.loading-mark {
+  width: 36px;
+  height: 36px;
+  border: 4px solid var(--border);
+  border-top-color: var(--warning);
+  border-radius: 50%;
+  animation: staff-loading-spin 0.8s linear infinite;
+}
+@keyframes staff-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .focused-shell .workspace {
   margin-left: 0;
 }
@@ -1408,7 +1502,8 @@ dd {
 }
 @media (max-width: 1100px) {
   .dashboard-grid,
-  .detail-grid {
+  .detail-grid,
+  .review-detail-grid {
     grid-template-columns: 1fr;
   }
   .dashboard-aside {
@@ -1561,6 +1656,19 @@ dd {
   }
   .form-grid {
     grid-template-columns: 1fr;
+  }
+  .review-fields {
+    grid-template-columns: 1fr;
+  }
+  .staff-pagination,
+  .staff-pagination nav {
+    width: 100%;
+  }
+  .staff-pagination nav {
+    justify-content: space-between;
+  }
+  .staff-pagination .button {
+    flex: 1;
   }
   .choice-grid {
     grid-template-columns: 1fr;
