@@ -1,5 +1,6 @@
 import { defineConfig } from "@playwright/test";
 import { loadEnvConfig } from "@next/env";
+import { randomBytes } from "node:crypto";
 
 loadEnvConfig(process.cwd());
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
@@ -15,6 +16,26 @@ if (
     "Refusing browser tests: TEST_DATABASE_URL must name a PostgreSQL database ending in _test.",
   );
 
+function testSecret(name: string, bytes: number, minimumLength: number) {
+  const supplied = process.env[name];
+  if (supplied) {
+    if (supplied.length < minimumLength)
+      throw new Error(`${name} is too short for browser tests.`);
+    return supplied;
+  }
+  const generated = randomBytes(bytes).toString("base64url");
+  process.env[name] = generated;
+  return generated;
+}
+
+testSecret("PERMORA_E2E_PASSWORD", 32, 12);
+const testAuthSecret = testSecret("PERMORA_E2E_AUTH_SECRET", 48, 32);
+const suppliedRunId = process.env.PERMORA_E2E_RUN_ID;
+if (suppliedRunId && !/^[a-z0-9]{16,64}$/i.test(suppliedRunId))
+  throw new Error("PERMORA_E2E_RUN_ID must contain 16–64 letters or digits.");
+process.env.PERMORA_E2E_RUN_ID =
+  suppliedRunId ?? randomBytes(12).toString("hex");
+
 const baseURL = "http://127.0.0.1:3200";
 const webServerEnvironment = Object.fromEntries(
   Object.entries(process.env).filter(
@@ -23,12 +44,15 @@ const webServerEnvironment = Object.fromEntries(
 );
 delete webServerEnvironment.DATABASE_URL;
 delete webServerEnvironment.DATABASE_MIGRATION_URL;
+delete webServerEnvironment.PERMORA_E2E_PASSWORD;
+delete webServerEnvironment.PERMORA_E2E_AUTH_SECRET;
+delete webServerEnvironment.PERMORA_E2E_RUN_ID;
 Object.assign(webServerEnvironment, {
   DATABASE_URL: testDatabaseUrl,
   TEST_DATABASE_URL: testDatabaseUrl,
   PERMORA_E2E_DATABASE: "isolated-test",
   APP_URL: baseURL,
-  AUTH_SECRET: "permora-e2e-only-secret-at-least-thirty-two-characters",
+  AUTH_SECRET: testAuthSecret,
 });
 
 export default defineConfig({

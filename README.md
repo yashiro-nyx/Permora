@@ -1,58 +1,43 @@
 # Permora
 
-Responsive access-request prototype based on the connected Figma design. Built with Next.js 15 App Router, React 19, TypeScript and Tailwind CSS 4. No backend or credentials are required.
+Permora is a secure access-request and approval application for students, faculty, approvers, and administrators. It uses Next.js 15, React 19, TypeScript, Tailwind CSS 4, Better Auth email/password sessions, and PostgreSQL. The current application supports owner-scoped requests, deterministic full-scope approval routing, protected staff review, and transactional decisions. Approval remains separate from access activation.
 
-## Run
+Read [HANDOFF.md](HANDOFF.md) before publishing, provisioning accounts, running migrations, or preparing a deployment. Current coverage and limitations are tracked in [docs/implementation-status.md](docs/implementation-status.md).
+
+## Local start
+
+Use Node.js 22 LTS, pinned by `.nvmrc` and `engines.node`, with isolated development/test databases:
 
 ```sh
 npm ci
-npm run dev -- --hostname 127.0.0.1
+cp .env.example .env.local
+# Replace placeholders locally; never commit .env.local.
+npm run db:migrate
+npm run dev
 ```
 
-Open **http://127.0.0.1:3000**. Choose a demo profile and use the prefilled password `permora-demo`. The email field checks format only; the selected profile controls the simulated identity. Do not enter real credentials.
-
-For a production build, run `npm run build`, then `npm start -- --hostname 127.0.0.1`. Stop the development server first.
-
-## Explore a connected workflow
-
-1. Enter as Student. Open Request Access and select Research VPN Gateway → Standard.
-2. Give a purpose of at least 20 characters; choose September 14–15, 2026, and confirm.
-3. Switch the clearly labeled Demo role to Approver. Open Review Requests, select the new request, give a decision reason, and approve or deny.
-4. Switch back to Student to see the decision, notification and activity history.
-5. As Administrator, open Permissions & Expiry and advance the demo clock by one day to activate approved access, then another day to expire it. Audit history records both simulated events.
-6. Explore user management, resource policies, reports, search/filtering and CSV exports. Reset demo restores the starting dataset.
-
-The demo starts at **September 13, 2026, 09:00 UTC** so examples stay repeatable. Dates are evaluated at 09:00 UTC; expiration is exclusive. Renewal creates a new request and must not overlap another pending or approved grant. Resource policies define allowed role/permission combinations and maximum duration.
-
-## State and boundaries
-
-`lib/demo-service.ts` owns validation and state transitions; `components/demo-provider.tsx` persists the shared dataset in local storage (`permora-demo-v1`) and selected profile in session storage. Role views derive their requests, notifications, reports and audit entries from that same dataset. Changes sync across tabs, but simultaneous writes are not transactional across browser processes.
-
-This is a local simulation: profile selection is not authentication, role checks are not server authorization, clock advancement does not change real access, and audit entries are editable browser data. A real release needs authenticated sessions, server-enforced read/write/export authorization, transactional persistence, resource provisioning/revocation integrations, scheduled expiry, durable notification delivery and protected audit retention. Do not store sensitive information here.
+Open the exact origin configured in `APP_URL`, normally `http://localhost:3000/login`. Accounts are provisioned by an authorized administrator; there is no public registration or demo login in the real application flow.
 
 ## Checks
 
 ```sh
+npm test
+npm run test:integration
+npm run test:e2e
 npm run lint
 npm run typecheck
-npm test
 npm run build
-# With Permora running at 127.0.0.1:3000 and Google Chrome installed:
-npm run test:e2e
+git diff --check
 ```
 
-Browser tests exercise submission, review, denial, saved notifications, expiration, renewal, policy changes, exports, route presentation, responsive reflow and dialog keyboard behavior. Screenshots and failure traces are written to ignored `test-results/`. The browser suite resets only Permora's demo storage.
+Integration and browser tests destructively reset only a guarded `TEST_DATABASE_URL` database whose name ends in `_test`. They never fall back to development or production.
+Playwright generates fresh account emails, a password, and an auth secret in memory for each run; no reusable test credential is stored in source. `GET /api/health` returns a private, non-cacheable `200` when the app and database are available, or a generic `503` otherwise.
 
-## Stage 1 audit and next stage
+## References
 
-Stage 1 completes the requester list disclosures/summary/filter UI and restores both original login images. [Implementation status](docs/implementation-status.md) separates Figma coverage from service readiness. [Stage 2 plan](docs/stage-2-plan.md) defines real authentication, PostgreSQL persistence and server ownership checks. Existing demo services are preserved for this UI stage; do not expand them for future application work.
-
-To test on a different local port, set `PLAYWRIGHT_BASE_URL` when running `npm run test:e2e`. Stage 1 was checked on port 3100 to avoid an unrelated local listener.
-
-## Design references
-
-- [Design system](docs/design-system.md): observed values, node references and proposed accessibility/responsive rules.
-- [Implementation rules](docs/design-system-rules.md): guidance for future work.
-- [Implementation notes](docs/implementation-notes.md): screen coverage, resolved prototype decisions and verification limits.
-
-Figma photographs and non-brand icons are stored locally in `public/assets`; fonts are bundled through Fontsource. No logo was supplied, so branding uses product-name text only.
+- [Project handoff and deployment guide](HANDOFF.md)
+- [Implementation status](docs/implementation-status.md)
+- [Resource access matrix](docs/resource-access-matrix.md)
+- [Stage 2B plan](docs/stage-2b-plan.md)
+- [Design system](docs/design-system.md)
+- [Implementation rules](docs/design-system-rules.md)

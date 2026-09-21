@@ -3,7 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import argon2 from "argon2";
 import { Pool, type PoolClient } from "pg";
-import { E2E } from "./staff-fixture";
+import { E2E, e2ePassword } from "./staff-fixture";
 
 function safeTestDatabaseUrl() {
   const value = process.env.TEST_DATABASE_URL;
@@ -167,7 +167,7 @@ export default async function globalSetup() {
   try {
     await client.query("BEGIN");
     await migrate(client);
-    const passwordHash = await argon2.hash(E2E.password, {
+    const passwordHash = await argon2.hash(e2ePassword(), {
       type: argon2.argon2id,
       memoryCost: 65_536,
       timeCost: 3,

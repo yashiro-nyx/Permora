@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { E2E } from "./staff-fixture";
+import { E2E, e2ePassword } from "./staff-fixture";
 
 test.describe.configure({ mode: "serial" });
 
@@ -8,7 +8,7 @@ let page: Page;
 async function signIn(page: Page, email: string = E2E.approver.email) {
   await page.goto("/login");
   await page.getByLabel("Email address").fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(E2E.password);
+  await page.getByLabel("Password", { exact: true }).fill(e2ePassword());
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 }
