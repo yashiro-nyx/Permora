@@ -222,14 +222,14 @@ psql "$DATABASE_MIGRATION_URL" -c \
 
 ## K. GitHub publication checklist
 
-Audit on 2026-09-21: branch `main`; clean tree before documentation work; no remote; `.env.local` and `.kiro/` are present locally and ignored; no live database URL, password, private key, session token, or production secret found in the current tracked-file scan.
+Audit on 2026-09-21: branch `main`; `.env.local` and `.kiro/` are present locally and ignored; no live database URL, password, private key, session token, or production secret found in the current tracked-file scan. A follow-up check found a clean tree with `main` tracking and matching `origin/main`.
 
 - [x] Current source contains no fixed E2E username, password, or auth secret; each guarded run generates ephemeral values or accepts explicitly test-only overrides.
 - [x] Full-history filename/category audit completed without printing values. Earlier commits contain the superseded deterministic synthetic E2E credential category in `playwright.config.ts` and `tests/e2e/staff-fixture.ts`; no live-system credential was identified. History was not rewritten.
 - [ ] Run a reviewed secret scanner over full Git history without printing values to shared logs.
 - [ ] Confirm visibility, branch protection, required checks, ownership, and issue policy.
 
-After creating an empty repository in the GitHub UI:
+For a new fork or replacement repository, create an empty repository in the GitHub UI, then run:
 
 ```sh
 git branch -M main
@@ -246,13 +246,13 @@ git branch -M main
 git push -u origin main
 ```
 
-Use public visibility only after approval. Do not rewrite history. None of these commands were run by this task.
+Use public visibility only after approval. Do not rewrite history. The repository now has an `origin`; the preparation task did not create it or run these publication commands.
 
 ## Deployment-readiness audit
 
 | Check | Current result |
 | --- | --- |
-| Git | Existing repository on `main`; clean before this documentation task; no configured remote |
+| Git | Existing repository on `main`; follow-up verification found a clean tree with `main` tracking and matching `origin/main` |
 | Sensitive local files | `.env.local` and `.kiro/` are present locally and ignored; no untracked files existed before this task |
 | Tracked-secret scan | No likely live secret found; placeholder URLs exist in `.env.example`, an unreachable fallback exists in `lib/server/db.ts`, and historical synthetic test literals are categorized above. Current E2E credentials are ephemeral |
 | Node/package configuration | npm with lockfile; Node 22 pinned in `.nvmrc` and `engines`; Next 15.5.25, React 19.3, TypeScript 5.9, Tailwind 4.3, Better Auth 1.7.5 |
