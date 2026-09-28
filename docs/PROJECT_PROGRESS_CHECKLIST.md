@@ -10,9 +10,9 @@ Milestone 5 branch: `feature/stage-2b-milestone-5`
 
 Permora is a university access-request and approval system built with Next.js, React, TypeScript, Tailwind CSS, Better Auth, PostgreSQL, Neon, and Vercel.
 
-The requester workflow, database-backed authentication, request persistence, approval routing, approval decisions, protected staff review interface, deployment preparation, and database CLI safety controls are complete.
+The requester workflow, database-backed authentication, request persistence, approval routing, approval decisions, protected staff review interface, requester in-app notifications, administrator audit-log visibility, deployment preparation, and database CLI safety controls are complete.
 
-Stage 2B Milestone 5 has **not yet been implemented**. It is assigned for team continuation and should add requester notifications and administrator audit-log visibility. Approval currently ends at `approved_pending_activation`; it does not grant or provision actual access.
+Stage 2B Milestone 5 is **complete**. Permora now includes PostgreSQL-backed requester notifications and an administrator-only, read-only audit-log viewer. Approval still ends at `approved_pending_activation`; it does not grant or provision actual access.
 
 ## 1. Foundation and design
 
@@ -136,54 +136,59 @@ Stage 2B Milestone 5 has **not yet been implemented**. It is assigned for team c
 - [x] Remove approval controls from terminal request details.
 - [x] Verify responsive staff layouts at desktop, tablet, 390 px, and 320 px.
 
-## 9. Stage 2B Milestone 5 — Team assignment
+## 9. Stage 2B Milestone 5 — Notifications and Audit Visibility
 
-Status: **Not started / not completed**
+Status: **Completed**
 
 ### Requester notification center
 
-- [ ] Inspect the notification records created by approval decisions.
-- [ ] Create an owner-scoped notification read service.
-- [ ] Add a requester-only notification API or server action.
-- [ ] Display notification type, safe message, date/time, and related request.
-- [ ] Add all-notification and unread-only filters.
-- [ ] Add bounded pagination and deterministic ordering.
-- [ ] Add read/unread status.
-- [ ] Implement idempotent “mark as read.”
-- [ ] Implement owner-scoped “mark all as read.”
-- [ ] Enforce active session, requester role, ownership, input validation, and same-origin protection.
-- [ ] Use private, no-store caching.
-- [ ] Do not expose another requester’s notifications.
-- [ ] Do not implement email, SMS, or push delivery in this milestone.
+- [x] Inspect the notification records created by approval decisions.
+- [x] Create an owner-scoped notification read service.
+- [x] Add a requester-only notification API or server action.
+- [x] Display notification type, safe message, date/time, and related request.
+- [x] Add all-notification and unread-only filters.
+- [x] Add bounded pagination and deterministic ordering.
+- [x] Add read/unread status.
+- [x] Implement idempotent “mark as read.”
+- [x] Implement owner-scoped “mark all as read.”
+- [x] Enforce active session, requester role, ownership, input validation, and same-origin protection.
+- [x] Use private, no-store caching.
+- [x] Do not expose another requester’s notifications.
+- [x] Keep email, SMS, and push delivery outside this milestone.
 
 ### Administrator audit-log viewer
 
-- [ ] Create an administrator-only audit read service.
-- [ ] Return only sanitized, presentation-safe audit fields.
-- [ ] Display event time, action type, safe actor information, target information, and summary.
-- [ ] Add search, event-type, date-range, and pagination filters where supported.
-- [ ] Keep ordering deterministic.
-- [ ] Keep the interface read-only.
-- [ ] Do not add audit update or delete operations.
-- [ ] Reject requesters, approvers without admin role, inactive users, and unauthenticated users.
-- [ ] Do not expose password hashes, sessions, tokens, credentials, database URLs, raw errors, or unnecessary metadata.
+- [x] Create an administrator-only audit read service.
+- [x] Return only sanitized, presentation-safe audit fields.
+- [x] Display event time, action type, safe actor information, target information, and summary.
+- [x] Add search, event-type, date-range, and pagination filters where supported.
+- [x] Keep ordering deterministic.
+- [x] Keep the interface read-only.
+- [x] Do not add audit update or delete operations.
+- [x] Reject requesters, approvers without admin role, inactive users, and unauthenticated users.
+- [x] Do not expose password hashes, sessions, tokens, credentials, database URLs, raw errors, or unnecessary metadata.
 
 ### Milestone 5 testing and documentation
 
-- [ ] Add unit tests for filters, parsing, display mapping, and safe error mapping.
-- [ ] Test notification ownership isolation.
-- [ ] Test requester-role enforcement.
-- [ ] Test mark-one and mark-all idempotency and ownership.
-- [ ] Test administrator-only audit access.
-- [ ] Test audit DTO sanitization.
-- [ ] Test filtering, pagination, and deterministic ordering.
-- [ ] Add Playwright coverage for requester notifications.
-- [ ] Add Playwright coverage for administrator audit logs.
-- [ ] Verify desktop, tablet, 390 px, and 320 px layouts.
-- [ ] Update `docs/stage-2b-plan.md`.
-- [ ] Update `docs/implementation-status.md`.
-- [ ] Update `HANDOFF.md` if operational procedures change.
-- [ ] Open a pull request from `feature/stage-2b-milestone-5` into `develop` after verification.
+- [x] Add unit tests for filters, parsing, display mapping, and safe error mapping.
+- [x] Test notification ownership isolation.
+- [x] Test requester-role enforcement.
+- [x] Test mark-one and mark-all idempotency and ownership.
+- [x] Test administrator-only audit access.
+- [x] Test audit DTO sanitization.
+- [x] Test filtering, pagination, and deterministic ordering.
+- [x] Add Playwright coverage for requester notifications.
+- [x] Add Playwright coverage for administrator audit logs.
+- [x] Verify desktop, tablet, 390 px, and 320 px layouts.
+- [x] Update `docs/stage-2b-plan.md`.
+- [x] Update `docs/implementation-status.md`.
+- [x] Update `HANDOFF.md` for the current operational boundary.
+- [x] Verify under Node.js 22.23.2.
+- [x] Pass 43 unit tests.
+- [x] Pass 43 PostgreSQL integration tests against the guarded `_test` database.
+- [x] Pass 20 Playwright E2E tests.
+- [x] Pass ESLint, TypeScript checking, the production build, and `git diff --check`.
+- [x] Push `feature/stage-2b-milestone-5` and open a pull request into `develop`.
 
 ## 10. Stage 2C — Activation and lifecycle management
 
@@ -234,6 +239,10 @@ Status: **Deferred**
 - [x] Verify the live request-to-approval workflow.
 - [x] Confirm that approval does not activate access.
 - [x] Add explicit database-target safety controls to operational CLI scripts.
+- [x] Push the completed Milestone 5 feature branch.
+- [x] Open the Milestone 5 pull request into `develop`.
+- [ ] Complete teammate review of the Milestone 5 pull request.
+- [ ] Merge Milestone 5 into `develop`.
 - [ ] Confirm that the Vercel `develop` Preview deployment uses only the Neon development branch.
 - [ ] Confirm that Preview uses a separate `AUTH_SECRET` from Production.
 - [ ] Confirm that Preview `APP_URL` exactly matches its stable Preview URL.
@@ -268,17 +277,17 @@ npm run build
 git diff --check
 ```
 
-- [ ] All unit tests pass.
-- [ ] All PostgreSQL integration tests pass against the guarded `_test` database.
-- [ ] All Playwright tests pass against isolated test fixtures.
-- [ ] ESLint passes.
-- [ ] TypeScript checking passes.
-- [ ] The production build passes.
-- [ ] `git diff --check` reports no formatting errors.
-- [ ] The working tree contains only intended changes.
-- [ ] No secrets, `.env.local`, database URLs, credentials, or generated test artifacts are staged.
-- [ ] Database migrations are versioned and existing migration files were not rewritten.
-- [ ] Documentation matches actual behavior.
+- [x] All unit tests pass (43 tests).
+- [x] All PostgreSQL integration tests pass against the guarded `_test` database (43 tests).
+- [x] All Playwright tests pass against isolated test fixtures (20 tests).
+- [x] ESLint passes.
+- [x] TypeScript checking passes.
+- [x] The production build passes.
+- [x] `git diff --check` reports no formatting errors.
+- [x] The working tree contains only intended changes.
+- [x] No secrets, `.env.local`, database URLs, credentials, or generated test artifacts are staged.
+- [x] Database migrations remain versioned; existing migrations were not rewritten and Milestone 5 required no new migration.
+- [x] Documentation matches actual behavior.
 - [ ] A teammate reviews authorization, ownership, and database-target boundaries.
 
 ## 15. Git workflow for remaining work
@@ -303,6 +312,8 @@ The following statements must remain clear to developers, reviewers, and evaluat
 - Permora authenticates real database-backed accounts.
 - Request records are owner-scoped and persisted in PostgreSQL.
 - Approval routing and decisions are server-authorized and auditable.
+- Requesters can view PostgreSQL-backed in-app notifications and mark them as read.
+- Administrators can view sanitized, read-only audit records.
 - Request approval does **not** provision or activate access.
 - External email, SMS, and push notifications are not implemented.
 - Institutional enrollment, staff assignment, course, laboratory, and research systems are not yet integrated.
