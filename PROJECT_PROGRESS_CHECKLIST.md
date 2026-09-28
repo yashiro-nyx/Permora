@@ -1,9 +1,9 @@
 # Permora Project Progress Checklist
 
-Last updated: September 28, 2026  
-Repository: `yashiro-nyx/Permora`  
-Production prototype: <https://permora.vercel.app>  
-Current development branch: `develop`  
+Last updated: September 28, 2026
+Repository: `yashiro-nyx/Permora`
+Production prototype: <https://permora.vercel.app>
+Current development branch: `develop`
 Milestone 5 branch: `feature/stage-2b-milestone-5`
 
 ## Project status summary
