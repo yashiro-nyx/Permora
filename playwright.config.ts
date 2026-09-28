@@ -1,12 +1,13 @@
 import { defineConfig } from "@playwright/test";
 import { loadEnvConfig } from "@next/env";
 import { randomBytes } from "node:crypto";
+import { preferNeonPooler } from "./lib/database-connection";
 
 loadEnvConfig(process.cwd());
-const testDatabaseUrl = process.env.TEST_DATABASE_URL;
-if (!testDatabaseUrl)
+const configuredTestDatabaseUrl = process.env.TEST_DATABASE_URL;
+if (!configuredTestDatabaseUrl)
   throw new Error("TEST_DATABASE_URL is required for browser tests.");
-const parsed = new URL(testDatabaseUrl);
+const parsed = new URL(configuredTestDatabaseUrl);
 const databaseName = decodeURIComponent(parsed.pathname.replace(/^\//, ""));
 if (
   !["postgres:", "postgresql:"].includes(parsed.protocol) ||
@@ -15,6 +16,8 @@ if (
   throw new Error(
     "Refusing browser tests: TEST_DATABASE_URL must name a PostgreSQL database ending in _test.",
   );
+const testDatabaseUrl = preferNeonPooler(configuredTestDatabaseUrl);
+process.env.TEST_DATABASE_URL = testDatabaseUrl;
 
 function testSecret(name: string, bytes: number, minimumLength: number) {
   const supplied = process.env[name];

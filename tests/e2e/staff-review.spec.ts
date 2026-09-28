@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { E2E, e2ePassword } from "./staff-fixture";
+import { E2E, e2eClientHeaders, e2ePassword } from "./staff-fixture";
 
 test.describe.configure({ mode: "serial" });
 
@@ -14,7 +14,10 @@ async function signIn(page: Page, email: string = E2E.approver.email) {
 }
 
 test.beforeAll(async ({ browser }) => {
-  page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  page = await browser.newPage({
+    viewport: { width: 1440, height: 1000 },
+    extraHTTPHeaders: e2eClientHeaders(30),
+  });
   await signIn(page);
 });
 

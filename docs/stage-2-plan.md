@@ -1,91 +1,110 @@
 # Permora Stage 2 plan
 
-> **Stage 2B Milestone 3 update — 2026-09-20:** server-authorized transactional approve, deny, and return-for-revision operations are implemented at `POST /api/review/requests/:id/decision`. The endpoint derives the actor from the active Better Auth session, enforces the persisted assignment and full responsibility scope, checks origin and JSON input, requires optimistic version and UUID idempotency values, and maps stale or unauthorized operations without exposing protected records. Approval revalidates current policy and requester eligibility. Migration `0006` persists idempotency keys and requester notifications; decision, state change, immutable events, audit, and notification commit atomically. Approval creates no entitlement and remains `approved_pending_activation`. Staff UI, notification UI, activation, and provisioning remain deferred.
+Updated 2026-09-28 after a repository-wide implementation audit. Stage 2A and Stage 2B Milestones 1–5 are implemented. The canonical checklist is [implementation-status.md](implementation-status.md); approval-domain detail remains in [stage-2b-plan.md](stage-2b-plan.md).
 
-> **Stage 2B Milestone 2 update — 2026-09-20:** the server-authorized approval read model is implemented. Active approvers and administrators need a current approval responsibility; normal queue/detail reads are restricted to the persisted assignee and re-check full requested-scope coverage. Administrators can inspect unassigned `pending_routing` failures only through a separate admin-only endpoint and receive no general review bypass. Explicit sanitized DTOs, validated filters, bounded deterministic pagination, private/no-store responses, and enumeration-resistant detail responses are tested. Decision mutations, the final staff UI, activation, and provisioning remain deferred. No migration was needed for this milestone; see [stage-2b-plan.md](stage-2b-plan.md).
-
-> **Stage 2B Milestone 1 update — 2026-09-20:** migrations `0004` and `0005`, transactional routing/decision domain services, and guarded legacy-pending reconciliation are implemented. Approval produces `approved_pending_activation` only and creates no entitlement. The administrator read model, routes, controls, requester notifications, activation, and downstream provisioning remain later milestones; see [stage-2b-plan.md](stage-2b-plan.md).
-
-Updated 2026-09-20. Stage 2A now uses Permora-owned email/password accounts. The earlier OIDC proposal is obsolete. PostgreSQL is the system of record; browser prototype records are never imported or used as a fallback.
+The earlier OIDC proposal is superseded. Permora uses its own Better Auth email/password accounts. PostgreSQL is the system of record, and browser prototype records are never imported or used as a fallback.
 
 ## Implemented Stage 2A boundary
 
-- **Authentication:** Better Auth 1.7 with its documented Next.js handler and PostgreSQL adapter. Public signup is disabled. Passwords use Argon2id (`argon2` 0.45) with 64 MiB memory, three iterations, and one lane. Better Auth stores opaque, revocable database sessions with an eight-hour server expiry and 15-minute refresh interval. Cookie caching is disabled so protected reads validate the database session. Production cookies are Secure; library session cookies are HttpOnly and SameSite. The canonical origin is the only trusted origin, so origin/CSRF checks remain enabled.
-- **Abuse control:** the auth endpoint stores rate-limit counters in PostgreSQL. Email sign-in allows five attempts per IP per 60 seconds. Login UI always shows the same invalid-account/invalid-password message. Inactive profiles cannot create a new session.
-- **Provisioning:** `npm run account:provision -- …` is a server-side, hidden-password command. There is no registration endpoint or default password. `--bootstrap-admin` is explicit and is refused after an active administrator exists. Every later account needs `--authorized-admin <internal UUID>`. Existing email accounts are never overwritten.
-- **Requests:** authenticated Student/Faculty requester roles are loaded from server records. Request creation, owner-scoped list/filter/count/detail, canonical scope assignments, duplicate/entitlement/conflict checks, validity, current policy, and approval routing run in PostgreSQL. Request plus submission history plus audit metadata commit together. New records are `pending`; Stage 2A creates no decision or grant.
-- **Cutover:** `DemoProvider` is removed from the application root. Login, shell, dashboard, request form/list/detail no longer use localStorage, sessionStorage, demo role switching, or browser seeds. Deferred routes render an explicit unavailable state rather than a mock workflow.
+- **Authentication:** Better Auth 1.7.5 with the Next.js handler and PostgreSQL adapter. Public signup and password-recovery endpoints are unavailable. Passwords use Argon2id with 64 MiB memory, three iterations, and one lane.
+- **Sessions:** opaque database sessions expire after eight hours and refresh after 15 minutes. Cookie caching is disabled so protected reads validate the database session. Logout revokes the session. Production cookies are Secure; session cookies are HttpOnly and SameSite.
+- **Abuse and request protection:** database-backed rate limiting allows five email sign-in attempts per client address per 60 seconds. Canonical-origin and CSRF checks remain enabled. Login errors do not reveal whether an account exists.
+- **Admission and roles:** an active `user_profile` is required before session creation. Server code reloads active state, requester type, and roles from PostgreSQL. Requesters cannot assign themselves identities, roles, scopes, or approval authority.
+- **Provisioning:** `account:provision` uses hidden password input, refuses overwrite, requires explicit first-administrator bootstrap, and requires an active authorized administrator for later accounts.
+- **Requester workflow:** authenticated students and faculty can create, list, search/filter, count, and inspect only their own persisted requests. Submission and renewal validation use current catalog policy, canonical assignments, ordinary entitlements, conflicts, dates, and routing configuration.
+- **Prototype cutover:** `DemoProvider` is not mounted. Login, shell, requester pages, staff pages, notifications, and audit use server data. `lib/demo-service.ts` remains historical test/prototype code only.
 
-Official compatibility references: [Better Auth Next.js integration](https://better-auth.com/docs/integrations/next), [PostgreSQL adapter](https://better-auth.com/docs/adapters/postgresql), [email/password options](https://better-auth.com/docs/authentication/email-password), [sessions](https://better-auth.com/docs/concepts/session-management), and [rate limiting](https://better-auth.com/docs/concepts/rate-limit). The installed application remains Next.js 15.5 / React 19; dependencies were not upgraded.
+## Implemented Stage 2B boundary
 
-## Data and authorization model
+Milestones 1–5 are complete:
 
-Migration [`0001_stage_2a_core.sql`](../db/migrations/0001_stage_2a_core.sql) creates Better Auth users/accounts/sessions/verifications/rate limits plus profiles, roles, institutional identifiers, policy versions, canonical scope options, requester assignments, ordinary entitlements, approver responsibilities, access requests, request scopes, submission history, and audit events. [`0002_catalog_v1.sql`](../db/migrations/0002_catalog_v1.sql) seeds the proposed six-resource catalog. Applying that seed records proposed configuration; it does not represent an approved university policy.
+1. Migrations `0004` and `0005` add approval states, versions, all-scope responsibility mappings, assignments, decisions, request events, constraints, indexes, and immutability.
+2. Server guards and sanitized read models restrict queues/details to the persisted assignee with a current fully covering responsibility. Administrators have a separate unassigned-failure read and no global approval bypass.
+3. Migration `0006` and the decision endpoint add idempotent, optimistic, transactional approve/deny/return operations. Decision, state, assignment, audit/request events, and notification commit together.
+4. The protected staff dashboard, review queue/detail, dialogs, and administrator unassigned page are implemented.
+5. Requester-owned in-app notifications and administrator-only read-only audit history are implemented.
 
-Internal UUIDs remain distinct from student/staff numbers. `institutional_identifier` stores the identifier type, issuer, and normalized value. Email is a login address, not proof of student/faculty status. The non-editable `user_profile.requester_role`, active roles, assignments, entitlements, and approver responsibility come only from administrator-controlled records.
+Approval transitions to `approved_pending_activation`. It does not create an `ordinary_entitlement`, downstream account, activation event, or active access.
 
-All requester reads include `requester_user_id` before search or filters. Detail lookup accepts an internal UUID or display ID only within that owner scope. Request actions ignore submitted owner, role, status, decision, and grant fields. Student Portal scope is derived as `own-account:<authenticated UUID>`. Other scopes must match a current administrator-maintained canonical option and requester assignment.
+## Data and migration history
 
-Submission uses a per-requester/resource PostgreSQL advisory transaction lock, then rechecks role, availability, policy, permission, required assignments, approver routing, ordinary entitlements, overlapping pending requests, renewal ownership, and dates. A missing assignment or route fails closed and inserts nothing. Renewals must refer to an owned expired record, remain renewable under the current policy, and preserve resource/permission/scope; the same current checks still apply.
+| Migration | Implemented schema |
+| --- | --- |
+| `0001_stage_2a_core.sql` | Better Auth user/account/session/verification/rate-limit tables; profiles, roles, institutional identifiers, catalog, assignments, entitlements, responsibilities, requests, scopes, submission history, and audit events. |
+| `0002_catalog_v1.sql` | Proposed six-resource catalog, permission-role mappings, required scope fields, validity policies, and policy versions. |
+| `0003_fix_rate_limit_schema.sql` | Better Auth-compatible non-null primary identifier for existing and future rate-limit rows. |
+| `0004_stage_2b_approval_foundation.sql` | Approval states/versioning, responsibility scopes, one active review assignment, immutable decisions/request events/audit events, and review indexes. |
+| `0005_enforce_approval_decision_reason.sql` | Non-empty reason enforcement for deny and return-for-revision decisions. |
+| `0006_stage_2b_decision_operations.sql` | Durable decision idempotency and recipient-scoped in-app notifications. |
 
-## Exact local setup
+Applied migrations are append-only. Add a new numbered migration for future changes; never edit an applied file.
 
-Create separate development and test databases. The role names below are examples; choose private passwords outside shell history and set them through your PostgreSQL administration tool.
+Internal user UUIDs remain distinct from student/staff numbers. Email proves login ownership only. Administrator-controlled profiles, roles, institutional identifiers, assignments, entitlements, and responsibilities remain authoritative until approved institutional integrations exist.
 
-```sql
-CREATE ROLE permora_migrator LOGIN;
-CREATE ROLE permora_app LOGIN;
-CREATE ROLE permora_test LOGIN;
-CREATE DATABASE permora_dev OWNER permora_migrator;
-CREATE DATABASE permora_test OWNER permora_test;
+## Request and approval lifecycle
+
+```text
+requester submits
+→ server validates current identity, policy, scopes, dates, ordinary access,
+  conflicts, resource availability, and a fully eligible non-self approver
+→ request becomes pending_review with exactly one assignment
+  OR remains pending_routing when no fully eligible approver exists
+→ persisted assignee reviews the current version
+→ approve | deny with reason | return for revision with reason
+→ approved_pending_activation | denied | returned_for_revision
+→ requester sees persisted status, event history, and in-app notification
 ```
 
-After running migrations as `permora_migrator`, grant only runtime DML in `permora_dev`:
+New submissions and their routing attempt commit in one transaction. Missing requester eligibility, policy, scope assignment, or resource availability rejects the submission. If no fully eligible approver exists, the request is preserved as `pending_routing` with immutable routing-unavailable evidence; it cannot be reviewed or decided. Approval revalidates current eligibility and policy, and a locked or prefilled client field never bypasses validation. A renewal opens a new owned request and repeats all checks. Return-for-revision is terminal for the reviewed record; the linked resubmission UI is still planned.
 
-```sql
-GRANT CONNECT ON DATABASE permora_dev TO permora_app;
-GRANT USAGE ON SCHEMA public TO permora_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO permora_app;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO permora_app;
-ALTER DEFAULT PRIVILEGES FOR ROLE permora_migrator IN SCHEMA public
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO permora_app;
-ALTER DEFAULT PRIVILEGES FOR ROLE permora_migrator IN SCHEMA public
-  GRANT USAGE, SELECT ON SEQUENCES TO permora_app;
+## Authorization model
+
+- Requester pages require an active session with a server-recorded student or faculty requester role.
+- Every requester query scopes by `requester_user_id`.
+- Approver queue/detail/decision access requires an approver/admin role, a current approval responsibility covering every requested scope, and the persisted assignment to that user.
+- Self-approval and partial responsibility matches are prohibited.
+- Administrator-only routes require the server-recorded admin role. The admin role does not bypass review assignment or responsibility.
+- Unauthorized and nonexistent protected detail IDs use indistinguishable responses where enumeration is a risk.
+- Role-based navigation is presentation only; pages, route handlers, services, and transactions enforce authorization.
+
+## Database CLI and local setup
+
+Use Node.js 22 LTS. Create separate development and test databases, then copy `.env.example` to ignored `.env.local`.
+
+```sh
+npm ci
+cp .env.example .env.local
+npm run db:migrate -- --database-target development
+npm run dev
 ```
 
-1. Copy `.env.example` to ignored `.env.local`.
-2. Set `DATABASE_URL` to the restricted `permora_app` development connection.
-3. Set `DATABASE_MIGRATION_URL` to the `permora_migrator` development connection.
-4. Set `TEST_DATABASE_URL` to the isolated `permora_test` database. The integration guard refuses a name that does not end in `_test`, or a URL equal to development/migration.
-5. Generate `AUTH_SECRET` locally with `openssl rand -base64 48`. Never paste its value into docs, chat, browser variables, or source.
-6. Keep `APP_URL=http://localhost:3000` for `npm run dev`. Login is `http://localhost:3000/login`; the library endpoint is `http://localhost:3000/api/auth/sign-in/email`. Email/password authentication has no callback URL.
-7. Apply additive migrations explicitly: `npm run db:migrate`.
-8. Bootstrap the first administrator in a private terminal. The command prompts twice without echo: `npm run account:provision -- --email <admin-email> --name "<name>" --role admin --department "<department>" --bootstrap-admin`.
-9. Save the printed internal administrator UUID. Create an approver and requester with `--authorized-admin <admin-uuid>`. For requesters, optionally add `--identifier-type student_number|staff_number --identifier <value> --issuer <institution-namespace>`.
-10. Configure at least one approver route before allowing submission: `npm run access:configure -- approver --actor <admin-uuid> --approver <approver-uuid> --resource r-library`.
-11. For scoped resources, create a canonical option and assign it: `npm run access:configure -- scope --actor <admin-uuid> --resource r-lms --field courseSection --code <official-code> --name "<display label>"`, then `npm run access:configure -- assignment --actor <admin-uuid> --user <requester-uuid> --resource r-lms --scope <scope-uuid> --evidence "<approved reason>"`.
-12. Record already-provided access with the `entitlement` command so duplicate requests fail. Accepted configuration commands are `scope`, `assignment`, `approver`, and `entitlement`.
+Development CLI operations load `DATABASE_URL` and `DATABASE_MIGRATION_URL` and reject different protocols, normalized hosts/Neon branches, or database names. Test operations require only `TEST_DATABASE_URL` and a database name ending in `_test`. Production operations do not load URLs from `.env.local`; both URLs must be injected into the current process and `--confirm-production` is mandatory.
 
-Migration and administrator commands require `DATABASE_MIGRATION_URL`; the web runtime does not. Commands print record IDs and outcomes but never passwords or hashes. They refuse invalid administrator actors and roll back the transaction on error.
+Bootstrap and later account/configuration examples are maintained in [HANDOFF.md](../HANDOFF.md). Run each CLI with `--help` before an operator action.
 
-For any later production environment, `APP_URL` must be an exact HTTPS origin. The reverse proxy must replace untrusted forwarding headers before traffic reaches Next.js so IP-based login limits cannot be bypassed with a client-supplied `X-Forwarded-For` value.
+## Verification
 
-## Verification commands
+```sh
+npm test
+npm run test:integration
+npm run test:e2e
+npm run lint
+npm run typecheck
+npm run build
+git diff --check
+```
 
-- `npm test` runs isolated unit/domain tests and does not touch PostgreSQL.
-- `npm run test:integration` uses `TEST_DATABASE_URL`, drops only that database's `public` schema after strict URL/name checks, reapplies migrations, and creates synthetic fixtures. It covers valid/invalid login, server expiration, logout revocation, owner isolation, forged identity/role/status fields, incompatible permission rejection, and persistence through a new sign-in.
-- `npm run lint`, `npm run typecheck`, and `npm run build` are required before merge.
+The integration and browser runners load `.env.local`, validate only `TEST_DATABASE_URL`, require `_test`, remove development/migration variables, and recreate only the guarded test schema. The current Node 22 run passed 43 unit, 43 PostgreSQL integration, and 20 Playwright tests, plus lint, typecheck, build, and diff checks.
 
-Without configured PostgreSQL URLs, migration and live/integration verification are blocked by setup, while compilation and unit tests remain available. The runtime returns authentication unavailable rather than switching to localStorage.
+## Remaining work after Stage 2B Milestone 5
 
-## Required policy decisions before real personal data
+- **Activation and provisioning:** define an approved queue, operator permissions, entitlement/outbox model, adapters, failure/retry/reconciliation, revocation, and expiry enforcement.
+- **Administrator maintenance UI:** users, assignments, entitlements, policy/catalog, and approver responsibilities remain CLI/migration maintained.
+- **Account operations:** password recovery/change, MFA, SSO, session administration, and break-glass recovery.
+- **Revision/resubmission:** create a new linked request from `returned_for_revision` after full current validation.
+- **External delivery:** email/SMS/push and preferences are absent; current notifications are in-app database records.
+- **Audit governance:** export, redaction, retention/legal hold, view-access logging policy, and external monitoring remain unresolved.
+- **Institutional integrations:** SIS/LMS/library/lab/research sources are not connected.
+- **Production operations:** owners, preview isolation, branch protection, secrets, backups/restore tests, monitoring, alerting, and incident runbooks require deliberate setup.
 
-- Approve or disable each proposed catalog resource, permission ID, default/maximum validity, renewable flag, and Student Portal handling.
-- Define retention/deletion for accounts, sessions, assignments, requests, and audit history.
-- Name administrators authorized to maintain roles, assignments, entitlements, and approval authority, including separation-of-duty and second-administrator recovery rules.
-- Approve canonical course/section, laboratory/software, project, and any restricted-library collection identifiers and display labels.
-- Confirm whether users may hold both Student and Faculty requester identities. Stage 2A assigns one non-editable requester role per account.
-
-## Deferred after Stage 2A
-
-Approval decisions and reasons, multi-stage routing, self-approval rules, access grants, downstream provisioning, activation, expiration/revocation workers, notifications/recovery email, MFA, password reset/change UI, administrator dashboards, integration sync, and protected audit/report screens remain Stage 2B or later. Approval and activation must stay separate. No later worker may treat a pending request as a grant.
+A bounded private/no-store `GET /api/health` probe exists. It is not a substitute for monitoring, and the repository must not be represented as a complete production access-control service until the remaining operational and activation boundaries are implemented.

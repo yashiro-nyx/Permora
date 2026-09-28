@@ -1,67 +1,62 @@
-# Permora prototype implementation
+# Permora prototype implementation history
 
-Historical prototype notes. For the current Stage 1 coverage audit and explicit remaining gaps, see [implementation-status.md](implementation-status.md). Future work must follow the [Stage 2 plan](stage-2-plan.md), not expand the demo service.
+This document preserves the Stage 1 browser-prototype decisions. It is historical, not the current runtime architecture. For current status see [Permora Project Progress Checklist](implementation-status.md), [Stage 2 plan](stage-2-plan.md), and [Stage 2B plan](stage-2b-plan.md).
 
-## Scope and evidence
+## Original scope and design evidence
 
-Implementation was authorized after the design-system documentation. The repository originally contained the two design documents and MCP settings, with no application or dependency manifest. This implementation establishes the requested Next.js 15 / React 19 / TypeScript / Tailwind CSS 4 stack; no existing dependencies or application code were replaced. See `package-lock.json` for reproducible versions. A PostCSS 8.5.28 override addresses transitive advisories without changing the requested framework major version.
+The prototype was authorized after the design-system audit and established Next.js 15, React 19, TypeScript, and Tailwind CSS 4. Figma design context and screenshots were inspected for these desktop frames:
 
-Design context **and screenshots** were retrieved from file `eP1FKbWJWPSCL3f34tM0Wt` for the implemented screen families. The original design-system document retains the detailed observed measurements and inconsistencies.
+| Observed Figma node | Original prototype route or component | Current route status |
+| --- | --- | --- |
+| `42:4` login | `/login` | Real Better Auth login; original imagery is stored locally. |
+| `3:2608` requester dashboard | `/dashboard` | PostgreSQL-backed requester/staff variants. |
+| `3:2441` request form | `/requests/new` | Server-filtered policy, scopes, submission, and renewal prefill. |
+| `3:3033`, `3:435` requester list/details | `/requests` | Owner-scoped PostgreSQL history/filter/details. |
+| `3:1257` review detail | `/review/[id]` | Assignment-scoped review and transactional decisions. |
+| `7:5` staff dashboard | `/dashboard` | Responsibility-scoped PostgreSQL summary. |
+| `7:447` review queue | `/review` | Assignment-scoped filters/pagination. |
+| `7:773` users | `/users` | Guarded deferred page; CLI provisioning remains current. |
+| `7:1134` resources | `/resources` | Guarded deferred page. |
+| `7:1441` reports | `/reports` | Guarded deferred page. |
+| `3:2061` audit | `/audit` | Administrator-only sanitized read-only audit history. |
+| `7:1998` notifications | `/notifications` | Requester-owned in-app notification center. |
 
-| Observed Figma node                           | Implemented route / shared component        |
-| --------------------------------------------- | ------------------------------------------- |
-| `42:4` login                                  | `/login`, LoginScreen                       |
-| `3:2608` requester dashboard                  | `/dashboard`, role-aware Dashboard          |
-| `3:2441` request form                         | `/requests/new`, RequestForm                |
-| `3:3033`, `3:435` request list / expanded row | `/requests`, RequestTable, Timeline         |
-| `3:1257` request review                       | `/requests/[id]`, RequestDetails            |
-| `7:5` administrator dashboard                 | `/dashboard` administrator variant          |
-| `7:447` administrator request list            | `/requests`, `/review`, shared RequestsList |
-| `7:773` users                                 | `/users`, Users                             |
-| `7:1134` resources                            | `/resources`, Resources                     |
-| `7:1441` reports                              | `/reports`, Reports                         |
-| `3:2061` history                              | `/audit`, Audit                             |
-| `7:1998` notifications                        | `/notifications`, Notifications             |
+The duplicate login frame reused the login implementation. The hidden notification flyout supplied no rendered behavior and remains unimplemented. Figma has no verified mobile/tablet variants. Responsive drawers, stacking, errors, empty states, confirmation dialogs, and focus behavior are proposed implementation decisions.
 
-The duplicate login frame shares the login implementation. The hidden flyout does not establish mobile behavior. Original institutional branding and sample identities were replaced with Permora text and fictional demo profiles. Photographs and non-brand SVG exports are local assets, not expiring MCP URLs.
+## Preserved visual and accessibility decisions
 
-## Applied decisions
+The current application retains the observed charcoal/yellow/white visual language, Inter body typography, rounded cards and controls, semantic status treatments, and local non-brand imagery. Original institutional branding was replaced with the Permora name; no logo was invented.
 
-**Observed visual language:** yellow primary actions; charcoal shell; white cards; Inter; restrained gray backgrounds/borders; rounded forms, table cards and summary tiles; distinct requester and administrator shells; wide review layout with a decision panel.
+Accessibility adjustments include dark text on yellow, stronger control borders, visible focus, semantic headings/forms/tables, labeled overflow regions, text-backed status, modal focus management, input-linked errors, and responsive layouts at narrow widths. Passing automated checks is not a WCAG certification; formal assistive-technology, browser-matrix, zoom, and complete contrast testing remain planned.
 
-**Inferred structure:** common request, resource, user and audit models support all role views. Request detail and timeline components serve requester and reviewer variants. Faculty shares requester layouts; reviewers share administrator shell styling.
+## Historical browser-demo policy
 
-**Proposed and implemented:** all mobile/tablet reflow, navigation drawer, demo login/profile switching, permission/expiry management route, help page, renewal prefill, user/resource editors, confirmation dialogs, loading/empty/error/success states and persistence recovery. Their visual and interaction details were not verified in Figma. Reports use actual demo counts instead of reproducing inconsistent sample figures. Printing invokes the browser's print/PDF UI; CSV buttons download real files.
+The first prototype used a `DemoProvider`, `lib/demo-service.ts`, synthetic profiles, and versioned localStorage. It simulated request decisions, activation/expiry, policy edits, reports, exports, and clock advancement to exercise presentation. Those behaviors were never a security boundary or production policy.
 
-**Normalization and accessibility fixes:** primary yellow is `#FFD700`; card radius 12px, panel 16px and control 8px are the documented normalized scale. Essential captions are at least 12px. Small application body copy remains 14px; larger form content uses 16px where space permits. Yellow actions use dark text; pending, success and danger use the documented darker foreground colors. Form control borders and focus outlines have stronger contrast. Native dialogs provide inert background, Escape, focus containment and restoration. Errors link to fields; statuses include text; charts provide data/labels. Tables scroll within labeled focusable regions, with relative containment to prevent hidden accessible text from expanding the page.
+The real mounted application no longer uses demo login, role switching, browser persistence, or demo mutations. Historical demo components and unit tests may remain for regression/reference, but:
 
-Mobile uses 16px gutters, stacked forms/detail panels, two summary cards where they fit and one at narrow widths. The sidebar becomes a drawer below 1024px. Identity fields stack below 480px; data tables retain their columns with local horizontal scrolling. This behavior is proposed, not extracted mobile evidence.
+- they are not imported as trusted production records;
+- no database failure falls back to them;
+- simulated approval/activation is not evidence of real access;
+- their generic permission levels and fixed seed clock do not define current policy;
+- current PostgreSQL records, server services, migrations, and authorization guards are authoritative.
 
-## Prototype workflow policy
+## Current architecture replacing the prototype
 
-These are explicit demo choices, not confirmed institutional policies:
+- App Router Server Components load trusted identity and protected reads.
+- Better Auth and PostgreSQL own accounts, sessions, roles, catalog policy, assignments, entitlements, requests, approval assignments/decisions, notifications, and audit records.
+- Server Actions and route handlers perform validated mutations.
+- `app/globals.css` contains semantic tokens and Tailwind CSS 4 theme mappings.
+- `components/ui.tsx` and focused requester/staff components provide shared presentation.
+- `lib/server/request-service.ts` owns requester workflow.
+- `lib/server/approval-read-service.ts` and `lib/approval-domain.ts` own approval reads/routing/decisions.
+- `lib/server/operations-service.ts` owns requester notifications and administrator audit reads.
+- `lib/demo-service.ts` is historical and unmounted.
 
-- Fixed seed clock: September 13, 2026, 09:00 UTC. Administrator clock advancement controls activation, expiry and expiry reminders. No wall-clock scheduler runs.
-- Permission levels: Read only, Standard, Administrative. Resource policies restrict levels by role, availability and maximum days. Students cannot request the records database; high-privilege levels require compatible policies.
-- Required expiration is strictly after the start, evaluated at 09:00 UTC. Grants use a half-open validity interval. Duplicate overlapping requests for the same user/resource are rejected.
-- Justification: 20–2,000 characters. Approval, denial and revocation require a reason of at least 10 characters.
-- Pending requests can be approved or denied once; stale versions are rejected. Approval before a future start produces Approved; the demo clock subsequently produces Active and Expired. Denied, revoked and expired are distinct states.
-- Renewals create new requests. Existing permissions do not extend automatically. Any other pending/approved/active overlapping grant still blocks renewal.
-- Administrators can edit profiles and policies. Deactivation or incompatible policy changes revoke affected pending/scheduled/active access with notifications and history.
-- Requesters see their records; reviewers see the review queue; administrator routes expose management controls. These are presentation and demo-service checks, never a production security boundary.
+Current approval ends at `approved_pending_activation`. Activation, provisioning, expiry enforcement, revocation, administrator CRUD, external notifications, audit export/retention, and institutional integrations remain future work.
 
-## Architecture and backend handoff
+## Verification history and current evidence
 
-Route wrappers and static help content are Server Components. Interactive screen bodies and the application shell consume a Client Component demo provider because browser storage supplies the data. Shared UI lives in `components/ui.tsx`; domain types live in `lib/model.ts`; mutations run through `transition` in `lib/demo-service.ts`. Token definitions and Tailwind 4 theme mappings live in `app/globals.css`. Grid/Flexbox handle page layout; absolute positioning is limited to decorations, overlays and shell behavior.
+The original prototype passed its contemporary unit/browser checks, but those results prove only historical client behavior. Current acceptance uses real server services and isolated PostgreSQL fixtures.
 
-Replace the provider adapter with authenticated server reads/mutations for a real backend, retaining shared presentation components and domain contracts. Enforce identity, resource policies, authorization and stale-version checks server-side, with transactional request/notification/audit writes. Add actual provisioning, scheduled expiry, notification delivery and tamper-resistant history. Local storage parsing/version checks and cross-tab synchronization are convenience features; they do not provide trust, atomic multi-user writes or retention guarantees.
-
-Unresolved production decisions: SSO provider, reviewer assignment/escalation, exact resource/role matrix, timezone and maximum-duration policies, notification channels, audit retention, renewal policy, and a supplied Permora logo.
-
-## Verification
-
-- ESLint, TypeScript, the optimized production build (16 generated pages), and six domain tests passed. Domain tests cover transitions, incompatible/overlapping permissions, expiration, stale decisions, revocation, scoped notification reads and renewal.
-- Four Chrome browser scenarios passed against both the development server and final production build at `127.0.0.1:3000`: full request-to-expiry flow and reload persistence; denial/validation/filtering/reset; administrator editing/policy revocation/export; route rendering and mobile keyboard/reflow checks.
-- Desktop routes were exercised at 1440px; requester reflow was checked at 390px and 320px, and administrator routes at 390px. Desktop dashboard, resources and review screenshots and mobile dashboard/form screenshots were visually inspected.
-- Browser assertions captured no uncaught page errors in the connected workflow and route/layout scenarios. Native drawer Tab containment, Escape dismissal and trigger focus restoration passed.
-- This is not a WCAG certification. Screen-reader testing, all browser engines, comprehensive zoom/text-spacing checks and exhaustive contrast combinations remain unverified. Production security and background expiration cannot be verified without a backend.
+As of the 2026-09-28 Node 22 audit, 43 unit tests, 43 PostgreSQL integration tests, and 20 Playwright tests pass, together with lint, typecheck, production build, and `git diff --check`. Automated database tests require only a guarded `TEST_DATABASE_URL` whose database name ends in `_test`.
