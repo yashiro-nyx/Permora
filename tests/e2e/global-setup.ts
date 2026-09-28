@@ -2,7 +2,8 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import argon2 from "argon2";
-import { Pool, type PoolClient } from "pg";
+import { type PoolClient } from "pg";
+import { ResilientPool } from "../../lib/database-pool";
 import { E2E, e2ePassword } from "./staff-fixture";
 
 function safeTestDatabaseUrl() {
@@ -162,7 +163,13 @@ async function request(
 }
 
 export default async function globalSetup() {
-  const pool = new Pool({ connectionString: safeTestDatabaseUrl(), max: 1 });
+  const pool = new ResilientPool({
+    connectionString: safeTestDatabaseUrl(),
+    max: 1,
+    connectionTimeoutMillis: 15_000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10_000,
+  }, 3);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -238,6 +245,84 @@ export default async function globalSetup() {
       displayId: "E2E-UNASSIGNED",
       submittedHoursAgo: 1,
     });
+    await client.query(
+      `INSERT INTO access_request
+        (id,display_id,requester_user_id,resource_id,permission_id,
+         policy_version_id,purpose,starts_at,expires_at,status,scope_fingerprint,
+         submitted_at,created_at,updated_at)
+       VALUES
+        ($1,'E2E-NOTIFY-APPROVED',$3::uuid,'r-student-portal','portal:view-own-academic-information',
+         '10000000-0000-4000-8000-000000000002','Persisted notification fixture for an approved own-account request.',
+         now(),now()+interval '30 days','approved_pending_activation','own-account:' || $3::text,now()-interval '40 minutes',now(),now()),
+        ($2,'E2E-NOTIFY-DENIED',$3::uuid,'r-library','library:subscribed-materials',
+         '10000000-0000-4000-8000-000000000004','Persisted notification fixture for a denied request.',
+         now(),now()+interval '30 days','denied','resource-wide',now()-interval '25 minutes',now(),now())`,
+      [
+        E2E.requests.notificationApproved,
+        E2E.requests.notificationDenied,
+        E2E.requester.id,
+      ],
+    );
+    await client.query(
+      `INSERT INTO request_submission_history
+        (id,request_id,actor_user_id,event_type,occurred_at,detail)
+       VALUES
+        ($1,$3,$5,'submitted',now() - interval '40 minutes','Access request submitted.'),
+        ($2,$4,$5,'submitted',now() - interval '25 minutes','Access request submitted.')`,
+      [
+        randomUUID(),
+        randomUUID(),
+        E2E.requests.notificationApproved,
+        E2E.requests.notificationDenied,
+        E2E.requester.id,
+      ],
+    );
+    const approvedEvent = "e2000000-0000-4000-8000-000000000401";
+    const deniedEvent = "e2000000-0000-4000-8000-000000000402";
+    await client.query(
+      `INSERT INTO request_event
+        (id,request_id,actor_user_id,event_type,occurred_at,detail)
+       VALUES
+        ($1,$3,$5,'review_approved',now() - interval '30 minutes','Approved; activation has not occurred.'),
+        ($2,$4,$5,'review_denied',now() - interval '15 minutes','Additional justification is required.')`,
+      [
+        approvedEvent,
+        deniedEvent,
+        E2E.requests.notificationApproved,
+        E2E.requests.notificationDenied,
+        E2E.approver.id,
+      ],
+    );
+    await client.query(
+      `INSERT INTO user_notification
+        (id,recipient_user_id,request_id,request_event_id,notification_type,title,body,created_at)
+       VALUES
+        ($1,$3,$4,$6,'request_approved_pending_activation','Request approved — awaiting activation','Your request was approved. Access is not active until activation is completed.',now() - interval '30 minutes'),
+        ($2,$3,$5,$7,'request_denied','Access request denied','Additional justification is required.',now() - interval '15 minutes')`,
+      [
+        E2E.notifications.approved,
+        E2E.notifications.denied,
+        E2E.requester.id,
+        E2E.requests.notificationApproved,
+        E2E.requests.notificationDenied,
+        approvedEvent,
+        deniedEvent,
+      ],
+    );
+    await client.query(
+      `INSERT INTO audit_event
+        (id,actor_user_id,subject_user_id,request_id,event_type,occurred_at,metadata)
+       VALUES
+        ($1,$3,$4,$5,'submitted',now() - interval '2 hours','{}'::jsonb),
+        ($2,$3,$4,$5,'review_approved',now() - interval '30 minutes','{"private":"not returned"}'::jsonb)`,
+      [
+        randomUUID(),
+        randomUUID(),
+        E2E.administrator.id,
+        E2E.requester.id,
+        E2E.requests.notificationApproved,
+      ],
+    );
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");

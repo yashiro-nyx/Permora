@@ -26,7 +26,7 @@ function identity(
 test("staff navigation is role-specific and excludes requester actions", () => {
   assert.deepEqual(
     navigationForIdentity(identity(["approver"])).map((item) => item[1]),
-    ["Dashboard", "Review Requests", "Notifications", "Help & Support"],
+    ["Dashboard", "Review Requests", "Help & Support"],
   );
   assert.deepEqual(
     navigationForIdentity(identity(["admin"])).map((item) => item[1]),
@@ -35,7 +35,6 @@ test("staff navigation is role-specific and excludes requester actions", () => {
       "Review Requests",
       "Unassigned Requests",
       "Audit Logs",
-      "Notifications",
       "Help & Support",
     ],
   );
@@ -52,7 +51,7 @@ test("requester navigation is preserved", () => {
     navigationForIdentity(identity(["student"], "student")).map(
       (item) => item[1],
     ),
-    ["Dashboard", "My Requests", "Request Access"],
+    ["Dashboard", "My Requests", "Request Access", "Notifications"],
   );
 });
 

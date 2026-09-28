@@ -6,6 +6,7 @@ import path from "node:path";
 import test, { after, before } from "node:test";
 import { promisify } from "node:util";
 import { Pool } from "pg";
+import { ResilientPool } from "../lib/database-pool";
 
 const execFileAsync = promisify(execFile);
 
@@ -120,11 +121,13 @@ async function runConfigureAccess(args: string[]) {
 }
 
 before(async () => {
-  pool = new Pool({
+  pool = new ResilientPool({
     connectionString: testDatabase.value,
     max: 1,
-    connectionTimeoutMillis: 30_000,
-  });
+    connectionTimeoutMillis: 15_000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10_000,
+  }, 3);
   const current = await pool.query<{ name: string }>(
     "SELECT current_database() AS name",
   );

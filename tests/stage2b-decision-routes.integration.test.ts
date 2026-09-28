@@ -4,6 +4,11 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import test, { after, before } from "node:test";
 import { Pool } from "pg";
+import { ResilientPool } from "../lib/database-pool";
+import {
+  closeApplicationTestPool,
+  installApplicationTestPool,
+} from "./helpers/application-test-pool";
 
 function requiredSafeTestDatabaseUrl() {
   const value = process.env.TEST_DATABASE_URL;
@@ -207,11 +212,14 @@ before(async () => {
   process.env.APP_URL = "http://localhost:3000";
   process.env.AUTH_SECRET =
     "stage2b-decision-test-secret-at-least-thirty-two-characters";
-  pool = new Pool({
+  pool = new ResilientPool({
     connectionString: testDatabase.value,
     max: 3,
-    connectionTimeoutMillis: 30_000,
-  });
+    connectionTimeoutMillis: 15_000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10_000,
+  }, 3);
+  await installApplicationTestPool(pool);
   const database = await pool.query<{ name: string }>(
     "SELECT current_database() AS name",
   );
@@ -248,9 +256,7 @@ before(async () => {
   ]);
 });
 
-after(async () => {
-  if (pool) await pool.end();
-});
+after(closeApplicationTestPool);
 
 test("decision route enforces origin, authentication, active role, and responsibility", async () => {
   const requestId = await seedReview({});

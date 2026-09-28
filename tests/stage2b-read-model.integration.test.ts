@@ -4,6 +4,11 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import test, { after, before } from "node:test";
 import { Pool } from "pg";
+import { ResilientPool } from "../lib/database-pool";
+import {
+  closeApplicationTestPool,
+  installApplicationTestPool,
+} from "./helpers/application-test-pool";
 import type { TrustedIdentity } from "../lib/auth-types";
 
 function requiredSafeTestDatabaseUrl() {
@@ -272,11 +277,14 @@ before(async () => {
   process.env.APP_URL = "http://localhost:3000";
   process.env.AUTH_SECRET =
     "stage2b-read-test-secret-at-least-thirty-two-characters";
-  pool = new Pool({
+  pool = new ResilientPool({
     connectionString: testDatabase.value,
     max: 2,
-    connectionTimeoutMillis: 30_000,
-  });
+    connectionTimeoutMillis: 15_000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10_000,
+  }, 3);
+  await installApplicationTestPool(pool);
   const database = await pool.query<{ name: string }>(
     "SELECT current_database() AS name",
   );
@@ -411,9 +419,7 @@ before(async () => {
   ]);
 });
 
-after(async () => {
-  if (pool) await pool.end();
-});
+after(closeApplicationTestPool);
 
 test("read routes require an authenticated server session", async () => {
   for (const response of [

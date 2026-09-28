@@ -4,6 +4,7 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import test, { after, before } from "node:test";
 import { Pool, type PoolClient } from "pg";
+import { ResilientPool } from "../lib/database-pool";
 import {
   applyApprovalDecision as applyApprovalDecisionDomain,
   type ApprovalDecision,
@@ -290,11 +291,13 @@ async function seedRoutedLabRequest(requester: string, approver: string) {
 }
 
 before(async () => {
-  pool = new Pool({
+  pool = new ResilientPool({
     connectionString: testDatabase.value,
     max: 4,
-    connectionTimeoutMillis: 30_000,
-  });
+    connectionTimeoutMillis: 15_000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10_000,
+  }, 3);
   const database = await pool.query<{ name: string }>(
     "SELECT current_database() AS name",
   );
