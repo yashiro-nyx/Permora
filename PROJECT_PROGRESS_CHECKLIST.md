@@ -1,165 +1,333 @@
 # Permora Project Progress Checklist
 
-Last updated: September 28, 2026
+Last updated: September 28, 2026  
+Repository: `yashiro-nyx/Permora`  
+Production prototype: <https://permora.vercel.app>  
+Current development branch: `develop`  
+Milestone 5 branch: `feature/stage-2b-milestone-5`
 
-## Project Foundation
+## Project status summary
 
-- [x] Define the university access-request problem.
-- [x] Create the Permora identity and interface design.
-- [x] Document the resource-access policy matrix.
-- [x] Configure GitHub, Neon PostgreSQL, and Vercel.
-- [x] Deploy the controlled prototype.
-- [x] Add a database-aware health endpoint.
-- [x] Pin the project to Node.js 22.
+Permora is a university access-request and approval system built with Next.js, React, TypeScript, Tailwind CSS, Better Auth, PostgreSQL, Neon, and Vercel.
 
-## Stage 1 — Requester Prototype
+The requester workflow, database-backed authentication, request persistence, approval routing, approval decisions, protected staff review interface, requester in-app notifications, administrator audit-log visibility, deployment preparation, and database CLI safety controls are complete.
 
-- [x] Build requester dashboard and request history.
-- [x] Add combined search and filters.
-- [x] Add expandable and full request details.
-- [x] Display denial reasons.
-- [x] Support expiration and renewal navigation.
-- [x] Restore the original Figma login images.
+Stage 2B Milestone 5 is **complete**. Permora now includes PostgreSQL-backed requester notifications and an administrator-only, read-only audit-log viewer. Approval still ends at `approved_pending_activation`; it does not grant or provision actual access.
+
+## 1. Foundation and design
+
+- [x] Analyze the original university access-request requirements.
+- [x] Select the system name **Permora**.
+- [x] Remove dependency on a fictional university identity.
+- [x] Create the Figma prototype and extract its design system.
+- [x] Document design tokens and implementation rules.
+- [x] Build responsive layouts for desktop, tablet, and mobile.
+- [x] Restore the original login-page imagery as local assets.
+- [x] Adopt semantic HTML and accessible interaction patterns.
+- [ ] Perform a final design comparison against every Figma frame before the final presentation.
+
+## 2. Stage 1 — Requester prototype
+
+- [x] Build the requester dashboard.
+- [x] Build the My Requests page.
+- [x] Add request summary cards.
+- [x] Add combined search and filtering.
+- [x] Add request details and expandable history.
+- [x] Show denial reasons.
+- [x] Show requested validity and scheduled expiration.
+- [x] Add expired-request renewal navigation.
+- [x] Correct expired-row actions and button placement.
 - [x] Verify desktop and mobile layouts.
+- [x] Replace browser-demo request behavior with server-backed records during Stage 2A.
 
-**Status:** Complete.
+## 3. Philippine university resource catalog
 
-## Stage 2A — Authentication and Persistence
+- [x] Define stable resource and permission identifiers.
+- [x] Add Learning Management System access.
+- [x] Add Student Portal access.
+- [x] Add Faculty Grading System access.
+- [x] Add Library E-Resources access.
+- [x] Add Computer Laboratory Systems access.
+- [x] Add Research Project Workspace access.
+- [x] Filter resources and permissions by requester role.
+- [x] Add course/section, laboratory, software, and research-project scopes.
+- [x] Prevent students from selecting faculty grading permissions.
+- [x] Limit Student Portal requests to the requester’s own account.
+- [x] Preserve compatible resource, permission, and scope values during renewal.
+- [x] Reject duplicate requests with overlapping validity periods.
+- [ ] Replace proposed policy values with officially approved institutional policies if the system is adopted by a real university.
+- [ ] Connect canonical course, laboratory, project, enrollment, and staff-assignment data to authoritative university sources.
 
-- [x] Replace the browser demo with email-and-password authentication.
-- [x] Store users, sessions, profiles, roles, and requests in PostgreSQL.
+## 4. Stage 2A — Authentication and PostgreSQL persistence
+
+- [x] Implement email/password authentication using Better Auth.
 - [x] Hash passwords using Argon2id.
-- [x] Add server-side session expiration and revocation.
-- [x] Add trusted-origin validation and database rate limiting.
-- [x] Add secure CLI account provisioning.
-- [x] Implement owner-scoped request access.
-- [x] Add the Philippine university resource catalog.
-- [x] Add role, permission, scope, entitlement, and assignment validation.
-- [x] Add safe, versioned database migrations.
+- [x] Store sessions in PostgreSQL.
+- [x] Support server-side session revocation and expiration.
+- [x] Enforce trusted-origin and CSRF protections.
+- [x] Add database-backed authentication rate limiting.
+- [x] Remove demo login and role-switching behavior.
+- [x] Implement owner-scoped requester records.
+- [x] Implement server-derived roles and identities.
+- [x] Add secure administrator bootstrap provisioning.
+- [x] Add authorized account provisioning for students, faculty, approvers, and administrators.
+- [x] Keep institutional identifiers separate from internal UUIDs.
+- [x] Add versioned migrations `0001` through `0003`.
+- [x] Fix the Better Auth `rateLimit` schema incompatibility.
+- [x] Add guarded PostgreSQL integration tests.
+- [x] Prevent integration fixtures from using a database whose name does not end in `_test`.
+- [ ] Add a password-change interface for institution-provisioned users.
+- [ ] Add secure password recovery and reset delivery.
+- [ ] Add optional or required MFA according to final university policy.
+- [ ] Build an administrator account-management interface to replace routine terminal provisioning.
 
-**Status:** Complete.
+## 5. Stage 2B Milestone 1 — Approval foundation
 
-## Stage 2B — Approval Workflow
-
-### Milestone 1 — Approval Foundation
-
-- [x] Add approval states and optimistic request versioning.
-- [x] Add review assignments and approver responsibilities.
-- [x] Add immutable decisions, events, and audit records.
-- [x] Implement full-scope deterministic routing.
+- [x] Add approval workflow states.
+- [x] Add optimistic request versioning.
+- [x] Add multi-scope approver responsibilities.
+- [x] Persist exactly one review assignment per routed request.
+- [x] Add immutable decision, request-event, and audit-event records.
+- [x] Prevent updates or deletion of immutable event records.
+- [x] Implement full-scope responsibility matching.
+- [x] Reject partial-scope matches.
+- [x] Exclude self-approval.
+- [x] Implement deterministic routing by workload and approver UUID.
+- [x] Preserve unrouteable requests as `pending_routing`.
 - [x] Add controlled routing reconciliation.
+- [x] Add versioned migrations `0004` and `0005`.
 
-**Status:** Complete.
+## 6. Stage 2B Milestone 2 — Authorized read model
 
-### Milestone 2 — Authorized Read Model
+- [x] Add active-session administrator and approver guards.
+- [x] Add assignment-scoped review queue queries.
+- [x] Add responsibility-scoped request-detail queries.
+- [x] Return identical not-found responses for unknown and unauthorized request IDs.
+- [x] Sanitize queue and detail DTOs.
+- [x] Add validated filters and bounded pagination.
+- [x] Add the administrator-only unassigned-routing query.
+- [x] Keep administrator review access subject to assignment and responsibility rules.
 
-- [x] Add server-side administrator and approver guards.
-- [x] Add assignment-scoped review queue and request details.
-- [x] Add sanitized DTOs, filtering, and pagination.
-- [x] Hide unauthorized and nonexistent records consistently.
-- [x] Add an administrator view for unassigned routing failures.
+## 7. Stage 2B Milestone 3 — Approval decisions
 
-**Status:** Complete.
+- [x] Add transactional approve, deny, and return-for-revision operations.
+- [x] Require the persisted, fully eligible assignee.
+- [x] Revalidate current eligibility, scope, responsibility, validity, and conflicts.
+- [x] Require reasons for denial and return-for-revision.
+- [x] Add expected-version concurrency checks.
+- [x] Add per-actor idempotency keys.
+- [x] Prevent duplicate and competing decisions.
+- [x] Create decision, request event, audit event, notification, assignment completion, and state transition atomically.
+- [x] Add versioned migration `0006`.
+- [x] Stop successful approval at `approved_pending_activation`.
+- [x] Confirm that approval creates no active entitlement.
 
-### Milestone 3 — Transactional Decisions
+## 8. Stage 2B Milestone 4 — Protected staff interface
 
-- [x] Add approve, deny, and return-for-revision operations.
-- [x] Require expected request versions.
-- [x] Add idempotency keys.
-- [x] Revalidate current eligibility before decisions.
-- [x] Write decisions, events, notifications, and audits atomically.
-- [x] Keep approval separate from activation.
+- [x] Add role-specific server-authorized navigation.
+- [x] Add live approver and administrator dashboard summaries.
+- [x] Build the assignment-scoped review queue.
+- [x] Build sanitized staff request details.
+- [x] Add confirmation dialogs for approval, denial, and revision.
+- [x] Add reason validation and duplicate-submit protection.
+- [x] Handle stale versions safely.
+- [x] Add the administrator unassigned-routing page.
+- [x] Show terminal requests as history instead of actionable reviews.
+- [x] Remove approval controls from terminal request details.
+- [x] Verify responsive staff layouts at desktop, tablet, 390 px, and 320 px.
 
-**Status:** Complete.
+## 9. Stage 2B Milestone 5 — Notifications and Audit Visibility
 
-### Milestone 4 — Protected Staff Interface
+Status: **Completed**
 
-- [x] Add role-specific staff navigation.
-- [x] Add live approver and administrator dashboards.
-- [x] Add the protected review queue and detail interface.
-- [x] Add confirmation dialogs and reason validation.
-- [x] Handle stale, duplicate, loading, empty, and failure states.
-- [x] Verify responsive and accessible layouts.
+### Requester notification center
 
-**Status:** Complete.
+- [x] Inspect the notification records created by approval decisions.
+- [x] Create an owner-scoped notification read service.
+- [x] Add a requester-only notification API or server action.
+- [x] Display notification type, safe message, date/time, and related request.
+- [x] Add all-notification and unread-only filters.
+- [x] Add bounded pagination and deterministic ordering.
+- [x] Add read/unread status.
+- [x] Implement idempotent “mark as read.”
+- [x] Implement owner-scoped “mark all as read.”
+- [x] Enforce active session, requester role, ownership, input validation, and same-origin protection.
+- [x] Use private, no-store caching.
+- [x] Do not expose another requester’s notifications.
+- [x] Keep email, SMS, and push delivery outside this milestone.
 
-### Stage 2B Milestone 5 — Notifications and Audit Visibility
+### Administrator audit-log viewer
 
-- [x] Add PostgreSQL-backed requester notifications.
-- [x] Add All and Unread filtering with pagination.
-- [x] Link notifications to their corresponding requests.
-- [x] Add idempotent mark-one-as-read and mark-all-as-read operations.
-- [x] Add administrator-only, read-only audit logs.
-- [x] Add audit search, event, and date filters.
-- [x] Add sanitized audit summaries and pagination.
-- [x] Add loading, empty, error, responsive, and accessible states.
-- [x] Verify authorization and same-origin notification mutations.
-- [x] Resolve Neon integration-test connection lifecycle issues.
-- [x] Verify the milestone under Node.js 22.23.2.
+- [x] Create an administrator-only audit read service.
+- [x] Return only sanitized, presentation-safe audit fields.
+- [x] Display event time, action type, safe actor information, target information, and summary.
+- [x] Add search, event-type, date-range, and pagination filters where supported.
+- [x] Keep ordering deterministic.
+- [x] Keep the interface read-only.
+- [x] Do not add audit update or delete operations.
+- [x] Reject requesters, approvers without admin role, inactive users, and unauthenticated users.
+- [x] Do not expose password hashes, sessions, tokens, credentials, database URLs, raw errors, or unnecessary metadata.
+
+### Milestone 5 testing and documentation
+
+- [x] Add unit tests for filters, parsing, display mapping, and safe error mapping.
+- [x] Test notification ownership isolation.
+- [x] Test requester-role enforcement.
+- [x] Test mark-one and mark-all idempotency and ownership.
+- [x] Test administrator-only audit access.
+- [x] Test audit DTO sanitization.
+- [x] Test filtering, pagination, and deterministic ordering.
+- [x] Add Playwright coverage for requester notifications.
+- [x] Add Playwright coverage for administrator audit logs.
+- [x] Verify desktop, tablet, 390 px, and 320 px layouts.
+- [x] Update `docs/stage-2b-plan.md`.
+- [x] Update `docs/implementation-status.md`.
+- [x] Update `HANDOFF.md` for the current operational boundary.
+- [x] Verify under Node.js 22.23.2.
 - [x] Pass 43 unit tests.
-- [x] Pass 43 PostgreSQL integration tests.
+- [x] Pass 43 PostgreSQL integration tests against the guarded `_test` database.
 - [x] Pass 20 Playwright E2E tests.
-- [x] Pass ESLint.
-- [x] Pass TypeScript type checking.
-- [x] Pass the production build.
-- [x] Pass `git diff --check`.
-- [x] Confirm automated database tests use only the guarded PostgreSQL test database ending in `_test`.
-- [x] Confirm the diff contains the intended Milestone 5 changes.
-- [x] Confirm credentials, database URLs, tokens, and other secrets are absent from test output and tracked Milestone 5 changes.
-- [x] Confirm migrations `0001`–`0006` remain ordered and no additional Milestone 5 migration is required.
-- [x] Update the implementation, Stage 2B, handoff, and project-progress documentation.
+- [x] Pass ESLint, TypeScript checking, the production build, and `git diff --check`.
+- [x] Push `feature/stage-2b-milestone-5` and open a pull request into `develop`.
 
-**Status:** Completed.
+## 10. Stage 2C — Activation and lifecycle management
 
-## Stage 2C — Activation and Access Lifecycle
+Status: **Deferred**
 
-- [ ] Define the activation queue and authorized activation roles.
-- [ ] Design the entitlement and outbox transaction boundary.
-- [ ] Implement activation without confusing approval with granted access.
-- [ ] Add retry-safe downstream provisioning.
-- [ ] Add activation failure and manual-intervention states.
-- [ ] Add requester-visible activation outcomes.
-- [ ] Add automated expiration and revocation.
-- [ ] Add external email, SMS, and push notification delivery.
-- [ ] Add monitoring and operational recovery procedures.
-- [ ] Add integration and browser coverage.
+- [ ] Define which university system or administrator performs activation.
+- [ ] Design the separation between approval and actual provisioning.
+- [ ] Add an authorized activation operation.
+- [ ] Require current eligibility and policy revalidation before activation.
+- [ ] Create active entitlement records only after successful provisioning.
+- [ ] Record activation success and failure as immutable events.
+- [ ] Notify the requester when activation succeeds or fails.
+- [ ] Implement scheduled expiration processing.
+- [ ] Revoke or expire entitlements safely.
+- [ ] Implement renewal processing without extending the old request in place.
+- [ ] Add retry and reconciliation behavior for downstream provisioning failures.
+- [ ] Prevent duplicate activation and expiration effects.
+- [ ] Add lifecycle integration and browser tests.
+- [ ] Document manual recovery procedures.
 
-**Status:** Not started.
+## 11. Future administrator capabilities
 
-## Remaining Administration and Account Work
+- [ ] Build user-account creation and maintenance UI.
+- [ ] Add user activation and deactivation controls.
+- [ ] Add secure temporary-password or invitation workflows.
+- [ ] Add resource and permission policy management.
+- [ ] Add approver-responsibility management.
+- [ ] Add safe reassignment for unassigned requests.
+- [ ] Add approver delegation and absence handling.
+- [ ] Add institutional identifier maintenance.
+- [ ] Add analytics and operational reports.
+- [ ] Add notification preferences when external delivery is introduced.
+- [ ] Define retention and archival policies.
 
-- [ ] Add administrator account-management screens.
-- [ ] Add secure first-login password-change workflow.
-- [ ] Add password recovery.
-- [ ] Add MFA.
-- [ ] Add approver responsibility-management screens.
-- [ ] Add assignment, entitlement, and catalog-maintenance screens.
-- [ ] Add reassignment and delegation controls.
-- [ ] Finalize authoritative university integrations.
+## 12. Deployment and environments
 
-## Deployment and Team Handoff
-
-- [x] Publish the repository to GitHub.
-- [x] Deploy the prototype to Vercel.
-- [x] Connect the production application to Neon.
-- [x] Apply production database migrations.
-- [x] Bootstrap the first production administrator.
-- [x] Verify the production health endpoint.
-- [x] Add `HANDOFF.md`.
-- [x] Create `develop` and feature-branch workflow.
-- [x] Push the Milestone 5 feature branch.
+- [x] Create the GitHub repository.
+- [x] Push `main` to GitHub.
+- [x] Create and push `develop`.
+- [x] Create and push `feature/stage-2b-milestone-5`.
+- [x] Deploy the production prototype to Vercel.
+- [x] Configure Node.js 22.
+- [x] Create a production health endpoint.
+- [x] Verify production application and database availability.
+- [x] Create Neon production, development, and test branches.
+- [x] Apply migrations `0001`–`0006` to production using a controlled operator environment.
+- [x] Provision production prototype accounts.
+- [x] Verify the live request-to-approval workflow.
+- [x] Confirm that approval does not activate access.
+- [x] Add explicit database-target safety controls to operational CLI scripts.
+- [x] Push the completed Milestone 5 feature branch.
 - [x] Open the Milestone 5 pull request into `develop`.
 - [ ] Complete teammate review of the Milestone 5 pull request.
-- [ ] Review and merge Milestone 5 into `develop`.
-- [ ] Verify the merged `develop` preview deployment.
-- [ ] Promote an approved release from `develop` to `main`.
+- [ ] Merge Milestone 5 into `develop`.
+- [ ] Confirm that the Vercel `develop` Preview deployment uses only the Neon development branch.
+- [ ] Confirm that Preview uses a separate `AUTH_SECRET` from Production.
+- [ ] Confirm that Preview `APP_URL` exactly matches its stable Preview URL.
+- [ ] Keep `TEST_DATABASE_URL` and migration credentials out of Vercel deployments.
+- [ ] Add monitoring and operational alerting appropriate for a production system.
+- [ ] Complete a formal security review before using real university records.
 
-## Current Boundary
+## 13. Database CLI safety
 
-Permora supports database-backed authentication and owner-scoped requests,
-auditable approval routing and decisions, PostgreSQL-backed requester in-app
-notifications, and administrator-only, read-only audit-log visibility.
-Approval ends at `approved_pending_activation` and does not provision access.
+- [x] Require `--database-target development`, `test`, or `production`.
+- [x] Reject unstated database targets.
+- [x] Validate protocol, database name, normalized Neon hostname, and port.
+- [x] Treat matching Neon direct and pooler hosts as the same branch.
+- [x] Permit separate runtime and migration usernames.
+- [x] Require `_test` for test database operations.
+- [x] Require `--confirm-production` for production operations.
+- [x] Require both production runtime and migration URLs in the current process.
+- [x] Prevent production database URLs from being loaded from `.env.local`.
+- [x] Avoid printing credentials and database URLs in failures.
 
-The system does not yet activate, provision, expire, or revoke real access
-in downstream university systems.
+## 14. Final verification checklist
+
+Run these checks before merging a feature branch:
+
+```bash
+npm test
+npm run test:integration
+npm run test:e2e
+npm run lint
+npm run typecheck
+npm run build
+git diff --check
+```
+
+- [x] All unit tests pass (43 tests).
+- [x] All PostgreSQL integration tests pass against the guarded `_test` database (43 tests).
+- [x] All Playwright tests pass against isolated test fixtures (20 tests).
+- [x] ESLint passes.
+- [x] TypeScript checking passes.
+- [x] The production build passes.
+- [x] `git diff --check` reports no formatting errors.
+- [x] The working tree contains only intended changes.
+- [x] No secrets, `.env.local`, database URLs, credentials, or generated test artifacts are staged.
+- [x] Database migrations remain versioned; existing migrations were not rewritten and Milestone 5 required no new migration.
+- [x] Documentation matches actual behavior.
+- [ ] A teammate reviews authorization, ownership, and database-target boundaries.
+
+## 15. Git workflow for remaining work
+
+Use the following flow for each remaining milestone:
+
+1. Start from the latest `develop` branch.
+2. Create a dedicated feature branch.
+3. Implement and verify the milestone locally.
+4. Push the feature branch.
+5. Open a pull request into `develop`, not directly into `main`.
+6. Require review and passing checks before merging.
+7. Verify the Vercel Preview deployment against the Neon development branch.
+8. Merge `develop` into `main` only for a reviewed production release.
+9. Run production migrations manually from the controlled operator environment when a release includes new migrations.
+10. Perform post-deployment health and workflow checks.
+
+## 16. Current system boundary
+
+The following statements must remain clear to developers, reviewers, and evaluators:
+
+- Permora authenticates real database-backed accounts.
+- Request records are owner-scoped and persisted in PostgreSQL.
+- Approval routing and decisions are server-authorized and auditable.
+- Requesters can view PostgreSQL-backed in-app notifications and mark them as read.
+- Administrators can view sanitized, read-only audit records.
+- Request approval does **not** provision or activate access.
+- External email, SMS, and push notifications are not implemented.
+- Institutional enrollment, staff assignment, course, laboratory, and research systems are not yet integrated.
+- The deployed application is a controlled functional prototype, not a complete university production access-control service.
+
+## Team handoff notes
+
+Before starting work, every teammate should read:
+
+- `README.md`
+- `HANDOFF.md`
+- `docs/implementation-status.md`
+- `docs/stage-2-plan.md`
+- `docs/stage-2b-plan.md`
+- `docs/resource-access-matrix.md`
+
+Never place credentials in source code, Git history, screenshots, issue comments, or pull-request descriptions. Never run fixtures against development or production. When the database target is uncertain, stop and verify it before running the command.
