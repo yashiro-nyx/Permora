@@ -8,7 +8,7 @@ Permora is an access-request and approval application for a proposed Philippine 
 
 The stack is Next.js 15 App Router, React 19, TypeScript 5, Tailwind CSS 4, Better Auth 1.7 email/password authentication, Argon2id, PostgreSQL through `pg`, and Neon. The design source is [University Access Request in Figma](https://www.figma.com/design/eP1FKbWJWPSCL3f34tM0Wt/University-Access-Request?node-id=0-1); code uses the Permora name and no invented logo.
 
-The project is at **Stage 2B Milestone 4 plus post-milestone UI fixes**. Real accounts, sessions, owner-scoped requests, routing, approval reads, transactional decisions, audit events, and the protected staff interface exist. Activation and most administrative operations are deferred.
+The project has completed **Stage 2B Milestones 1–5**. Real accounts, sessions, owner-scoped requests, routing, approval reads and decisions, the protected staff interface, requester in-app notifications, and administrator read-only audit history exist. Activation and most administrator maintenance operations are deferred.
 
 Security goals are server-trusted identity and roles, owner isolation, least privilege, full-scope fail-closed routing, revocable sessions, CSRF/origin protection, database rate limiting, transactional immutable evidence, optimistic concurrency, idempotency, and strict separation of approval from activation.
 
@@ -73,13 +73,13 @@ The app requires Node runtime APIs (`pg`, native Argon2). Do not move database/a
 
 **Completed:** no-public-registration email/password accounts; Argon2id; revocable HttpOnly sessions; database rate limiting; active-account admission; server roles; owner-scoped request create/list/filter/count/detail; catalog/scope policy; deterministic full-scope non-self routing; assigned review read model; protected staff UI; transactional approve/deny/return with reasons, optimistic versions, idempotency, events, and notification records; responsive role shells; guarded migrations and isolated tests.
 
-**Partial:** decision notifications are stored but the notification center/delivery is deferred; immutable events exist but final audit UI/export/retention is deferred; renewal revalidation exists but revision/resubmission policy is incomplete; assignments are administrator-maintained until integrations exist.
+**Partial:** in-app notification presentation/read state and read-only audit presentation are implemented, while external delivery, notification preferences, audit export/retention/redaction and external monitoring are deferred; renewal revalidation exists but revision/resubmission policy is incomplete; assignments are administrator-maintained until integrations exist.
 
-**Deferred:** activation/provisioning/revocation/expiry jobs; password recovery, MFA and SSO; multi-stage approval, delegation and reassignment; final notifications, audit exports, analytics and monitoring; most administrator CRUD; institutional integrations.
+**Deferred:** activation/provisioning/revocation/expiry jobs; password recovery, MFA and SSO; multi-stage approval, delegation and reassignment; external notifications, audit exports/retention, analytics and monitoring; most administrator CRUD; institutional integrations.
 
 **Demo/test-only:** historical `lib/demo-service.ts` and older demo components are not mounted in the real flow. Playwright recreates only a guarded `_test` database and seeds synthetic accounts. Its configuration generates a cryptographically random run namespace, password, and auth secret in memory for each invocation; optional dedicated `PERMORA_E2E_*` inputs are validated and never fall back to development/production credentials. Browser/localStorage records are never trusted or imported.
 
-**Known boundary:** this is suitable for a clearly labeled, access-controlled prototype/pilot after deliberate configuration. It is not a complete production access-control service. A bounded `GET /api/health` probe is implemented, but broader monitoring is not. Recommended next milestone: define the activation/entitlement state machine and adapter/outbox, add admin assignment/responsibility maintenance, and finish notifications/audit presentation and observability.
+**Known boundary:** this is suitable for a clearly labeled, access-controlled prototype/pilot after deliberate configuration. It is not a complete production access-control service. A bounded `GET /api/health` probe is implemented, but broader monitoring is not. Recommended next milestone: define the activation/entitlement state machine and adapter/outbox, then add administrator assignment/responsibility maintenance and operational observability.
 
 ## F. Local setup
 
@@ -217,6 +217,8 @@ All package scripts and their intended use:
 
 Integration tests load `.env.local`, require only `TEST_DATABASE_URL`, delete inherited development/migration variables, validate PostgreSQL plus `_test`, recreate only the test schema, and run sequentially. Playwright has the same guard, uses port 3200, and one worker. Both are destructive to the configured test database.
 
+Latest Node 22 verification on 2026-09-28 passed 43 unit tests, 43 isolated PostgreSQL integration tests, and 20 Playwright tests. Lint, typecheck, optimized build, and `git diff --check` also passed. The integration and browser runners derive a pooled Neon endpoint only after validating the configured test URL; the branch and `_test` database do not change.
+
 `db:migrate` validates the selected target before using its migration connection, takes an advisory transaction lock, applies files lexically, and tracks `schema_migration`. Development and production require a matching runtime/migration pair; test uses only its guarded test URL. Inspect status safely with:
 
 ```sh
@@ -236,7 +238,7 @@ psql "$DATABASE_MIGRATION_URL" -c \
 
 ## K. GitHub publication checklist
 
-Audit on 2026-09-21: branch `main`; `.env.local` and `.kiro/` are present locally and ignored; no live database URL, password, private key, session token, or production secret found in the current tracked-file scan. A follow-up check found a clean tree with `main` tracking and matching `origin/main`.
+Security audit recorded on 2026-09-21: `.env.local` and `.kiro/` were ignored; no live database URL, password, private key, session token, or production secret was found in the tracked-file scan. The full-history category scan found only superseded synthetic E2E literals. History was not rewritten. Re-run the publication checks on the exact commit to be published; the current 2026-09-28 working branch is `feature/stage-2b-milestone-5` with intentional uncommitted implementation and documentation changes.
 
 - [x] Current source contains no fixed E2E username, password, or auth secret; each guarded run generates ephemeral values or accepts explicitly test-only overrides.
 - [x] Full-history filename/category audit completed without printing values. Earlier commits contain the superseded deterministic synthetic E2E credential category in `playwright.config.ts` and `tests/e2e/staff-fixture.ts`; no live-system credential was identified. History was not rewritten.
@@ -266,8 +268,8 @@ Use public visibility only after approval. Do not rewrite history. The repositor
 
 | Check | Current result |
 | --- | --- |
-| Git | Existing repository on `main`; follow-up verification found a clean tree with `main` tracking and matching `origin/main` |
-| Sensitive local files | `.env.local` and `.kiro/` are present locally and ignored; no untracked files existed before this task |
+| Git | Existing repository; publication must use a reviewed clean commit. The documentation audit was performed on `feature/stage-2b-milestone-5` with intentional uncommitted changes. |
+| Sensitive local files | `.env.local` and `.kiro/` are present locally and ignored. Recheck ignored/tracked status and the complete working tree immediately before publication. |
 | Tracked-secret scan | No likely live secret found; placeholder URLs exist in `.env.example`, an unreachable fallback exists in `lib/server/db.ts`, and historical synthetic test literals are categorized above. Current E2E credentials are ephemeral |
 | Node/package configuration | npm with lockfile; Node 22 pinned in `.nvmrc` and `engines`; Next 15.5.25, React 19.3, TypeScript 5.9, Tailwind 4.3, Better Auth 1.7.5 |
 | Build configuration | Standard Next.js defaults; no `next.config.*` or `vercel.json`; production build succeeds locally |

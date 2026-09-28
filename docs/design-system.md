@@ -1,6 +1,6 @@
 # Permora design system
 
-Design analysis dated 2026-09-13. Scope: documentation only; no application implementation or dependency changes.
+Design analysis dated 2026-09-13 and implementation-status review dated 2026-09-28. The Figma evidence remains historical source material; current runtime coverage is tracked in [implementation-status.md](implementation-status.md).
 
 ## Evidence and repository baseline
 
@@ -10,7 +10,7 @@ Design analysis dated 2026-09-13. Scope: documentation only; no application impl
 
 Source: [Figma Page 1](https://www.figma.com/design/eP1FKbWJWPSCL3f34tM0Wt/University-Access-Request?node-id=0-1), file `eP1FKbWJWPSCL3f34tM0Wt`. The connected MCP lists one page, `0:1`. All 14 visible screen frames below were inspected using `get_design_context` and its returned screenshot. The selected radio card, approval button, approved badge, and login input were also inspected individually. Metadata was used for inventory and native dimensions, not as the sole visual evidence. Node IDs below refer to this file; append `?node-id=3-2441`, for example, to open `3:2441`.
 
-The workspace initially contained only `.kiro/settings/mcp.json`; no `AGENTS.md`, README, application files, package manifest, lockfile, Tailwind configuration, or Git directory was found. Ancestor instruction files were also checked. No existing components or tokens are available to reuse. Target: **Next.js 15 App Router, React 19, TypeScript, Tailwind CSS 4**. Installed versions are **not verifiable**, so there is no demonstrated version mismatch and no dependency change to make.
+At the time of this design audit, the workspace contained only the design documents and MCP settings. That baseline is retained to explain why the component contracts were proposed from Figma rather than extracted from code. The repository now implements **Next.js 15 App Router, React 19, TypeScript, and Tailwind CSS 4** with semantic tokens in [`app/globals.css`](../app/globals.css), shared primitives in [`components/ui.tsx`](../components/ui.tsx), and role-focused requester/staff components. See `package.json` and the lockfile for installed versions.
 
 **Product constraint:** use **Permora** in navigation, login, page titles, and future product copy. Omit the existing TIP tile, institutional names, institution-specific copyright, and sample identity data. Use plain product-name text; do not invent, redraw, or substitute a logo. Preserve the charcoal/yellow visual language. Photography remains a design reference pending a decision about appropriate Permora imagery.
 
@@ -244,7 +244,7 @@ Ratios below were calculated from the exact sRGB foreground/background values us
 
 ## Implementation mapping
 
-**Proposed:** implement reusable typed React components and semantic HTML, with tokens defined once in CSS. The example maps runtime semantic variables through Tailwind CSS 4 `@theme inline`; this generates utilities such as `bg-primary` and `text-on-primary`. Keep layout/typography tokens in the appropriate theme namespaces. Reference: [Tailwind theme variables](https://tailwindcss.com/docs/theme).
+**Implemented direction:** reusable typed React components and semantic HTML use tokens defined in CSS. The example below records the intended Tailwind CSS 4 mapping pattern; [`app/globals.css`](../app/globals.css) is the current implementation source. Reference: [Tailwind theme variables](https://tailwindcss.com/docs/theme).
 
 ```css
 @import "tailwindcss";
@@ -284,18 +284,19 @@ Ratios below were calculated from the exact sRGB foreground/background values us
 /* Example: bg-primary text-on-primary rounded-control px-6 py-3 */
 ```
 
-This is an illustrative subset, not a complete stylesheet or installed configuration. Extend it with semantic status foreground/background/border triplets, inverse surfaces, font weights, other elevations and layout widths above. Font-family declarations do not load font files. Do not assume Tailwind's default palette exactly equals the raw Figma hex values.
+This is an illustrative subset, not the complete stylesheet. The implementation also defines semantic status, inverse-surface, typography, elevation, and layout rules. Inter and JetBrains Mono are installed locally through `@fontsource-variable`; it does not depend on an expiring Figma or remote font URL. Do not assume Tailwind's default palette exactly equals the raw Figma hex values.
 
 Use shared App Router layouts for persistent shell and identity; compose role-specific data/actions into shared dashboard, list and detail templates. Default pages, metric cards, read-only details and audit data to Server Components. Client boundaries belong around stateful drawer/popover/dialog controls, disclosure rows, controlled filter enhancements, validation feedback, password reveal and interactive chart features. A form can use native submission/server actions without making the whole page a Client Component. Pass serializable data across boundaries; server actions are explicit mutation entrypoints, not arbitrary callback props.
 
 Server-side authorization must check identity, resource scope, action, ownership/reviewer assignment, access level, validity window, and allowed state transition on every protected read and mutation. Hiding navigation or approval controls grants no security. Recheck expiry on protected resource access; the displayed timestamp is not enforcement. Calculate policy-based expiration on the server, reject stale/duplicate decisions, and write audit events from the server transaction. Session/security checklist copy must be backed by evidence; do not ship mock “secure” or “verified” indicators as guarantees.
 
-## Unresolved decisions
+## Resolved implementation choices and remaining design decisions
 
-1. Choose one primary yellow, pending-state semantics, and approved/active naming across roles. Proposed token normalization and accessibility fixes are documented above, not edits to Figma.
-2. Decide whether the requester header needs duplicate top/side route navigation, whether to retain both shell palettes/widths, and whether the two request-list designs are alternatives or distinct views.
-3. Confirm actual permission vocabulary: the form uses Read-only/Standard/Administrative while tables use Full Access, Edit, Connect and other resource-specific levels. Do not equate these silently.
-4. Define faculty and approver scopes, reviewer assignment, denial reasons, renewal flow, and whether approval requires a confirmation dialog or additional verification. No separate approver/mobile/MFA designs establish these rules.
-5. Confirm duration policy, start-date rules, timezone display and inclusive/exclusive expiration. Designs mix 2023/2024/2026 examples and GMT/PST labels; sample counts and pagination ranges also disagree with visible rows. They are not business rules.
-6. Resolve identity inconsistencies (student header versus researcher in request form), notification unread behavior, ambiguous user-management icons, and hidden flyout appearance. Metadata text can differ from rendered text: login email/title examples vary, so screenshots/context take priority over names.
-7. Choose Permora-appropriate imagery and verify font/icon assets before implementation. No logo recreation is authorized. No mobile, empty, error, loading, focus or dialog visual specification has been verified.
+1. The implementation normalizes primary yellow to `#FFD700`, uses dark text on yellow, and distinguishes `approved_pending_activation` from active access. This is an accessibility/domain adaptation, not an edit to Figma.
+2. Requester and staff shells use role-specific navigation; the sidebar becomes a modal drawer below the desktop breakpoint. The two request-list frames informed one owner-scoped requester view plus one staff review queue.
+3. Generic Figma permission labels were replaced with stable resource-specific permission IDs from the [resource access matrix](resource-access-matrix.md). They are not silently equated.
+4. The initial approval workflow uses one fully eligible persisted approver, non-empty denial/return reasons, confirmation dialogs, optimistic versions, and idempotency. Mobile/dialog/error states remain proposed because Figma does not show them.
+5. Current policies use versioned default/maximum days and date-only input stored at 09:00 UTC. Final institutional timezone, inclusive/exclusive expiry, and approver date-adjustment rules remain unresolved.
+6. The database-backed notification center implements All/Unread filters; the hidden Figma flyout remains unverified and unimplemented. User/resource management icon semantics remain deferred with those pages.
+7. Figma-supplied non-brand login assets and local fonts are stored in the project. Permora still has no supplied logo, and no logo recreation is authorized.
+8. Formal screen-reader, browser-matrix, 200% zoom, text-spacing, and exhaustive contrast verification remains outstanding. Passing current automated checks is not a WCAG certification.
