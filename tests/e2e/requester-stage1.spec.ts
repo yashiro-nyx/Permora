@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { E2E, e2ePassword } from "./staff-fixture";
+import { E2E, e2eClientHeaders, e2ePassword } from "./staff-fixture";
 
 test.describe.configure({ mode: "serial" });
 
@@ -13,8 +13,22 @@ async function signIn(target: Page) {
   await expect(target).toHaveURL(/\/dashboard$/);
 }
 
+function dateLabel(daysFromToday: number) {
+  const value = new Date();
+  value.setUTCDate(value.getUTCDate() + daysFromToday);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(value);
+}
+
 test.beforeAll(async ({ browser }) => {
-  page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  page = await browser.newPage({
+    viewport: { width: 1440, height: 1000 },
+    extraHTTPHeaders: e2eClientHeaders(20),
+  });
   await signIn(page);
 });
 
@@ -32,17 +46,21 @@ test("request history, filters, and accessible details use persisted records", a
   await expect(page.getByText("Authenticated session")).toHaveCount(0);
   await expect(
     page.getByRole("region", { name: "Request summary" }),
-  ).toContainText("05");
+  ).toContainText("07");
   await expect(
     page.getByRole("region", { name: "Request summary" }),
   ).toContainText("Approved requests awaiting activation");
+
+  await page.getByLabel("Search requests").fill("E2E-RETRY");
+  await page.getByRole("button", { name: "Apply filters" }).click();
+  await expect(page).toHaveURL(/query=E2E-RETRY/);
+  await page.waitForLoadState("networkidle");
 
   const view = page.locator(
     `button[aria-controls="history-${E2E.requests.retry}"]`,
   );
   await expect(view).toHaveAttribute("aria-expanded", "false");
-  await view.focus();
-  await page.keyboard.press("Enter");
+  await view.press("Enter");
   await expect(view).toHaveAttribute("aria-expanded", "true");
   const details = page.locator(`#history-${E2E.requests.retry}`);
   await expect(details).toBeVisible();
@@ -52,23 +70,20 @@ test("request history, filters, and accessible details use persisted records", a
   await expect(details).toContainText("Request submitted");
   await expect(details).toContainText("Assigned for review");
   const requestRow = page.getByRole("row", { name: /E2E-RETRY/ }).first();
-  await expect(requestRow).toContainText("Sep 22, 2026");
-  await expect(requestRow).toContainText("Oct 22, 2026");
+  await expect(requestRow).toContainText(dateLabel(1));
+  await expect(requestRow).toContainText(dateLabel(31));
   await expect(requestRow).not.toContainText(
     "Requested period shown in details",
   );
   await view.press("Space");
   await expect(details).toBeHidden();
 
-  await page.getByLabel("Search requests").fill("E2E-RETRY");
-  await page.getByRole("button", { name: "Apply filters" }).click();
-  await expect(page).toHaveURL(/query=E2E-RETRY/);
   await expect(page.getByRole("row", { name: /E2E-RETRY/ })).toBeVisible();
   await expect(page.getByText("E2E-OTHER")).toHaveCount(0);
 
   await page.goto("/requests?status=denied");
   await expect(
-    page.getByRole("heading", { name: "No requests to show" }),
+    page.getByRole("row", { name: /E2E-NOTIFY-DENIED/ }),
   ).toBeVisible();
   await page.goto("/requests?resource=r-library");
   await expect(

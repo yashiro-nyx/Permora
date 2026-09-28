@@ -13,6 +13,12 @@ export function e2ePassword() {
   return requiredGeneratedValue("PERMORA_E2E_PASSWORD");
 }
 
+export function e2eClientHeaders(lastOctet: number) {
+  if (!Number.isInteger(lastOctet) || lastOctet < 1 || lastOctet > 254)
+    throw new Error("The E2E client address octet must be between 1 and 254.");
+  return { "x-forwarded-for": `192.0.2.${lastOctet}` };
+}
+
 export const E2E = {
   approver: {
     id: "e2000000-0000-4000-8000-000000000001",
@@ -40,5 +46,11 @@ export const E2E = {
     stale: "e2000000-0000-4000-8000-000000000103",
     anotherApprover: "e2000000-0000-4000-8000-000000000104",
     unassigned: "e2000000-0000-4000-8000-000000000105",
+    notificationApproved: "e2000000-0000-4000-8000-000000000106",
+    notificationDenied: "e2000000-0000-4000-8000-000000000107",
+  },
+  notifications: {
+    approved: "e2000000-0000-4000-8000-000000000301",
+    denied: "e2000000-0000-4000-8000-000000000302",
   },
 } as const;

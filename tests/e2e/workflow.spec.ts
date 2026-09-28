@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { E2E, e2ePassword } from "./staff-fixture";
+import { E2E, e2eClientHeaders, e2ePassword } from "./staff-fixture";
 
 test.describe.configure({ mode: "serial" });
 
@@ -14,12 +14,20 @@ async function signIn(target: Page, email: string) {
   await expect(target).toHaveURL(/\/dashboard$/);
 }
 
+function dateInput(daysFromToday: number) {
+  const value = new Date();
+  value.setUTCDate(value.getUTCDate() + daysFromToday);
+  return value.toISOString().slice(0, 10);
+}
+
 test.beforeAll(async ({ browser }) => {
   requesterPage = await browser.newPage({
     viewport: { width: 1440, height: 1000 },
+    extraHTTPHeaders: e2eClientHeaders(40),
   });
   adminPage = await browser.newPage({
     viewport: { width: 1440, height: 1000 },
+    extraHTTPHeaders: e2eClientHeaders(41),
   });
   await signIn(requesterPage, E2E.workflowRequester.email);
   await signIn(adminPage, E2E.administrator.email);
@@ -40,8 +48,10 @@ test("request submission, deterministic routing, approval, and requester status 
     .fill(
       "Access to subscribed materials for an independent literature review.",
     );
-  await requesterPage.getByLabel("Access starts").fill("2026-09-23");
-  await requesterPage.getByLabel("Expiration date").fill("2026-10-20");
+  const startsOn = dateInput(1);
+  const expiresOn = dateInput(29);
+  await requesterPage.getByLabel("Access starts").fill(startsOn);
+  await requesterPage.getByLabel("Expiration date").fill(expiresOn);
   await requesterPage
     .getByRole("button", { name: "Review request" })
     .click();
@@ -108,8 +118,15 @@ test("request submission, deterministic routing, approval, and requester status 
   const approvedRow = requesterPage.getByRole("row", {
     name: new RegExp(displayId!),
   });
-  await expect(approvedRow).toContainText("Sep 23, 2026");
-  await expect(approvedRow).toContainText("Oct 20, 2026");
+  const formatDate = (value: string) =>
+    new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(new Date(`${value}T00:00:00Z`));
+  await expect(approvedRow).toContainText(formatDate(startsOn));
+  await expect(approvedRow).toContainText(formatDate(expiresOn));
   await expect(approvedRow).toContainText("Approved — awaiting activation");
   await expect(
     requesterPage.getByRole("region", { name: "Request summary" }),

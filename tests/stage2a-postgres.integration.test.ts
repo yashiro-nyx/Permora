@@ -4,6 +4,11 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import test, { after, before } from "node:test";
 import { Pool } from "pg";
+import { ResilientPool } from "../lib/database-pool";
+import {
+  closeApplicationTestPool,
+  installApplicationTestPool,
+} from "./helpers/application-test-pool";
 
 function requiredSafeTestDatabaseUrl() {
   const value = process.env.TEST_DATABASE_URL;
@@ -34,23 +39,7 @@ let userB = "";
 let cookieA = "";
 
 async function connectToVerifiedTestDatabase() {
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      return await pool.query<{ name: string }>(
-        "SELECT current_database() AS name",
-      );
-    } catch (error) {
-      lastError = error;
-      if (attempt < 3) {
-        console.warn(
-          `Test database connection attempt ${attempt} failed; retrying.`,
-        );
-        await new Promise((resolve) => setTimeout(resolve, 1_000));
-      }
-    }
-  }
-  throw lastError;
+  return pool.query<{ name: string }>("SELECT current_database() AS name");
 }
 
 function request(pathname: string, init: RequestInit = {}) {
@@ -135,11 +124,14 @@ before(async () => {
   process.env.APP_URL = "http://localhost:3000";
   process.env.AUTH_SECRET =
     "stage2a-isolated-test-secret-at-least-thirty-two-characters";
-  pool = new Pool({
+  pool = new ResilientPool({
     connectionString: testDatabase.value,
     max: 1,
-    connectionTimeoutMillis: 30_000,
-  });
+    connectionTimeoutMillis: 15_000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10_000,
+  }, 3);
+  await installApplicationTestPool(pool);
   const database = await connectToVerifiedTestDatabase();
   assert.equal(database.rows[0].name, testDatabase.databaseName);
   assert.ok(database.rows[0].name.endsWith("_test"));
@@ -165,9 +157,7 @@ before(async () => {
   );
 });
 
-after(async () => {
-  if (pool) await pool.end();
-});
+after(closeApplicationTestPool);
 
 test("rate-limit migration matches Better Auth and preserves legacy rows", async () => {
   const column = await pool.query<{

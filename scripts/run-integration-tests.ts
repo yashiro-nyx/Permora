@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { loadEnvConfig } from "@next/env";
+import { preferNeonPooler } from "../lib/database-connection";
 
 function testDatabaseName(connectionString: string) {
   let parsed: URL;
@@ -30,10 +31,12 @@ async function main() {
     );
   }
   testDatabaseName(testDatabaseUrl);
+  const pooledTestDatabaseUrl = preferNeonPooler(testDatabaseUrl);
 
   const environment: NodeJS.ProcessEnv = {
     ...process.env,
     NODE_ENV: "test",
+    TEST_DATABASE_URL: pooledTestDatabaseUrl,
   };
   delete environment.DATABASE_URL;
   delete environment.DATABASE_MIGRATION_URL;
@@ -43,6 +46,7 @@ async function main() {
     "tests/stage2b-approval.integration.test.ts",
     "tests/stage2b-read-model.integration.test.ts",
     "tests/stage2b-decision-routes.integration.test.ts",
+    "tests/stage2b-operations.integration.test.ts",
     "tests/configure-access.integration.test.ts",
   ]) {
     const child: ChildProcess = spawn(
