@@ -203,7 +203,11 @@ function accountWhere(filters: UserListFilters) {
   if (filters.search) {
     values.push(`%${filters.search}%`);
     clauses.push(
-      `(u.name ILIKE $${values.length} OR u.email ILIKE $${values.length} OR profile.department ILIKE $${values.length})`,
+      `(u.name ILIKE $${values.length} OR u.email ILIKE $${values.length} OR profile.department ILIKE $${values.length} OR EXISTS (
+         SELECT 1 FROM institutional_identifier identifier
+          WHERE identifier.user_id = u.id
+            AND identifier.normalized_value ILIKE $${values.length}
+       ))`,
     );
   }
   if (filters.role) {
@@ -272,7 +276,8 @@ export async function getUser(
   const result = await query<AccountUserQueryRow>(
     `${ACCOUNT_USER_SELECT}
       WHERE u.id = $1
-      GROUP BY u.id, profile.user_id, deactivator.id`,
+      GROUP BY u.id, profile.user_id, deactivator.id,
+           invitation.id, invitation.expires_at`,
     [id],
   );
   return result.rows[0] ? toAccountUserDto(result.rows[0]) : null;

@@ -49,6 +49,7 @@ export interface UnassignedRequestDto {
   submittedAt: string;
   status: "pending_routing";
   version: number;
+  routingReason: string | null;
 }
 
 export interface ReviewTimelineEventDto {

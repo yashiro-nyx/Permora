@@ -54,7 +54,7 @@ export function StaffReviewQueue({
   const pathname = unassigned ? "/admin/unassigned" : "/review";
   const title = unassigned ? "Unassigned requests" : "Review requests";
   const description = unassigned
-    ? "Requests awaiting valid approval routing. These records cannot be decided until an eligible approver is assigned."
+    ? "Requests awaiting valid approval routing. Assignment is allowed only for currently eligible approvers; routing rules are not bypassed."
     : "Review requests assigned to you and make decisions within your configured responsibilities.";
   return (
     <>
@@ -191,7 +191,8 @@ export function StaffReviewQueue({
                   <th scope="col">
                     {unassigned ? "Routing state" : "Assignment age"}
                   </th>
-                  {!unassigned && <th scope="col">Action</th>}
+                  {unassigned && <th scope="col">Routing reason</th>}
+                  <th scope="col">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -226,6 +227,13 @@ export function StaffReviewQueue({
                           ? assignmentAge(assigned.assignedAt)
                           : "Awaiting eligible approver"}
                       </td>
+                      {unassigned && (
+                        <td className="table-secondary">
+                          {"routingReason" in item && item.routingReason
+                            ? item.routingReason
+                            : "No fully eligible approver was available."}
+                        </td>
+                      )}
                       {assigned && (
                         <td>
                           <Link
@@ -237,6 +245,17 @@ export function StaffReviewQueue({
                               {" "}
                               {item.displayId}
                             </span>
+                          </Link>
+                        </td>
+                      )}
+                      {unassigned && (
+                        <td>
+                          <Link
+                            href={`/admin/unassigned/${encodeURIComponent(item.requestId)}`}
+                            className="table-link"
+                          >
+                            Assign eligible approver
+                            <span className="sr-only"> {item.displayId}</span>
                           </Link>
                         </td>
                       )}

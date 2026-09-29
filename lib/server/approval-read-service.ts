@@ -238,6 +238,7 @@ type UnassignedRow = QueryResultRow & {
   submitted_at: Date | string;
   status: "pending_routing";
   version: number;
+  routing_reason: string | null;
   total_count: number;
 };
 
@@ -261,13 +262,22 @@ export async function listUnassignedRoutingFailures(
             profile.requester_role, request.resource_id,
             resource.name AS resource_name, request.permission_id,
             permission.label AS permission_label, request.submitted_at,
-            request.status, request.version, count(*) OVER()::int AS total_count
+            request.status, request.version, routing.detail AS routing_reason,
+            count(*) OVER()::int AS total_count
        FROM access_request request
        LEFT JOIN request_review_assignment assignment ON assignment.request_id = request.id
        JOIN "user" requester ON requester.id = request.requester_user_id
        JOIN user_profile profile ON profile.user_id = requester.id
        JOIN catalog_resource resource ON resource.id = request.resource_id
        JOIN catalog_permission permission ON permission.id = request.permission_id
+       LEFT JOIN LATERAL (
+         SELECT event.detail
+           FROM request_event event
+          WHERE event.request_id = request.id
+            AND event.event_type = 'request_routing_unavailable'
+          ORDER BY event.occurred_at DESC, event.id DESC
+          LIMIT 1
+       ) routing ON true
       WHERE ${where.join(" AND ")}
       ORDER BY request.submitted_at DESC, request.id DESC
       LIMIT $${values.length - 1} OFFSET $${values.length}`,
@@ -282,6 +292,7 @@ export async function listUnassignedRoutingFailures(
     submittedAt: iso(row.submitted_at),
     status: row.status,
     version: row.version,
+    routingReason: row.routing_reason,
     total_count: row.total_count,
   }));
   return pagination(mapped, filters);

@@ -41,22 +41,7 @@ async function routeCandidate(
     scopeOptionIds: string[];
   },
 ) {
-  const result = await client.query<RouteCandidate>(
-    `WITH matching_responsibilities AS (
-       SELECT ar.id AS responsibility_id, ar.approver_user_id
-         FROM approver_responsibility ar
-         JOIN user_profile profile
-           ON profile.user_id = ar.approver_user_id AND profile.active
-        WHERE ar.resource_id = $1
-          AND (ar.permission_id IS NULL OR ar.permission_id = $2)
-          AND ar.approver_user_id <> $3
-          AND ar.valid_from <= now()
-          AND (ar.valid_until IS NULL OR ar.valid_until > now())
-          AND EXISTS (
-            SELECT 1 FROM user_role role
-             WHERE role.user_id = ar.approver_user_id
-               AND role.role IN ('approver', 'admin')
-          )
+  const responsibilityScopeMatch = `
           AND (
             NOT EXISTS (
               SELECT 1 FROM approver_responsibility_scope configured
@@ -73,7 +58,45 @@ async function routeCandidate(
                  )
               )
             )
+          )`;
+  const result = await client.query<RouteCandidate>(
+    `WITH matching_responsibilities AS (
+       SELECT ar.id AS responsibility_id, ar.approver_user_id
+         FROM approver_responsibility ar
+         JOIN user_profile profile
+           ON profile.user_id = ar.approver_user_id AND profile.active
+        WHERE ar.resource_id = $1
+          AND (ar.permission_id IS NULL OR ar.permission_id = $2)
+          AND ar.approver_user_id <> $3
+          AND ar.valid_from <= now()
+          AND (ar.valid_until IS NULL OR ar.valid_until > now())
+          AND EXISTS (
+            SELECT 1 FROM user_role role
+             WHERE role.user_id = ar.approver_user_id
+               AND role.role IN ('approver', 'admin')
           )
+          ${responsibilityScopeMatch}
+       UNION ALL
+       SELECT ar.id AS responsibility_id, delegation.substitute_user_id AS approver_user_id
+         FROM approver_responsibility ar
+         JOIN approver_delegation delegation
+           ON delegation.delegator_user_id = ar.approver_user_id
+          AND delegation.valid_from <= now()
+          AND delegation.valid_until > now()
+          AND delegation.cancelled_at IS NULL
+         JOIN user_profile substitute
+           ON substitute.user_id = delegation.substitute_user_id AND substitute.active
+        WHERE ar.resource_id = $1
+          AND (ar.permission_id IS NULL OR ar.permission_id = $2)
+          AND delegation.substitute_user_id <> $3
+          AND ar.valid_from <= now()
+          AND (ar.valid_until IS NULL OR ar.valid_until > now())
+          AND EXISTS (
+            SELECT 1 FROM user_role role
+             WHERE role.user_id = delegation.substitute_user_id
+               AND role.role IN ('approver', 'admin')
+          )
+          ${responsibilityScopeMatch}
      ), approvers AS (
        SELECT DISTINCT ON (approver_user_id)
               approver_user_id, responsibility_id
@@ -266,6 +289,258 @@ export async function routePendingRequest(
     assignmentId,
     approverUserId: candidate.approver_user_id,
     responsibilityId: candidate.responsibility_id,
+  };
+}
+
+export type EligibleResponsibilityOption = {
+  responsibilityId: string;
+  approverUserId: string;
+  approverName: string;
+  viaDelegation: boolean;
+  delegatorName: string | null;
+};
+
+export async function listEligibleResponsibilitiesForRequest(
+  client: PoolClient,
+  requestId: string,
+): Promise<EligibleResponsibilityOption[]> {
+  const request = await client.query<{
+    requester_user_id: string;
+    resource_id: string;
+    permission_id: string;
+    status: ApprovalRequestStatus;
+  }>(
+    `SELECT requester_user_id, resource_id, permission_id, status
+       FROM access_request WHERE id = $1`,
+    [requestId],
+  );
+  const row = request.rows[0];
+  if (!row || row.status !== "pending_routing") return [];
+  const scopes = await client.query<{ scope_option_id: string }>(
+    "SELECT scope_option_id FROM access_request_scope WHERE request_id = $1 ORDER BY field_name",
+    [requestId],
+  );
+  const scopeOptionIds = scopes.rows.map((scope) => scope.scope_option_id);
+  const responsibilityScopeMatch = `
+          AND (
+            NOT EXISTS (
+              SELECT 1 FROM approver_responsibility_scope configured
+               WHERE configured.responsibility_id = ar.id
+            )
+            OR (
+              cardinality($4::uuid[]) > 0
+              AND NOT EXISTS (
+                SELECT 1 FROM unnest($4::uuid[]) requested(scope_option_id)
+                 WHERE NOT EXISTS (
+                   SELECT 1 FROM approver_responsibility_scope configured
+                    WHERE configured.responsibility_id = ar.id
+                      AND configured.scope_option_id = requested.scope_option_id
+                 )
+              )
+            )
+          )`;
+  const result = await client.query<{
+    responsibility_id: string;
+    approver_user_id: string;
+    approver_name: string;
+    via_delegation: boolean;
+    delegator_name: string | null;
+  }>(
+    `WITH matching_responsibilities AS (
+       SELECT ar.id AS responsibility_id, ar.approver_user_id,
+              false AS via_delegation, NULL::text AS delegator_name
+         FROM approver_responsibility ar
+         JOIN user_profile profile
+           ON profile.user_id = ar.approver_user_id AND profile.active
+        WHERE ar.resource_id = $1
+          AND (ar.permission_id IS NULL OR ar.permission_id = $2)
+          AND ar.approver_user_id <> $3
+          AND ar.valid_from <= now()
+          AND (ar.valid_until IS NULL OR ar.valid_until > now())
+          AND EXISTS (
+            SELECT 1 FROM user_role role
+             WHERE role.user_id = ar.approver_user_id
+               AND role.role IN ('approver', 'admin')
+          )
+          ${responsibilityScopeMatch}
+       UNION ALL
+       SELECT ar.id, delegation.substitute_user_id, true, delegator.name
+         FROM approver_responsibility ar
+         JOIN approver_delegation delegation
+           ON delegation.delegator_user_id = ar.approver_user_id
+          AND delegation.valid_from <= now()
+          AND delegation.valid_until > now()
+          AND delegation.cancelled_at IS NULL
+         JOIN user_profile substitute
+           ON substitute.user_id = delegation.substitute_user_id AND substitute.active
+         JOIN "user" delegator ON delegator.id = delegation.delegator_user_id
+        WHERE ar.resource_id = $1
+          AND (ar.permission_id IS NULL OR ar.permission_id = $2)
+          AND delegation.substitute_user_id <> $3
+          AND ar.valid_from <= now()
+          AND (ar.valid_until IS NULL OR ar.valid_until > now())
+          AND EXISTS (
+            SELECT 1 FROM user_role role
+             WHERE role.user_id = delegation.substitute_user_id
+               AND role.role IN ('approver', 'admin')
+          )
+          ${responsibilityScopeMatch}
+     )
+     SELECT responsibility_id, approver_user_id, approver.name AS approver_name,
+            via_delegation, delegator_name
+       FROM matching_responsibilities match
+       JOIN "user" approver ON approver.id = match.approver_user_id
+      ORDER BY lower(approver.name), responsibility_id`,
+    [row.resource_id, row.permission_id, row.requester_user_id, scopeOptionIds],
+  );
+  return result.rows.map((entry) => ({
+    responsibilityId: entry.responsibility_id,
+    approverUserId: entry.approver_user_id,
+    approverName: entry.approver_name,
+    viaDelegation: entry.via_delegation,
+    delegatorName: entry.delegator_name,
+  }));
+}
+
+export class AdministratorRoutingError extends Error {
+  constructor(
+    message: string,
+    readonly code:
+      | "not_found"
+      | "not_pending_routing"
+      | "stale_request"
+      | "already_assigned"
+      | "invalid_responsibility"
+      | "self_assignment",
+  ) {
+    super(message);
+    this.name = "AdministratorRoutingError";
+  }
+}
+
+export async function administratorAssignPendingRequest(
+  client: PoolClient,
+  input: {
+    requestId: string;
+    responsibilityId: string;
+    expectedVersion: number;
+    actorUserId: string;
+  },
+) {
+  await client.query("SELECT pg_advisory_xact_lock(73020422)");
+  const locked = await client.query<{
+    requester_user_id: string;
+    resource_id: string;
+    permission_id: string;
+    policy_version_id: string;
+    display_id: string;
+    status: ApprovalRequestStatus;
+    version: number;
+  }>(
+    `SELECT requester_user_id, resource_id, permission_id, policy_version_id,
+            display_id, status, version
+       FROM access_request WHERE id = $1 FOR UPDATE`,
+    [input.requestId],
+  );
+  const request = locked.rows[0];
+  if (!request) throw new AdministratorRoutingError("The request was not found.", "not_found");
+  if (request.status !== "pending_routing")
+    throw new AdministratorRoutingError(
+      "Only unassigned requests can be manually routed.",
+      "not_pending_routing",
+    );
+  if (request.version !== input.expectedVersion)
+    throw new AdministratorRoutingError(
+      "This request changed after it was loaded.",
+      "stale_request",
+    );
+  const existing = await client.query(
+    "SELECT 1 FROM request_review_assignment WHERE request_id = $1",
+    [input.requestId],
+  );
+  if (existing.rows[0])
+    throw new AdministratorRoutingError(
+      "This request already has a review assignment.",
+      "already_assigned",
+    );
+  const eligible = await listEligibleResponsibilitiesForRequest(
+    client,
+    input.requestId,
+  );
+  const selected = eligible.find(
+    (option) => option.responsibilityId === input.responsibilityId,
+  );
+  if (!selected)
+    throw new AdministratorRoutingError(
+      "The selected approver responsibility is not eligible for this request.",
+      "invalid_responsibility",
+    );
+  if (selected.approverUserId === request.requester_user_id)
+    throw new AdministratorRoutingError(
+      "Self-approval is not permitted.",
+      "self_assignment",
+    );
+
+  const assignmentId = randomUUID();
+  await client.query(
+    `INSERT INTO request_review_assignment
+      (id, request_id, approver_user_id, responsibility_id)
+     VALUES ($1,$2,$3,$4)`,
+    [
+      assignmentId,
+      input.requestId,
+      selected.approverUserId,
+      selected.responsibilityId,
+    ],
+  );
+  await client.query(
+    `UPDATE access_request
+        SET status = 'pending_review', version = version + 1, updated_at = now()
+      WHERE id = $1`,
+    [input.requestId],
+  );
+  const metadata = {
+    displayId: request.display_id,
+    resourceId: request.resource_id,
+    permissionId: request.permission_id,
+    policyVersionId: request.policy_version_id,
+    assignmentId,
+    responsibilityId: selected.responsibilityId,
+    previousState: "pending_routing",
+    newState: "pending_review",
+    assignmentMode: "administrator",
+    viaDelegation: selected.viaDelegation,
+    delegatorName: selected.delegatorName,
+  };
+  await client.query(
+    `INSERT INTO request_event
+      (id, request_id, actor_user_id, event_type, detail, metadata)
+     VALUES ($1,$2,$3,'request_administrator_assigned',$4,$5::jsonb)`,
+    [
+      randomUUID(),
+      input.requestId,
+      input.actorUserId,
+      "Administrator assigned an eligible approver for review.",
+      JSON.stringify(metadata),
+    ],
+  );
+  await client.query(
+    `INSERT INTO audit_event
+      (id, actor_user_id, subject_user_id, request_id, event_type, metadata)
+     VALUES ($1,$2,$3,$4,'request_administrator_assigned',$5::jsonb)`,
+    [
+      randomUUID(),
+      input.actorUserId,
+      request.requester_user_id,
+      input.requestId,
+      JSON.stringify(metadata),
+    ],
+  );
+  return {
+    assignmentId,
+    approverUserId: selected.approverUserId,
+    responsibilityId: selected.responsibilityId,
+    version: input.expectedVersion + 1,
   };
 }
 
