@@ -9,6 +9,7 @@ import type {
   UserListDto,
   UserListFilters,
 } from "@/lib/server/account-types";
+import { InvitationControls } from "./invitation-controls";
 import {
   Alert,
   Badge,
@@ -401,6 +402,7 @@ export function AccountEditor({ mode, user, actorId }: {
           </div>
         </form>
       </Card>
+      {mode === "edit" && user && <InvitationControls user={user} />}
       {mode === "edit" && user && (
         <Card title="Account status" className="account-status-card">
           <div className="account-status-content">

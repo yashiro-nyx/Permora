@@ -214,6 +214,14 @@ export function toAccountUserDto(row: AccountUserRow): AccountUserDto {
     email: row.email,
     department: row.department,
     active: row.active,
+    hasCredential: row.has_credential,
+    invitation:
+      row.invitation_id && row.invitation_expires_at
+        ? {
+            id: row.invitation_id,
+            expiresAt: iso(row.invitation_expires_at),
+          }
+        : null,
     roles: [...row.roles],
     requesterRole: row.requester_role,
     createdAt: iso(row.created_at),

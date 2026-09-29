@@ -12,12 +12,14 @@ export const requesterNavigation: readonly NavigationItem[] = [
   ["/requests", "My Requests", "requests"],
   ["/requests/new", "Request Access", "key"],
   ["/notifications", "Notifications", "bell"],
+  ["/account/password", "Change Password", "key"],
 ];
 
 export const approverNavigation: readonly NavigationItem[] = [
   ["/dashboard", "Dashboard", "dashboard"],
   ["/review", "Review Requests", "requests"],
   ["/help", "Help & Support", "help"],
+  ["/account/password", "Change Password", "key"],
 ];
 
 export const administratorNavigation: readonly NavigationItem[] = [
@@ -28,6 +30,7 @@ export const administratorNavigation: readonly NavigationItem[] = [
   ["/users", "User Management", "users"],
   ["/audit", "Audit Logs", "clock"],
   ["/help", "Help & Support", "help"],
+  ["/account/password", "Change Password", "key"],
 ];
 
 export function primaryRole(identity: TrustedIdentity): Role {

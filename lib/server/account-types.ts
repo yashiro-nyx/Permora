@@ -14,6 +14,11 @@ export interface AccountUserDto {
   email: string;
   department: string;
   active: boolean;
+  hasCredential: boolean;
+  invitation: null | {
+    id: string;
+    expiresAt: string;
+  };
   roles: Role[];
   requesterRole: "student" | "faculty" | null;
   createdAt: string;
@@ -39,6 +44,9 @@ export interface AccountUserRow {
   email: string;
   department: string;
   active: boolean;
+  has_credential: boolean;
+  invitation_id: string | null;
+  invitation_expires_at: Date | string | null;
   roles: Role[];
   requester_role: "student" | "faculty" | null;
   created_at: Date | string;

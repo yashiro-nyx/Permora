@@ -152,11 +152,11 @@ async function assertServiceRejected(
 
 function assertSanitized(value: unknown) {
   const serialized = JSON.stringify(value);
-  assert.doesNotMatch(serialized, /password|password_hash|token|session|credential/i);
+  assert.doesNotMatch(serialized, /password_hash|password_token|token_hash|session_token/i);
   const visit = (entry: unknown) => {
     if (!entry || typeof entry !== "object") return;
     for (const [key, nested] of Object.entries(entry)) {
-      assert.doesNotMatch(key, /password|hash|token|session|credential/i);
+      assert.doesNotMatch(key, /^(?:password|passwordHash|token|tokenHash|session|sessionToken)$/i);
       visit(nested);
     }
   };

@@ -49,11 +49,26 @@ const ACCOUNT_USER_SELECT = `
          profile.deactivation_reason,
          profile.deactivated_by AS deactivated_by_user_id,
          deactivator.name AS deactivated_by_name,
+         EXISTS (
+           SELECT 1 FROM account credential
+            WHERE credential."userId" = u.id
+              AND credential."providerId" = 'credential'
+              AND credential.password IS NOT NULL
+         ) AS has_credential,
+         invitation.id AS invitation_id,
+         invitation.expires_at AS invitation_expires_at,
          coalesce(array_agg(assigned_role.role ORDER BY assigned_role.role)
            FILTER (WHERE assigned_role.role IS NOT NULL), '{}') AS roles
     FROM "user" u
     JOIN user_profile profile ON profile.user_id = u.id
     LEFT JOIN "user" deactivator ON deactivator.id = profile.deactivated_by
+    LEFT JOIN LATERAL (
+      SELECT id, expires_at
+        FROM account_invitation
+       WHERE target_user_id = u.id AND used_at IS NULL AND expires_at > now()
+       ORDER BY created_at DESC, id DESC
+       LIMIT 1
+    ) invitation ON true
     LEFT JOIN user_role assigned_role ON assigned_role.user_id = u.id`;
 
 async function requireActiveAdminSession() {
@@ -158,7 +173,8 @@ async function selectAccountUser(client: PoolClient, userId: string) {
   const result = await client.query<AccountUserQueryRow>(
     `${ACCOUNT_USER_SELECT}
       WHERE u.id = $1
-      GROUP BY u.id, profile.user_id, deactivator.id`,
+      GROUP BY u.id, profile.user_id, deactivator.id,
+           invitation.id, invitation.expires_at`,
     [userId],
   );
   const row = result.rows[0];
@@ -219,7 +235,8 @@ export async function listUsers(
     `WITH filtered AS (
        ${ACCOUNT_USER_SELECT}
         ${where}
-        GROUP BY u.id, profile.user_id, deactivator.id
+        GROUP BY u.id, profile.user_id, deactivator.id,
+           invitation.id, invitation.expires_at
      ), page AS (
        SELECT * FROM filtered
         ORDER BY lower(name), id
