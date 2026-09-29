@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { notificationPresentation } from "@/lib/activation-presentation";
 import type {
   NotificationFilters,
   NotificationListDto,
@@ -74,7 +75,7 @@ export function RequesterNotifications({
       <PageHeading
         eyebrow="REQUESTER › NOTIFICATIONS"
         title="Notifications"
-        description="Persisted updates about decisions on your access requests."
+        description="Persisted updates about decisions and access activation on your requests."
         action={
           <Button
             variant="outline"
@@ -131,17 +132,16 @@ export function RequesterNotifications({
           <ul className="notification-list">
             {data.items.map((item) => {
               const unread = item.readAt === null;
-              const approved =
-                item.type === "request_approved_pending_activation";
+              const presentation = notificationPresentation(item.type);
               return (
                 <li
                   key={item.notificationId}
                   className={unread ? "unread" : ""}
                 >
                   <span
-                    className={`icon-tile tone-${approved ? "success" : "warning"}`}
+                    className={`icon-tile tone-${presentation.tone}`}
                   >
-                    <Icon name={approved ? "check" : "bell"} />
+                    <Icon name={presentation.icon} />
                   </span>
                   <div className="notification-content">
                     <div className="spread">
@@ -152,7 +152,7 @@ export function RequesterNotifications({
                     </div>
                     <p>{item.message}</p>
                     <div className="notification-meta">
-                      <span>{item.type.replaceAll("_", " ")}</span>
+                      <span>{presentation.label}</span>
                       {item.request && <span>{item.request.displayId}</span>}
                     </div>
                     <div className="row wrap">

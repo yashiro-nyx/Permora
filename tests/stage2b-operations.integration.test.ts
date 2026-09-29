@@ -95,10 +95,26 @@ async function seedRequest(userId: string, displayId: string) {
   return id;
 }
 
-async function seedNotification(userId: string, requestId: string, type: "request_approved_pending_activation" | "request_denied", title: string, occurredAt: string) {
+async function seedNotification(
+  userId: string,
+  requestId: string,
+  type:
+    | "request_approved_pending_activation"
+    | "request_denied"
+    | "activation_succeeded"
+    | "activation_failed",
+  title: string,
+  occurredAt: string,
+) {
   const eventId = randomUUID();
   const id = randomUUID();
-  await pool.query(`INSERT INTO request_event (id,request_id,actor_user_id,event_type,occurred_at,detail) VALUES ($1,$2,$3,$4,$5,$6)`, [eventId, requestId, admin, type === "request_denied" ? "review_denied" : "review_approved", occurredAt, title]);
+  const eventType =
+    type === "request_denied"
+      ? "review_denied"
+      : type === "activation_succeeded" || type === "activation_failed"
+        ? type
+        : "review_approved";
+  await pool.query(`INSERT INTO request_event (id,request_id,actor_user_id,event_type,occurred_at,detail) VALUES ($1,$2,$3,$4,$5,$6)`, [eventId, requestId, admin, eventType, occurredAt, title]);
   await pool.query(`INSERT INTO user_notification (id,recipient_user_id,request_id,request_event_id,notification_type,title,body,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, [id, userId, requestId, eventId, type, title, `${title} safe message`, occurredAt]);
   return id;
 }
@@ -222,4 +238,50 @@ test("administrator audit DTOs are sanitized, filtered, paginated, and determini
   const failed = await handleAuditListRequest(apiRequest("/api/admin/audit-events", adminCookie), { listAudit: async () => { throw new Error("private query detail"); } });
   assert.equal(failed.status, 503);
   assert.doesNotMatch(await failed.text(), /private query detail/i);
+});
+
+test("requester notification reads include owner-scoped activation outcomes", async () => {
+  const approvedRequest = await seedRequest(requesterA, "OPS-ACTIVATION");
+  await seedNotification(
+    requesterA,
+    approvedRequest,
+    "activation_succeeded",
+    "Access activated",
+    "2026-09-28T09:00:00Z",
+  );
+  await seedNotification(
+    requesterA,
+    approvedRequest,
+    "activation_failed",
+    "Activation failed",
+    "2026-09-29T09:00:00Z",
+  );
+  const response = await handleNotificationListRequest(
+    apiRequest("/api/notifications?pageSize=100", requesterCookie),
+  );
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const succeeded = body.items.find(
+    (item: { type: string }) => item.type === "activation_succeeded",
+  );
+  const failed = body.items.find(
+    (item: { type: string }) => item.type === "activation_failed",
+  );
+  assert.equal(succeeded.title, "Access activated");
+  assert.equal(failed.title, "Activation failed");
+  assert.equal(succeeded.request.displayId, "OPS-ACTIVATION");
+  assert.equal(failed.request.displayId, "OPS-ACTIVATION");
+  assert.equal("metadata" in succeeded, false);
+  assert.equal("metadata" in failed, false);
+
+  const otherOwnerResponse = await handleNotificationListRequest(
+    apiRequest("/api/notifications?pageSize=100", requesterBCookie),
+  );
+  const otherOwner = await otherOwnerResponse.json();
+  assert.equal(
+    otherOwner.items.some((item: { request?: { displayId: string } }) =>
+      item.request?.displayId === "OPS-ACTIVATION",
+    ),
+    false,
+  );
 });

@@ -181,7 +181,7 @@ async function hydrateRequests(
 ): Promise<AccessRequestDto[]> {
   return Promise.all(
     rows.map(async (row) => {
-      const [scopes, events] = await Promise.all([
+      const [scopes, events, activation] = await Promise.all([
         query<{
           field_name: string;
           label: string;
@@ -203,7 +203,9 @@ async function hydrateRequests(
             | "request_routing_unavailable"
             | "review_approved"
             | "review_denied"
-            | "review_returned_for_revision";
+            | "review_returned_for_revision"
+            | "activation_succeeded"
+            | "activation_failed";
           occurred_at: Date;
           actor_name: string;
           detail: string;
@@ -222,6 +224,25 @@ async function hydrateRequests(
             ORDER BY event.occurred_at, event.id`,
           [row.id],
         ),
+        query<{
+          status: "activating" | "activated" | "failed" | "expired" | "revoked";
+          started_at: Date;
+          activated_at: Date | null;
+          expires_at: Date;
+          retryable: string | null;
+        }>(
+          `SELECT activation.status, activation.started_at,
+                  activation.activated_at, activation.expires_at,
+                  (SELECT event.metadata ->> 'retryable'
+                     FROM activation_event event
+                    WHERE event.activation_id = activation.id
+                      AND event.event_type = 'activation_failed'
+                    ORDER BY event.occurred_at DESC, event.id DESC
+                    LIMIT 1) AS retryable
+             FROM request_activation activation
+            WHERE activation.request_id = $1`,
+          [row.id],
+        ),
       ]);
       return {
         id: row.id,
@@ -237,6 +258,20 @@ async function hydrateRequests(
         expiresAt: toIso(row.expires_at),
         submittedAt: toIso(row.submitted_at),
         status: row.status,
+        activation: activation.rows[0]
+          ? {
+              status: activation.rows[0].status,
+              startedAt: toIso(activation.rows[0].started_at),
+              activatedAt: activation.rows[0].activated_at
+                ? toIso(activation.rows[0].activated_at)
+                : null,
+              expiresAt: toIso(activation.rows[0].expires_at),
+              retryable:
+                activation.rows[0].retryable === null
+                  ? null
+                  : activation.rows[0].retryable === "true",
+            }
+          : null,
         renewable: row.renewable,
         renewalOf: row.renewal_of,
         scopes: scopes.rows.map((scope) => ({
@@ -491,8 +526,15 @@ async function validateAndInsert(
       permission_id: string;
       scope_fingerprint: string;
       status: string;
+      activation_status: string | null;
     }>(
-      "SELECT resource_id, permission_id, scope_fingerprint, status FROM access_request WHERE id::text = $1 AND requester_user_id = $2 FOR UPDATE",
+      `SELECT request.resource_id, request.permission_id,
+              request.scope_fingerprint, request.status,
+              activation.status AS activation_status
+         FROM access_request request
+         LEFT JOIN request_activation activation ON activation.request_id = request.id
+        WHERE request.id::text = $1 AND request.requester_user_id = $2
+        FOR UPDATE OF request`,
       [input.renewalOf, identity.id],
     );
     const old = previous.rows[0];
@@ -504,7 +546,13 @@ async function validateAndInsert(
       throw new RequestPolicyError(
         "This resource policy does not allow renewal.",
       );
-    if (old.status !== "expired")
+    if (
+      old.status !== "expired" &&
+      !(
+        old.status === "approved_pending_activation" &&
+        old.activation_status === "expired"
+      )
+    )
       throw new RequestPolicyError("Only an expired request can be renewed.");
     if (
       old.resource_id !== input.resourceId ||

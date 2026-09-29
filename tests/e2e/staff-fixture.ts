@@ -32,6 +32,10 @@ export const E2E = {
     id: "e2000000-0000-4000-8000-000000000003",
     email: testEmail("administrator"),
   },
+  activationAdministrator: {
+    id: "e2000000-0000-4000-8000-000000000006",
+    email: testEmail("activation-administrator"),
+  },
   requester: {
     id: "e2000000-0000-4000-8000-000000000004",
     email: testEmail("requester"),
@@ -52,5 +56,7 @@ export const E2E = {
   notifications: {
     approved: "e2000000-0000-4000-8000-000000000301",
     denied: "e2000000-0000-4000-8000-000000000302",
+    activationFailed: "e2000000-0000-4000-8000-000000000303",
+    activationSucceeded: "e2000000-0000-4000-8000-000000000304",
   },
 } as const;

@@ -40,6 +40,7 @@ let otherApproverCookie = "";
 let observerAdminCookie = "";
 let inactiveApproverCookie = "";
 let approverResponsibility = "";
+let handleActivationStartRequest: typeof import("../lib/server/activation-handlers")["handleActivationStartRequest"];
 
 async function applyMigrations() {
   const client = await pool.connect();
@@ -208,6 +209,32 @@ async function decide(
   });
 }
 
+function activationRequest(
+  requestId: string,
+  cookie: string,
+  options: { origin?: string | null; body?: unknown } = {},
+) {
+  const headers = new Headers({
+    "content-type": "application/json",
+    "idempotency-key": randomUUID(),
+  });
+  if (cookie) headers.set("cookie", cookie);
+  if (options.origin !== null)
+    headers.set("origin", options.origin ?? "http://localhost:3000");
+  return new Request(`http://localhost:3000/api/admin/activations/${requestId}/activate`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(
+      options.body ?? {
+        operatorConfirmation: {
+          provisioned: true,
+          evidence: "Administrator confirmed access in the target system.",
+        },
+      },
+    ),
+  });
+}
+
 before(async () => {
   process.env.APP_URL = "http://localhost:3000";
   process.env.AUTH_SECRET =
@@ -220,6 +247,9 @@ before(async () => {
     keepAliveInitialDelayMillis: 10_000,
   }, 3);
   await installApplicationTestPool(pool);
+  ({ handleActivationStartRequest } = await import(
+    "../lib/server/activation-handlers"
+  ));
   const database = await pool.query<{ name: string }>(
     "SELECT current_database() AS name",
   );
@@ -269,6 +299,71 @@ test("decision route enforces origin, authentication, active role, and responsib
     (await decide(requestId, approverCookie, body, { origin: "https://untrusted.example" })).status,
     403,
   );
+});
+
+test("activation route requires an active administrator and same-origin request", async () => {
+  const approvedRequestId = randomUUID();
+  let activationCalls = 0;
+  const dependencies = {
+    activate: async (input: {
+      requestId: string;
+      idempotencyKey: string;
+      operatorConfirmation: { provisioned: boolean; evidence?: string | null };
+    }) => {
+      activationCalls++;
+      assert.equal(input.requestId, approvedRequestId);
+      assert.equal(input.operatorConfirmation.provisioned, true);
+      return { status: "activated" };
+    },
+  };
+
+  assert.equal(
+    (
+      await handleActivationStartRequest(
+        activationRequest(approvedRequestId, ""),
+        approvedRequestId,
+        dependencies,
+      )
+    ).status,
+    401,
+  );
+  assert.equal(
+    (
+      await handleActivationStartRequest(
+        activationRequest(approvedRequestId, requesterCookie),
+        approvedRequestId,
+        dependencies,
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await handleActivationStartRequest(
+        activationRequest(approvedRequestId, approverCookie),
+        approvedRequestId,
+        dependencies,
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await handleActivationStartRequest(
+        activationRequest(approvedRequestId, observerAdminCookie, { origin: null }),
+        approvedRequestId,
+        dependencies,
+      )
+    ).status,
+    403,
+  );
+  const accepted = await handleActivationStartRequest(
+    activationRequest(approvedRequestId, observerAdminCookie),
+    approvedRequestId,
+    dependencies,
+  );
+  assert.equal(accepted.status, 200);
+  assert.equal(activationCalls, 1);
 });
 
 test("only the persisted fully eligible assignee can decide a request", async () => {

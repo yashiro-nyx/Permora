@@ -23,6 +23,7 @@ export const approverNavigation: readonly NavigationItem[] = [
 export const administratorNavigation: readonly NavigationItem[] = [
   ["/dashboard", "Dashboard", "dashboard"],
   ["/review", "Review Requests", "requests"],
+  ["/admin/activations", "Activations", "key"],
   ["/admin/unassigned", "Unassigned Requests", "expire"],
   ["/audit", "Audit Logs", "clock"],
   ["/help", "Help & Support", "help"],

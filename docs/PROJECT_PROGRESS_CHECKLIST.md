@@ -1,6 +1,6 @@
 # Permora Project Progress Checklist
 
-Last updated: September 28, 2026  
+Last updated: September 29, 2026
 Repository: `yashiro-nyx/Permora`  
 Production prototype: <https://permora.vercel.app>  
 Current development branch: `develop`  
@@ -10,9 +10,9 @@ Milestone 5 branch: `feature/stage-2b-milestone-5`
 
 Permora is a university access-request and approval system built with Next.js, React, TypeScript, Tailwind CSS, Better Auth, PostgreSQL, Neon, and Vercel.
 
-The requester workflow, database-backed authentication, request persistence, approval routing, approval decisions, protected staff review interface, requester in-app notifications, administrator audit-log visibility, deployment preparation, and database CLI safety controls are complete.
+The requester workflow, database-backed authentication, approval routing, protected staff review, requester notifications, administrator audit, and Stage 2C manual activation lifecycle are implemented. Automatic expiry scheduling and real university provisioning integrations remain outstanding.
 
-Stage 2B Milestone 5 is **complete**. Permora now includes PostgreSQL-backed requester notifications and an administrator-only, read-only audit-log viewer. Approval still ends at `approved_pending_activation`; it does not grant or provision actual access.
+Stage 2B Milestone 5 is **complete**. Stage 2C lifecycle slices 1–7 are implemented for manual administrator operation. `approved_pending_activation` remains the approval decision; activation is stored separately and only successful manual confirmation creates an entitlement. No live university provisioning adapter or automatic job schedule exists.
 
 ## 1. Foundation and design
 
@@ -192,22 +192,22 @@ Status: **Completed**
 
 ## 10. Stage 2C — Activation and lifecycle management
 
-Status: **Deferred**
+Status: **In progress — manual lifecycle implemented; integration and scheduling deferred**
 
-- [ ] Define which university system or administrator performs activation.
-- [ ] Design the separation between approval and actual provisioning.
-- [ ] Add an authorized activation operation.
-- [ ] Require current eligibility and policy revalidation before activation.
-- [ ] Create active entitlement records only after successful provisioning.
-- [ ] Record activation success and failure as immutable events.
-- [ ] Notify the requester when activation succeeds or fails.
-- [ ] Implement scheduled expiration processing.
-- [ ] Revoke or expire entitlements safely.
-- [ ] Implement renewal processing without extending the old request in place.
-- [ ] Add retry and reconciliation behavior for downstream provisioning failures.
-- [ ] Prevent duplicate activation and expiration effects.
-- [ ] Add lifecycle integration and browser tests.
-- [ ] Document manual recovery procedures.
+- [x] Define activation as manual active-administrator confirmation behind the `ActivationAdapter` interface; no university system is integrated yet.
+- [x] Design the separation between approval and actual provisioning; approval state stays on `access_request`, lifecycle state is separate.
+- [x] Add an authorized activation operation; requester and original approver are forbidden, including an original approver with admin role.
+- [x] Require current eligibility, policy version, scope assignment, validity, entitlement/conflict revalidation before the adapter call.
+- [x] Create `ordinary_entitlement` only after successful provisioning confirmation.
+- [x] Record activation success/failure and lifecycle changes as immutable events.
+- [x] Notify the requester of success/failure through owner-scoped in-app notifications.
+- [ ] Configure automatic expiration scheduling; `activations:expire` exists and is dry-run by default but currently requires operator invocation.
+- [x] Expire or revoke entitlement lifecycles safely and terminally; the revocation service is not yet exposed as UI/CLI.
+- [x] Implement renewal as a new linked request rather than extending/reactivating the old request.
+- [x] Add retryable failure and 15-minute stuck-activation reconciliation with dry-run default.
+- [x] Prevent duplicate activation/replay effects and terminal expiry/revocation overwrites.
+- [x] Add combined lifecycle integration coverage and admin/requester Playwright coverage.
+- [x] Document manual recovery procedures in [docs/activation-operations.md](activation-operations.md).
 
 ## 11. Future administrator capabilities
 
@@ -277,16 +277,17 @@ npm run build
 git diff --check
 ```
 
-- [x] All unit tests pass (43 tests).
-- [x] All PostgreSQL integration tests pass against the guarded `_test` database (43 tests).
+- [x] All unit tests pass (53 tests).
+- [x] All PostgreSQL integration tests pass against the guarded `_test` database (60 tests).
 - [x] All Playwright tests pass against isolated test fixtures (20 tests).
 - [x] ESLint passes.
 - [x] TypeScript checking passes.
-- [x] The production build passes.
+- [ ] Re-run the production build after Stage 2C changes.
+- [ ] Re-run the verification suite under the repository-pinned Node.js 22 runtime (latest Stage 2C run used Node 24.21).
 - [x] `git diff --check` reports no formatting errors.
 - [x] The working tree contains only intended changes.
 - [x] No secrets, `.env.local`, database URLs, credentials, or generated test artifacts are staged.
-- [x] Database migrations remain versioned; existing migrations were not rewritten and Milestone 5 required no new migration.
+- [x] Database migrations remain versioned; migration `0007` was validated on `_test` before any development apply; existing migrations were not rewritten.
 - [x] Documentation matches actual behavior.
 - [ ] A teammate reviews authorization, ownership, and database-target boundaries.
 
@@ -313,8 +314,8 @@ The following statements must remain clear to developers, reviewers, and evaluat
 - Request records are owner-scoped and persisted in PostgreSQL.
 - Approval routing and decisions are server-authorized and auditable.
 - Requesters can view PostgreSQL-backed in-app notifications and mark them as read.
-- Administrators can view sanitized, read-only audit records.
-- Request approval does **not** provision or activate access.
+- Administrators can view sanitized read-only audit records and the activation lifecycle queue.
+- Request approval does **not by itself** provision or activate access; manual admin confirmation is a separate lifecycle step.
 - External email, SMS, and push notifications are not implemented.
 - Institutional enrollment, staff assignment, course, laboratory, and research systems are not yet integrated.
 - The deployed application is a controlled functional prototype, not a complete university production access-control service.

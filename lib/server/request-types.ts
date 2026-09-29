@@ -50,7 +50,9 @@ export interface RequestEventDto {
     | "request_routing_unavailable"
     | "review_approved"
     | "review_denied"
-    | "review_returned_for_revision";
+    | "review_returned_for_revision"
+    | "activation_succeeded"
+    | "activation_failed";
   at: string;
   actorName: string;
   detail: string;
@@ -70,6 +72,13 @@ export interface AccessRequestDto {
   expiresAt: string;
   submittedAt: string;
   status: RequestStatus;
+  activation: null | {
+    status: "activating" | "activated" | "failed" | "expired" | "revoked";
+    startedAt: string;
+    activatedAt: string | null;
+    expiresAt: string;
+    retryable: boolean | null;
+  };
   renewable: boolean;
   renewalOf: string | null;
   scopes: {

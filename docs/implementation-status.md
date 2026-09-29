@@ -8,7 +8,7 @@ Status key: **Completed**, **In progress**, **Planned**, **Blocked**.
 
 Permora has completed Stage 1, Stage 2A, and Stage 2B Milestones 1–5. The application has real email/password accounts, revocable PostgreSQL sessions, owner-scoped request persistence, deterministic approval routing, transactional decisions, requester in-app notifications, and an administrator read-only audit view.
 
-The current terminal approval result is `approved_pending_activation`. It records an approval decision and notification, but it does not create an entitlement, provision a downstream system, or activate access.
+The approval decision remains `approved_pending_activation`; by itself it creates no entitlement or active access. Stage 2C adds a separate activation lifecycle and manual administrator confirmation adapter. Successful manual confirmation records an entitlement, while no university system is integrated and no background scheduler is configured.
 
 ## Stage 1 — design and requester interface
 
@@ -76,6 +76,19 @@ Figma contains desktop evidence only. Mobile drawers, stacked layouts, errors, e
 - [ ] **Planned:** external email, SMS, or push delivery and user notification preferences. Current notifications are PostgreSQL-backed in-app records only.
 - [ ] **Planned:** audit export, retention/legal-hold operations, redaction policy, and external security monitoring.
 
+### Stage 2C: activation and lifecycle management
+
+- [x] **Completed:** migration `0007` adds a separate activation lifecycle and immutable events; migration `0006` and earlier files remain unchanged.
+- [x] **Completed:** active-admin-only activation with transaction-1 policy/eligibility/entitlement revalidation, strict requester/original-approver exclusion, adapter call outside database transactions, and atomic transaction-2 outcome writes.
+- [x] **Completed:** success creates an `ordinary_entitlement`; success/failure events, audit, request events, and owner-scoped notifications are committed atomically. Approval status remains `approved_pending_activation`.
+- [x] **Completed:** `/admin/activations` displays lifecycle status and allows manually attested activation/retry; requester detail, timeline, and notification center display lifecycle outcomes.
+- [x] **Completed:** retryable failure requires a new per-actor idempotency key; non-retryable failures cannot be retried in place.
+- [x] **Completed:** `activations:reconcile` and `activations:expire` are dry-run by default and require explicit `--apply`; reconciliation uses a 15-minute stuck threshold.
+- [x] **Completed:** renewal after activation expiry creates a new `access_request` linked with `renewal_of`; the old approval/lifecycle records are not reopened.
+- [ ] **Planned:** configure and monitor an automatic schedule for expiry/reconciliation. The scripts currently require a deliberate operator invocation.
+- [ ] **Planned:** integrate real university provisioning/reconciliation adapters and expose revocation through an administrator UI or CLI. The current revocation operation is a guarded server service only.
+- [x] **Completed:** combined lifecycle integration coverage and Stage 2C Playwright coverage; manual recovery procedures are in [activation-operations.md](activation-operations.md).
+
 ## Route and service coverage
 
 | Route or operation | Status | Current behavior |
@@ -87,11 +100,13 @@ Figma contains desktop evidence only. Mobile drawers, stacked layouts, errors, e
 | `/review`, `/review/[id]` | **Completed** | Assigned queue/detail and transactional decision interface. |
 | `/admin/unassigned` | **Completed** | Administrator-only read view of preserved routing failures; no decision/reassignment bypass. |
 | `/notifications` | **Completed** | Requester-owned in-app notification center and read-state mutations. |
+| `/admin/activations` | **Completed** | Active-administrator queue and manual activation/retry controls; requester/original approver cannot activate. |
+| `POST /api/admin/activations/[id]/activate` | **Completed** | Same-origin, active-admin-only request; domain rechecks the actor and lifecycle state inside transaction 1. |
 | `/audit` | **Completed** | Administrator-only sanitized, immutable, read-only audit history. |
 | `/help` | **Completed** | Current account/request/stage-boundary guidance. |
 | `/users` | **Planned** | Server-guarded deferred page; provisioning remains CLI-only. |
 | `/resources` | **Planned** | Server-guarded deferred page; catalog administration remains migration/CLI controlled. |
-| `/permissions` | **Planned** | Server-guarded deferred page; no activation or provisioning operation exists. |
+| `/permissions` | **Planned** | Server-guarded deferred entitlement/policy administration page; activation uses the separate `/admin/activations` surface. |
 | `/reports` | **Planned** | Server-guarded deferred page; no analytics/export workflow exists. |
 | `GET /api/health` | **Completed** | Bounded `SELECT 1`; private/no-store `200` when available and generic `503` when unavailable. |
 
@@ -100,8 +115,8 @@ Figma contains desktop evidence only. Mobile drawers, stacked layouts, errors, e
 | Category | Source of truth | Trust boundary |
 | --- | --- | --- |
 | Accounts, sessions, roles, profiles | Better Auth and PostgreSQL | Real server-enforced behavior. |
-| Catalog policy, assignments, entitlements, responsibilities | PostgreSQL seeded/configured by migrations and guarded CLI tools | Real server-enforced behavior, using proposed institutional policy until approved. |
-| Requests, assignments, decisions, events, notifications, audit | PostgreSQL transactions | Real persistence and authorization. |
+| Catalog policy, assignments, entitlements, responsibilities | PostgreSQL seeded/configured by migrations and guarded CLI tools | Real server-enforced behavior, using proposed institutional policy until approved. Successful manual activation records an `ordinary_entitlement`. |
+| Requests, assignments, decisions, activation lifecycle/events, notifications, audit | PostgreSQL transactions | Real persistence and authorization; approval state and activation lifecycle are separate. |
 | `lib/demo-service.ts`, older demo components/tests | Historical Stage 1 prototype | Not mounted and never a fallback or production authority. |
 | Figma sample values and security checklist text | Design reference | Presentation evidence only, not proof a policy or check occurred. |
 | `/users`, `/resources`, `/permissions`, `/reports` controls | Deferred pages | Inactive; no hidden success path or simulated mutation. |
@@ -110,7 +125,7 @@ Figma contains desktop evidence only. Mobile drawers, stacked layouts, errors, e
 
 - [x] **Completed:** Node 22 repository requirement, lint, typecheck, production build, unit tests, isolated PostgreSQL tests, and deterministic single-worker Playwright coverage.
 - [x] **Completed:** integration and E2E runners require only `TEST_DATABASE_URL`, verify the database name ends in `_test`, remove development/migration variables, and use the same Neon branch/database through its pooled endpoint.
-- [x] **Completed:** latest Node 22 verification: 43 unit tests, 43 PostgreSQL integration tests, and 20 Playwright tests passed; lint, typecheck, build, and `git diff --check` passed.
+- [x] **Completed:** latest Stage 2C verification on 2026-09-29: 53 unit tests, 60 guarded PostgreSQL integration tests, and 20 Playwright tests passed; lint, typecheck, and `git diff --check` passed. These runs used the current Node 24.21 environment; rerun under the pinned Node 22 before release. Production build was not part of this Stage 2C verification.
 - [x] **Completed:** database CLIs require an explicit development/test/production target, reject mixed runtime/migration endpoints, and require explicit production confirmation.
 - [x] **Completed:** private/no-store health endpoint and credential-safe errors.
 - [ ] **In progress:** controlled prototype publication/deployment configuration, final secret scanning, branch protection, owners, preview isolation, and operational sign-off. See [HANDOFF.md](../HANDOFF.md).
@@ -118,19 +133,20 @@ Figma contains desktop evidence only. Mobile drawers, stacked layouts, errors, e
 
 ## Remaining development roadmap
 
-1. **Planned — activation foundation:** define the approved-awaiting-activation queue, operator authorization, entitlement/provisioning transaction or outbox, failure/retry/reconciliation states, revocation, expiry enforcement, and requester-visible activation result.
+1. **Completed — activation foundation and manual lifecycle:** admin authorization, adapter boundary, transactions, entitlements, events, notifications, retry/reconciliation, expiry/revocation boundaries, requester/admin status UI, browser coverage, and operator runbook.
 2. **Planned — administrator maintenance:** authenticated UI for users, assignments, ordinary entitlements, catalog policy, and approver responsibilities with audit and separation of duties.
 3. **Planned — revision flow:** create a new linked request from `returned_for_revision` and re-run all current validation and routing. The reviewed record remains immutable.
 4. **Planned — account operations:** password recovery/change, optional MFA/SSO, session administration, and secured break-glass recovery.
-5. **Planned — institutional integrations:** authoritative SIS/LMS/library/lab/research synchronization, health/reconciliation, and source-specific failure handling.
+5. **Planned — institutional integrations and scheduling:** authoritative SIS/LMS/library/lab/research adapters, automatic job scheduling/monitoring, downstream reconciliation, and source-specific failure handling.
 6. **Planned — communications and governance:** external delivery, preferences, audit retention/export/redaction, analytics, alerts, backups/restore exercises, and incident runbooks.
 
 ## Unresolved policy decisions
 
 - Approve the proposed resource matrix, canonical institutional identifiers, policy durations, renewal rules, and Student Portal exception handling.
-- Decide activation owners, automatic versus manually attested provisioning, evidence requirements, retry policy, and downstream adapters.
+- The current prototype uses manual administrator attestation with evidence. Still decide institutional provisioning owners, accepted evidence policy, and production retry/reconciliation ownership before pilot/production use.
+- Automatic scheduling is not configured; the expiry and stuck-attempt commands currently require deliberate operator invocation.
 - Decide whether high-sensitivity/grading requests need multiple stages or separation-of-duty rules beyond the current single assigned approver.
 - Define delegation, reassignment, escalation, out-of-office, cancellation, and approver-adjusted validity behavior.
 - Define audit retention, export/redaction authorization, legal hold, notification delivery policy, and production monitoring ownership.
 
-No unresolved documentation contradiction remains about the implemented lifecycle: submission produces `pending_review` or preserved `pending_routing`; one assigned approver may approve, deny, or return; approval produces `approved_pending_activation`; actual activation is future work.
+No unresolved documentation contradiction remains: approval produces the immutable request state `approved_pending_activation`; a separate activation row records `activating`, `activated`, `failed`, `expired`, or `revoked`. Only manual administrator confirmation currently creates an entitlement; this is not an external university integration or production-ready access-control service.

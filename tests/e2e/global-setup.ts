@@ -186,6 +186,11 @@ export default async function globalSetup() {
       role: "admin",
     });
     await user(client, passwordHash, {
+      ...E2E.activationAdministrator,
+      name: "Jordan Activation Administrator",
+      role: "admin",
+    });
+    await user(client, passwordHash, {
       ...E2E.approver,
       name: "Reese Approver",
       role: "approver",
@@ -293,12 +298,86 @@ export default async function globalSetup() {
         E2E.approver.id,
       ],
     );
+    const activationFailureEvent = "e2000000-0000-4000-8000-000000000403";
+    const activationSuccessEvent = "e2000000-0000-4000-8000-000000000404";
+    const activationResponsibility = "e2000000-0000-4000-8000-000000000503";
+    const activationAssignment = "e2000000-0000-4000-8000-000000000502";
+    const activationDecision = "e2000000-0000-4000-8000-000000000501";
+    const activationId = "e2000000-0000-4000-8000-000000000504";
+    const entitlementId = "e2000000-0000-4000-8000-000000000505";
+    const firstActivationKey = "e2000000-0000-4000-8000-000000000506";
+    const finalActivationKey = "e2000000-0000-4000-8000-000000000507";
+    await client.query(
+      `INSERT INTO approver_responsibility
+        (id,approver_user_id,resource_id,permission_id,valid_from,assigned_by)
+       VALUES ($1,$2,'r-student-portal','portal:view-own-academic-information',now()-interval '1 day',$3)`
+      , [activationResponsibility, E2E.approver.id, E2E.administrator.id],
+    );
+    await client.query(
+      `INSERT INTO request_review_assignment
+        (id,request_id,approver_user_id,responsibility_id,status,assigned_at,completed_at)
+       VALUES ($1,$2,$3,$4,'completed',now()-interval '35 minutes',now()-interval '30 minutes')`,
+      [activationAssignment, E2E.requests.notificationApproved, E2E.approver.id, activationResponsibility],
+    );
+    await client.query(
+      `UPDATE access_request SET version=2 WHERE id=$1`,
+      [E2E.requests.notificationApproved],
+    );
+    await client.query(
+      `INSERT INTO request_decision
+        (id,request_id,assignment_id,actor_user_id,action,previous_status,
+         resulting_status,previous_version,resulting_version,idempotency_key)
+       VALUES ($1,$2,$3,$4,'approve','pending_review',
+         'approved_pending_activation',1,2,$1)`,
+      [activationDecision, E2E.requests.notificationApproved, activationAssignment, E2E.approver.id],
+    );
+    await client.query(
+      `INSERT INTO ordinary_entitlement
+        (id,user_id,resource_id,permission_id,scope_fingerprint,source,evidence,
+         valid_from,valid_until,recorded_by)
+       SELECT $2,requester_user_id,resource_id,permission_id,scope_fingerprint,
+              'manual','E2E fixture: administrator confirmed provisioning.',
+              starts_at,expires_at,$3
+         FROM access_request WHERE id=$1`,
+      [E2E.requests.notificationApproved, entitlementId, E2E.administrator.id],
+    );
+    await client.query(
+      `INSERT INTO request_activation
+        (id,request_id,decision_id,status,adapter_name,actor_user_id,idempotency_key,
+         attempt_count,started_at,last_attempt_at,activated_at,expires_at,external_reference)
+       SELECT $2,$1,$3,'activated','manual-admin',$4,$5,2,
+              now()-interval '20 minutes',now()-interval '15 minutes',
+              now()-interval '15 minutes',expires_at,'E2E-MANUAL-1001'
+         FROM access_request WHERE id=$1`,
+      [E2E.requests.notificationApproved, activationId, activationDecision, E2E.administrator.id, finalActivationKey],
+    );
+    await client.query(
+      `INSERT INTO activation_event
+        (id,activation_id,actor_user_id,event_type,idempotency_key,adapter_name,
+         external_reference,occurred_at,detail,metadata)
+       VALUES
+        ('e2000000-0000-4000-8000-000000000508',$1,$2,'activation_started',$3,'manual-admin',NULL,now()-interval '25 minutes','First activation attempt started.','{"attemptCount":1}'::jsonb),
+        ('e2000000-0000-4000-8000-000000000509',$1,$2,'activation_failed',$3,'manual-admin',NULL,now()-interval '23 minutes','The first manual attempt was not confirmed.','{"attemptCount":1,"failureCode":"activation_attempt_timeout","retryable":true}'::jsonb),
+        ('e2000000-0000-4000-8000-000000000510',$1,$2,'activation_started',$4,'manual-admin',NULL,now()-interval '20 minutes','Retry started after manual verification.','{"attemptCount":2}'::jsonb),
+        ('e2000000-0000-4000-8000-000000000511',$1,$2,'activation_succeeded',$4,'manual-admin','E2E-MANUAL-1001',now()-interval '15 minutes','Administrator confirmed access was provisioned.',$5::jsonb)`,
+      [activationId, E2E.administrator.id, firstActivationKey, finalActivationKey, JSON.stringify({ entitlementId, attemptCount: 2, adapterName: "manual-admin", externalReference: "E2E-MANUAL-1001", evidence: "Administrator verified access." })],
+    );
+    await client.query(
+      `INSERT INTO request_event
+        (id,request_id,actor_user_id,event_type,occurred_at,detail,metadata)
+       VALUES
+        ($1,$3,$5,'activation_failed',now()-interval '23 minutes','The first manual attempt was not confirmed.','{"retryable":true}'::jsonb),
+        ($2,$3,$5,'activation_succeeded',now()-interval '15 minutes','Administrator confirmed access was provisioned.',$4::jsonb)`,
+      [activationFailureEvent, activationSuccessEvent, E2E.requests.notificationApproved, JSON.stringify({ entitlementId, externalReference: "E2E-MANUAL-1001" }), E2E.administrator.id],
+    );
     await client.query(
       `INSERT INTO user_notification
         (id,recipient_user_id,request_id,request_event_id,notification_type,title,body,created_at)
        VALUES
         ($1,$3,$4,$6,'request_approved_pending_activation','Request approved — awaiting activation','Your request was approved. Access is not active until activation is completed.',now() - interval '30 minutes'),
-        ($2,$3,$5,$7,'request_denied','Access request denied','Additional justification is required.',now() - interval '15 minutes')`,
+        ($2,$3,$5,$7,'request_denied','Access request denied','Additional justification is required.',now() - interval '15 minutes'),
+        ($8,$3,$4,$9,'activation_failed','Access activation failed','The first activation attempt was not confirmed. An administrator retried after verification.',now() - interval '23 minutes'),
+        ($10,$3,$4,$11,'activation_succeeded','Access activated','Your approved access has been activated.',now() - interval '15 minutes')`,
       [
         E2E.notifications.approved,
         E2E.notifications.denied,
@@ -307,6 +386,10 @@ export default async function globalSetup() {
         E2E.requests.notificationDenied,
         approvedEvent,
         deniedEvent,
+        E2E.notifications.activationFailed,
+        activationFailureEvent,
+        E2E.notifications.activationSucceeded,
+        activationSuccessEvent,
       ],
     );
     await client.query(

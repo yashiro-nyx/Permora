@@ -33,6 +33,7 @@ test("staff navigation is role-specific and excludes requester actions", () => {
     [
       "Dashboard",
       "Review Requests",
+      "Activations",
       "Unassigned Requests",
       "Audit Logs",
       "Help & Support",
