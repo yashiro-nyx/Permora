@@ -19,7 +19,8 @@ export type AccountErrorCode =
   | "self_demotion"
   | "account_already_active"
   | "account_already_deactivated"
-  | "session_revocation_failed";
+  | "session_revocation_failed"
+  | "stale_account";
 
 const ERROR_DETAILS: Record<
   AccountErrorCode,
@@ -52,6 +53,10 @@ const ERROR_DETAILS: Record<
   session_revocation_failed: {
     status: 503,
     message: "Existing sessions could not be invalidated; the account remains deactivated.",
+  },
+  stale_account: {
+    status: 409,
+    message: "This account changed after it was loaded. Review the latest values and try again.",
   },
 };
 

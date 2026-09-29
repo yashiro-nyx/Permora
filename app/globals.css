@@ -1042,6 +1042,128 @@ textarea {
   gap: 5px;
   align-items: center;
 }
+.account-directory-card {
+  overflow: hidden;
+}
+.account-filters {
+  border-bottom: 1px solid var(--border);
+}
+.account-table {
+  min-width: 720px;
+}
+.account-table td {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+.account-table .table-secondary {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+.account-row-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.account-mobile-list {
+  display: none;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.account-mobile-list > li {
+  padding: 16px;
+  border-top: 1px solid var(--border);
+}
+.account-mobile-heading,
+.account-status-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.account-mobile-heading > div {
+  min-width: 0;
+}
+.account-mobile-heading strong,
+.account-mobile-heading a {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.account-mobile-heading a {
+  color: var(--secondary);
+  font-size: 12px;
+  margin-top: 3px;
+}
+.account-mobile-list dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0 8px;
+}
+.account-mobile-list dt {
+  margin-bottom: 3px;
+}
+.account-mobile-list dd {
+  overflow-wrap: anywhere;
+}
+.account-editor-card {
+  max-width: 900px;
+}
+.account-editor {
+  padding: 24px;
+  gap: 24px;
+}
+.account-role-options legend {
+  margin-bottom: 6px;
+}
+.account-role-options > .field-hint {
+  margin: 0 0 12px;
+}
+.account-role-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.account-role-grid .choice {
+  min-width: 0;
+  align-items: center;
+  padding: 12px;
+  overflow-wrap: anywhere;
+}
+.account-role-grid .choice:has(input:checked) {
+  padding: 11px;
+}
+.account-form-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+.account-form-footer p {
+  margin: 0;
+}
+.account-status-card {
+  max-width: 900px;
+}
+.account-status-card > .account-status-content,
+.account-status-card > .field-hint {
+  margin: 16px 20px;
+}
+.account-status-content > div {
+  min-width: 0;
+}
+.account-status-content p {
+  overflow-wrap: anywhere;
+}
+.account-pagination nav > span {
+  align-items: center;
+  padding: 0 8px;
+  white-space: nowrap;
+}
 .ellipsis {
   padding: 0 4px;
 }
@@ -1746,6 +1868,36 @@ dd {
   }
   .modal-actions {
     flex-wrap: wrap;
+  }
+  .account-pagination,
+  .account-pagination nav {
+    width: 100%;
+  }
+  .account-pagination nav {
+    justify-content: space-between;
+  }
+  .account-pagination nav > a {
+    flex: 1;
+  }
+  .account-editor {
+    padding: 20px;
+  }
+  .account-role-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .account-status-content {
+    flex-direction: column;
+  }
+  .account-status-content > button {
+    width: 100%;
+  }
+}
+@media (max-width: 700px) {
+  .account-desktop-list {
+    display: none;
+  }
+  .account-mobile-list {
+    display: block;
   }
 }
 @media (max-width: 380px) {

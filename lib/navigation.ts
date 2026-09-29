@@ -25,6 +25,7 @@ export const administratorNavigation: readonly NavigationItem[] = [
   ["/review", "Review Requests", "requests"],
   ["/admin/activations", "Activations", "key"],
   ["/admin/unassigned", "Unassigned Requests", "expire"],
+  ["/users", "User Management", "users"],
   ["/audit", "Audit Logs", "clock"],
   ["/help", "Help & Support", "help"],
 ];

@@ -36,6 +36,7 @@ type LockedUser = {
   id: string;
   active: boolean;
   roles: Role[];
+  updatedAt: Date | string;
 };
 
 type AccountUserQueryRow = AccountUserRow & QueryResultRow;
@@ -110,8 +111,10 @@ async function lockUser(client: PoolClient, userId: string): Promise<LockedUser>
   const result = await client.query<{
     id: string;
     active: boolean;
+    updated_at: Date | string;
   }>(
-    `SELECT user_record.id, profile.active
+    `SELECT user_record.id, profile.active,
+            greatest(user_record."updatedAt", profile.updated_at) AS updated_at
        FROM "user" user_record
        JOIN user_profile profile ON profile.user_id = user_record.id
       WHERE user_record.id = $1
@@ -128,6 +131,7 @@ async function lockUser(client: PoolClient, userId: string): Promise<LockedUser>
     id: account.id,
     active: account.active,
     roles: assignedRoles.rows.map((row) => row.role),
+    updatedAt: account.updated_at,
   };
 }
 
@@ -303,6 +307,7 @@ export async function updateUser(
   userId: string,
   input: unknown,
   dependencies: AccountServiceOverrides = {},
+  expectedUpdatedAt?: string,
 ): Promise<AccountUserDto> {
   const identity = await (dependencies.requireAdmin ?? requireActiveAdminSession)();
   const id = parseUserId(userId);
@@ -311,6 +316,12 @@ export async function updateUser(
     transaction(async (client) => {
       await validateActiveAdminTransaction(client, identity.id);
       const current = await lockUser(client, id);
+      if (
+        expectedUpdatedAt &&
+        new Date(current.updatedAt).toISOString() !==
+          new Date(expectedUpdatedAt).toISOString()
+      )
+        throw new AccountServiceError("stale_account");
       const nextRoles = changes.roles ?? current.roles;
       if (
         identity.id === id &&
