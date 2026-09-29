@@ -2,6 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { PoolClient, QueryResultRow } from "pg";
 import type { Role } from "@/lib/model";
+import type { TrustedIdentity } from "@/lib/auth-types";
 import {
   AccountServiceError,
   parseCreateUserInput,
@@ -14,7 +15,6 @@ import {
   type UpdateUserInput,
 } from "@/lib/account-management";
 import { reconcilePendingReviewsForInactiveApprover } from "@/lib/approval-domain";
-import { requireAdmin } from "./identity";
 import { query, transaction } from "./db";
 import type {
   AccountUserDto,
@@ -24,6 +24,13 @@ import type {
 } from "./account-types";
 
 const ACCOUNT_ADMIN_LOCK = 73020423;
+
+export interface AccountServiceDependencies {
+  requireAdmin: () => Promise<TrustedIdentity>;
+  revokeUserSessions: typeof revokeUserSessions;
+}
+
+type AccountServiceOverrides = Partial<AccountServiceDependencies>;
 
 type LockedUser = {
   id: string;
@@ -47,6 +54,11 @@ const ACCOUNT_USER_SELECT = `
     JOIN user_profile profile ON profile.user_id = u.id
     LEFT JOIN "user" deactivator ON deactivator.id = profile.deactivated_by
     LEFT JOIN user_role assigned_role ON assigned_role.user_id = u.id`;
+
+async function requireActiveAdminSession() {
+  const { requireAdmin } = await import("./identity");
+  return requireAdmin();
+}
 
 function isEmailUniqueViolation(error: unknown) {
   return (
@@ -189,8 +201,9 @@ function accountWhere(filters: UserListFilters) {
 
 export async function listUsers(
   searchParams: URLSearchParams,
+  dependencies: AccountServiceOverrides = {},
 ): Promise<UserListDto> {
-  await requireAdmin();
+  await (dependencies.requireAdmin ?? requireActiveAdminSession)();
   const filters = parseUserListFilters(searchParams);
   const { values, where } = accountWhere(filters);
   const limitPosition = values.length + 1;
@@ -229,8 +242,11 @@ export async function listUsers(
   };
 }
 
-export async function getUser(userId: string): Promise<AccountUserDto | null> {
-  await requireAdmin();
+export async function getUser(
+  userId: string,
+  dependencies: AccountServiceOverrides = {},
+): Promise<AccountUserDto | null> {
+  await (dependencies.requireAdmin ?? requireActiveAdminSession)();
   const id = parseUserId(userId);
   const result = await query<AccountUserQueryRow>(
     `${ACCOUNT_USER_SELECT}
@@ -249,8 +265,11 @@ async function validateActiveAdminTransaction(
   await assertActiveAdministrator(client, actorUserId);
 }
 
-export async function createUser(input: unknown): Promise<AccountUserDto> {
-  const identity = await requireAdmin();
+export async function createUser(
+  input: unknown,
+  dependencies: AccountServiceOverrides = {},
+): Promise<AccountUserDto> {
+  const identity = await (dependencies.requireAdmin ?? requireActiveAdminSession)();
   const data: CreateUserInput = parseCreateUserInput(input);
   return withAccountErrorMapping(() =>
     transaction(async (client) => {
@@ -283,8 +302,9 @@ export async function createUser(input: unknown): Promise<AccountUserDto> {
 export async function updateUser(
   userId: string,
   input: unknown,
+  dependencies: AccountServiceOverrides = {},
 ): Promise<AccountUserDto> {
-  const identity = await requireAdmin();
+  const identity = await (dependencies.requireAdmin ?? requireActiveAdminSession)();
   const id = parseUserId(userId);
   const changes: UpdateUserInput = parseUpdateUserInput(input);
   return withAccountErrorMapping(() =>
@@ -363,17 +383,18 @@ async function revokeUserSessions(userId: string) {
 export async function deactivateUser(
   userId: string,
   reason: unknown,
+  dependencies: AccountServiceOverrides = {},
 ): Promise<{ user: AccountUserDto; sessionsRevoked: boolean }> {
-  const identity = await requireAdmin();
+  const identity = await (dependencies.requireAdmin ?? requireActiveAdminSession)();
   const id = parseUserId(userId);
   const normalizedReason = parseDeactivationReason(reason);
   const result = await transaction(async (client) => {
     await validateActiveAdminTransaction(client, identity.id);
     const target = await lockUser(client, id);
-    if (identity.id === id) throw new AccountServiceError("self_deactivation");
     if (!target.active)
       throw new AccountServiceError("account_already_deactivated");
     await assertAdministratorCanBeRemoved(client, target);
+    if (identity.id === id) throw new AccountServiceError("self_deactivation");
     await client.query(
       `UPDATE user_profile
           SET active = false, deactivated_at = now(), deactivated_by = $2,
@@ -394,15 +415,18 @@ export async function deactivateUser(
 
   let sessionsRevoked = true;
   try {
-    await revokeUserSessions(id);
+    await (dependencies.revokeUserSessions ?? revokeUserSessions)(id);
   } catch {
     sessionsRevoked = false;
   }
   return { user: result, sessionsRevoked };
 }
 
-export async function reactivateUser(userId: string): Promise<AccountUserDto> {
-  const identity = await requireAdmin();
+export async function reactivateUser(
+  userId: string,
+  dependencies: AccountServiceOverrides = {},
+): Promise<AccountUserDto> {
+  const identity = await (dependencies.requireAdmin ?? requireActiveAdminSession)();
   const id = parseUserId(userId);
   await transaction(async (client) => {
     await validateActiveAdminTransaction(client, identity.id);
@@ -410,7 +434,7 @@ export async function reactivateUser(userId: string): Promise<AccountUserDto> {
     if (target.active) throw new AccountServiceError("account_already_active");
   });
   try {
-    await revokeUserSessions(id);
+    await (dependencies.revokeUserSessions ?? revokeUserSessions)(id);
   } catch {
     throw new AccountServiceError("session_revocation_failed");
   }
