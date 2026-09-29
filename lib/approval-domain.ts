@@ -269,6 +269,77 @@ export async function routePendingRequest(
   };
 }
 
+export async function reconcilePendingReviewsForInactiveApprover(
+  client: PoolClient,
+  approverUserId: string,
+  actorUserId: string,
+) {
+  const assignments = await client.query<{
+    assignment_id: string;
+    request_id: string;
+    requester_user_id: string;
+    display_id: string;
+  }>(
+    `SELECT assignment.id AS assignment_id, request.id AS request_id,
+            request.requester_user_id, request.display_id
+       FROM request_review_assignment assignment
+       JOIN access_request request ON request.id = assignment.request_id
+      WHERE assignment.approver_user_id = $1
+        AND assignment.status = 'assigned'
+        AND request.status = 'pending_review'
+      ORDER BY request.id
+      FOR UPDATE OF assignment, request`,
+    [approverUserId],
+  );
+  let routed = 0;
+  let unassigned = 0;
+
+  for (const assignment of assignments.rows) {
+    await client.query(
+      `UPDATE access_request
+          SET status = 'pending_routing', version = version + 1, updated_at = now()
+        WHERE id = $1 AND status = 'pending_review'`,
+      [assignment.request_id],
+    );
+    const removed = await client.query(
+      `DELETE FROM request_review_assignment
+        WHERE id = $1 AND status = 'assigned'`,
+      [assignment.assignment_id],
+    );
+    if (removed.rowCount !== 1)
+      throw new Error("The review assignment changed during account reconciliation.");
+
+    const route = await routePendingRequest(
+      client,
+      assignment.request_id,
+      actorUserId,
+    );
+    if (route.routed) routed++;
+    else unassigned++;
+
+    await client.query(
+      `INSERT INTO audit_event
+        (id, actor_user_id, subject_user_id, request_id, event_type, metadata)
+       VALUES ($1,$2,$3,$4,'request_approver_reconciled',$5::jsonb)`,
+      [
+        randomUUID(),
+        actorUserId,
+        assignment.requester_user_id,
+        assignment.request_id,
+        JSON.stringify({
+          displayId: assignment.display_id,
+          previousApproverUserId: approverUserId,
+          newApproverUserId: route.routed ? route.approverUserId : null,
+          previousState: "pending_review",
+          newState: route.routed ? "pending_review" : "pending_routing",
+        }),
+      ],
+    );
+  }
+
+  return { routed, unassigned };
+}
+
 export async function applyApprovalDecision(
   client: PoolClient,
   actorUserId: string,
