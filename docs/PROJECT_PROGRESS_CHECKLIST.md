@@ -211,9 +211,9 @@ Status: **In progress — manual lifecycle implemented; integration and scheduli
 
 ## 11. Future administrator capabilities
 
-- [ ] Build user-account creation and maintenance UI.
-- [ ] Add user activation and deactivation controls.
-- [ ] Add secure temporary-password or invitation workflows.
+- [x] Build user-account creation and maintenance UI.
+- [x] Add user activation and deactivation controls.
+- [x] Add secure temporary-password or invitation workflows.
 - [ ] Add resource and permission policy management.
 - [ ] Add approver-responsibility management.
 - [ ] Add safe reassignment for unassigned requests.
