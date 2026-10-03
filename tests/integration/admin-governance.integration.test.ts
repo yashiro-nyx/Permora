@@ -742,6 +742,25 @@ test("delegations create and cancel with admin-only access and valid dates", asy
     [admin.id, delegator.id, created.id],
   );
   assert.equal(createdAudit.rowCount, 1);
+  const cancelDenied = await handlers.handleDelegationCancel(
+    new Request(
+      `http://localhost:3000/api/admin/delegations/${created.id}/cancel`,
+      {
+        method: "POST",
+        headers: {
+          cookie: nonAdminCookie,
+          origin: "http://localhost:3000",
+        },
+      },
+    ),
+    created.id,
+  );
+  assert.equal(cancelDenied.status, 403);
+  const unchangedDelegation = await pool.query<{ cancelled_at: Date | null }>(
+    "SELECT cancelled_at FROM approver_delegation WHERE id = $1",
+    [created.id],
+  );
+  assert.equal(unchangedDelegation.rows[0].cancelled_at, null);
   await service.cancelDelegation(created.id, adminDeps);
   const cancelled = await pool.query<{ cancelled_by: string; cancelled_at: Date | null }>(
     `SELECT cancelled_by, cancelled_at FROM approver_delegation WHERE id = $1`,

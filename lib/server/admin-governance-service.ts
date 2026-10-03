@@ -969,7 +969,7 @@ export async function upsertUserIdentifier(
   const identity = await requireActiveAdmin(dependencies);
   const data = parseIdentifierInput(input);
   try {
-    return await transaction(async (client) => {
+    await transaction(async (client) => {
       await lockGovernance(client);
       const existing = await client.query<{
         id: string;
@@ -1005,8 +1005,8 @@ export async function upsertUserIdentifier(
         },
         userId,
       );
-      return listUserIdentifiers(userId);
     });
+    return listUserIdentifiers(userId);
   } catch (error) {
     if (isUniqueViolation(error))
       throw new GovernanceError(
