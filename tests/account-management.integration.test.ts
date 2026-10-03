@@ -5,6 +5,7 @@ import path from "node:path";
 import test, { after, before } from "node:test";
 import { Pool } from "pg";
 import type { Role } from "../lib/model";
+import { InvitationFlowError } from "../lib/account-credentials";
 import { AccountServiceError } from "../lib/account-management";
 import { ResilientPool } from "../lib/database-pool";
 import {
@@ -26,10 +27,12 @@ if (!testDatabase.databaseName.endsWith("_test"))
   throw new Error("Refusing an integration database without the _test suffix.");
 
 const password = "Account integration password 2026";
+const invitationPassword = "Invitation acceptance password 2026";
 let pool: Pool;
 let passwordHash = "";
 let loginAddress = 0;
 let accountService: typeof import("../lib/server/account-service");
+let invitationService: typeof import("../lib/server/invitation-service");
 let getTrustedIdentityFromHeaders: typeof import("../lib/server/identity-data")["getTrustedIdentityFromHeaders"];
 let hashPassword: typeof import("../lib/server/password")["hashPassword"];
 
@@ -72,6 +75,7 @@ async function seedUser(
   roles: Role[],
   name: string,
   active = true,
+  withCredential = true,
 ) {
   const id = randomUUID();
   const email = `${id}@permora.test`;
@@ -96,16 +100,17 @@ async function seedUser(
       id,
       role,
     ]);
-  await pool.query(
-    `INSERT INTO account
-      (id, "userId", "accountId", "providerId", password, "createdAt", "updatedAt")
-     VALUES ($1,$2::uuid,$2::text,'credential',$3,$4,$4)`,
-    [randomUUID(), id, passwordHash, now],
-  );
+  if (withCredential)
+    await pool.query(
+      `INSERT INTO account
+        (id, "userId", "accountId", "providerId", password, "createdAt", "updatedAt")
+       VALUES ($1,$2::uuid,$2::text,'credential',$3,$4,$4)`,
+      [randomUUID(), id, passwordHash, now],
+    );
   return { id, email };
 }
 
-async function login(email: string) {
+async function login(email: string, passwordForLogin = password) {
   const { auth } = await import("../lib/server/auth");
   const current = loginAddress++;
   const response = await auth.handler(
@@ -116,7 +121,7 @@ async function login(email: string) {
         "content-type": "application/json",
         "x-forwarded-for": `127.0.${Math.floor(current / 250)}.${(current % 250) + 1}`,
       },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password: passwordForLogin }),
     }),
   );
   assert.equal(response.status, 200);
@@ -230,9 +235,277 @@ before(async () => {
     await import("../lib/server/identity-data")
   ).getTrustedIdentityFromHeaders;
   accountService = await import("../lib/server/account-service");
+  invitationService = await import("../lib/server/invitation-service");
 });
 
 after(closeApplicationTestPool);
+
+async function invitationDependencies(adminEmail: string) {
+  return dependencies(await login(adminEmail));
+}
+
+async function assertInvitationIsInvalid(token: string) {
+  await assert.rejects(
+    () => invitationService.acceptInvitation({ token, password: invitationPassword }),
+    (error: unknown) =>
+      error instanceof InvitationFlowError &&
+      error.code === "invalid_invitation",
+  );
+}
+
+test("invitation acceptance creates a Better Auth credential and audit event", async () => {
+  const administrator = await seedUser(["admin"], "Invitation Acceptance Admin");
+  const target = await seedUser(
+    ["student"],
+    "Invitation Acceptance Target",
+    true,
+    false,
+  );
+  await pool.query('UPDATE "user" SET "emailVerified" = false WHERE id = $1', [
+    target.id,
+  ]);
+  const issued = await invitationService.issueInvitation(
+    target.id,
+    await invitationDependencies(administrator.email),
+  );
+
+  assert.deepEqual(
+    await invitationService.acceptInvitation({
+      token: issued.rawToken,
+      password: invitationPassword,
+    }),
+    { accepted: true },
+  );
+
+  const credential = await pool.query<{
+    user_id: string;
+    account_id: string;
+    provider_id: string;
+    password_hash: string;
+  }>(
+    `SELECT "userId" AS user_id, "accountId" AS account_id,
+            "providerId" AS provider_id, password AS password_hash
+       FROM account WHERE "userId" = $1`,
+    [target.id],
+  );
+  assert.equal(credential.rows.length, 1);
+  assert.equal(credential.rows[0].user_id, target.id);
+  assert.equal(credential.rows[0].account_id, target.id);
+  assert.equal(credential.rows[0].provider_id, "credential");
+  assert.notEqual(credential.rows[0].password_hash, invitationPassword);
+  const verified = await pool.query<{ email_verified: boolean }>(
+    'SELECT "emailVerified" AS email_verified FROM "user" WHERE id = $1',
+    [target.id],
+  );
+  assert.equal(verified.rows[0].email_verified, true);
+
+  const events = await pool.query<{ event_type: string; metadata: { invitationId: string } }>(
+    `SELECT event_type, metadata FROM audit_event
+      WHERE subject_user_id = $1 AND event_type = 'account.invitation_accepted'`,
+    [target.id],
+  );
+  assert.equal(events.rows.length, 1);
+  assert.equal(events.rows[0].metadata.invitationId, issued.invitation.id);
+  await login(target.email, invitationPassword);
+});
+
+test("expired, used, and revoked invitations cannot be accepted", async () => {
+  const administrator = await seedUser(["admin"], "Invalid Invitation Admin");
+  const adminDependencies = await invitationDependencies(administrator.email);
+  const expiredTarget = await seedUser(
+    ["student"],
+    "Expired Invitation Target",
+    true,
+    false,
+  );
+  const expired = await invitationService.issueInvitation(
+    expiredTarget.id,
+    adminDependencies,
+  );
+  await pool.query(
+    `UPDATE account_invitation
+        SET created_at = now() - interval '2 seconds',
+            expires_at = now() - interval '1 second'
+      WHERE id = $1`,
+    [expired.invitation.id],
+  );
+  await assertInvitationIsInvalid(expired.rawToken);
+
+  const usedTarget = await seedUser(
+    ["student"],
+    "Used Invitation Target",
+    true,
+    false,
+  );
+  const used = await invitationService.issueInvitation(
+    usedTarget.id,
+    adminDependencies,
+  );
+  await pool.query("UPDATE account_invitation SET used_at = now() WHERE id = $1", [
+    used.invitation.id,
+  ]);
+  await assertInvitationIsInvalid(used.rawToken);
+
+  const revokedTarget = await seedUser(
+    ["student"],
+    "Revoked Invitation Target",
+    true,
+    false,
+  );
+  const revoked = await invitationService.issueInvitation(
+    revokedTarget.id,
+    adminDependencies,
+  );
+  await invitationService.revokeInvitation(
+    revokedTarget.id,
+    revoked.invitation.id,
+    adminDependencies,
+  );
+  await assertInvitationIsInvalid(revoked.rawToken);
+});
+
+test("invitation failure rolls back consumption and credential creation", async () => {
+  const administrator = await seedUser(["admin"], "Invitation Rollback Admin");
+  const target = await seedUser(
+    ["student"],
+    "Invitation Rollback Target",
+    true,
+    false,
+  );
+  const issued = await invitationService.issueInvitation(
+    target.id,
+    await invitationDependencies(administrator.email),
+  );
+  await pool.query(`
+    CREATE FUNCTION reject_invitation_acceptance_test() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW.event_type = 'account.invitation_accepted' THEN
+        RAISE EXCEPTION 'test invitation audit rejection' USING ERRCODE = '23514';
+      END IF;
+      RETURN NEW;
+    END;
+    $$
+  `);
+  await pool.query(`
+    CREATE TRIGGER reject_invitation_acceptance_test
+    BEFORE INSERT ON audit_event
+    FOR EACH ROW EXECUTE FUNCTION reject_invitation_acceptance_test()
+  `);
+  try {
+    await assert.rejects(() =>
+      invitationService.acceptInvitation({
+        token: issued.rawToken,
+        password: invitationPassword,
+      }),
+    );
+  } finally {
+    await pool.query(
+      "DROP TRIGGER reject_invitation_acceptance_test ON audit_event",
+    );
+    await pool.query("DROP FUNCTION reject_invitation_acceptance_test()");
+  }
+
+  const state = await pool.query<{
+    used_at: Date | null;
+    credential_count: number;
+  }>(
+    `SELECT invitation.used_at,
+            (SELECT count(*)::int FROM account
+              WHERE "userId" = invitation.target_user_id) AS credential_count
+       FROM account_invitation invitation WHERE invitation.id = $1`,
+    [issued.invitation.id],
+  );
+  assert.equal(state.rows[0].used_at, null);
+  assert.equal(state.rows[0].credential_count, 0);
+  await invitationService.acceptInvitation({
+    token: issued.rawToken,
+    password: invitationPassword,
+  });
+});
+
+test("concurrent invitation acceptance creates one credential and audit", async () => {
+  const administrator = await seedUser(["admin"], "Concurrent Invitation Admin");
+  const target = await seedUser(
+    ["student"],
+    "Concurrent Invitation Target",
+    true,
+    false,
+  );
+  const issued = await invitationService.issueInvitation(
+    target.id,
+    await invitationDependencies(administrator.email),
+  );
+  const attempts = await Promise.allSettled([
+    invitationService.acceptInvitation({
+      token: issued.rawToken,
+      password: invitationPassword,
+    }),
+    invitationService.acceptInvitation({
+      token: issued.rawToken,
+      password: invitationPassword,
+    }),
+  ]);
+  assert.equal(attempts.filter((attempt) => attempt.status === "fulfilled").length, 1);
+  const failure = attempts.find((attempt) => attempt.status === "rejected");
+  assert.ok(failure && failure.status === "rejected");
+  assert.ok(failure.reason instanceof InvitationFlowError);
+  assert.equal(failure.reason.code, "invalid_invitation");
+
+  const counts = await pool.query<{
+    credential_count: number;
+    audit_count: number;
+  }>(
+    `SELECT (SELECT count(*)::int FROM account WHERE "userId" = $1) AS credential_count,
+            (SELECT count(*)::int FROM audit_event
+              WHERE subject_user_id = $1
+                AND event_type = 'account.invitation_accepted') AS audit_count`,
+    [target.id],
+  );
+  assert.equal(counts.rows[0].credential_count, 1);
+  assert.equal(counts.rows[0].audit_count, 1);
+});
+
+test("invitation revocation is isolated to its target account", async () => {
+  const administrator = await seedUser(["admin"], "Invitation Ownership Admin");
+  const target = await seedUser(
+    ["student"],
+    "Invitation Ownership Target",
+    true,
+    false,
+  );
+  const otherTarget = await seedUser(
+    ["student"],
+    "Other Invitation Ownership Target",
+    true,
+    false,
+  );
+  const adminDependencies = await invitationDependencies(administrator.email);
+  const issued = await invitationService.issueInvitation(
+    target.id,
+    adminDependencies,
+  );
+
+  await assert.rejects(
+    () =>
+      invitationService.revokeInvitation(
+        otherTarget.id,
+        issued.invitation.id,
+        adminDependencies,
+      ),
+    (error: unknown) =>
+      error instanceof InvitationFlowError && error.code === "not_found",
+  );
+  await invitationService.acceptInvitation({
+    token: issued.rawToken,
+    password: invitationPassword,
+  });
+  const credentials = await pool.query<{ user_id: string }>(
+    'SELECT "userId" AS user_id FROM account WHERE "userId" = ANY($1::uuid[])',
+    [[target.id, otherTarget.id]],
+  );
+  assert.deepEqual(credentials.rows.map((row) => row.user_id), [target.id]);
+});
 
 test("account reads require an active administrator session", async () => {
   const requester = await seedUser(["student"], "Account Read Requester");

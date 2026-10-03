@@ -186,7 +186,28 @@ export async function acceptInvitation(input: unknown) {
     authContext.password.config.maxPasswordLength,
   );
 
-  const invitation = await transaction(async (client) => {
+  const candidate = await query<{ id: string }>(
+    `SELECT invitation.id
+       FROM account_invitation invitation
+       JOIN user_profile profile ON profile.user_id = invitation.target_user_id
+      WHERE invitation.token_hash = $1
+        AND invitation.used_at IS NULL
+        AND invitation.expires_at > now()
+        AND profile.active
+        AND NOT EXISTS (
+          SELECT 1 FROM account credential
+           WHERE credential."userId" = invitation.target_user_id
+             AND credential."providerId" = 'credential'
+             AND credential.password IS NOT NULL
+        )
+      LIMIT 1`,
+    [tokenHash],
+  );
+  if (!candidate.rows[0])
+    throw new InvitationFlowError("invalid_invitation");
+
+  const passwordHash = await authContext.password.hash(password);
+  await transaction(async (client) => {
     const result = await client.query<{
       id: string;
       target_user_id: string;
@@ -211,6 +232,18 @@ export async function acceptInvitation(input: unknown) {
     const row = result.rows[0];
     if (!row || !row.active || row.has_credential)
       throw new InvitationFlowError("invalid_invitation");
+
+    const now = new Date();
+    await client.query(
+      `INSERT INTO account
+        (id, "userId", "accountId", "providerId", password, "createdAt", "updatedAt")
+       VALUES ($1,$2::uuid,$2::text,'credential',$3,$4,$4)`,
+      [randomUUID(), row.target_user_id, passwordHash, now],
+    );
+    await client.query(
+      `UPDATE "user" SET "emailVerified" = true WHERE id = $1`,
+      [row.target_user_id],
+    );
     const consumed = await client.query(
       `UPDATE account_invitation SET used_at = now()
         WHERE id = $1 AND used_at IS NULL AND expires_at > now()`,
@@ -218,25 +251,9 @@ export async function acceptInvitation(input: unknown) {
     );
     if (consumed.rowCount !== 1)
       throw new InvitationFlowError("invalid_invitation");
-    return { id: row.id, userId: row.target_user_id };
+    await insertAudit(client, null, row.target_user_id, "account.invitation_accepted", {
+      ...invitationAuditMetadata(row.id),
+    });
   });
-
-  const account = await authContext.internalAdapter.findUserById(invitation.userId);
-  if (!account) throw new InvitationFlowError("invalid_invitation");
-  const passwordHash = await authContext.password.hash(password);
-  await authContext.internalAdapter.createAccount({
-    userId: invitation.userId,
-    providerId: "credential",
-    accountId: invitation.userId,
-    password: passwordHash,
-  });
-  await authContext.internalAdapter.updateUser(invitation.userId, {
-    emailVerified: true,
-  });
-  await transaction((client) =>
-    insertAudit(client, null, invitation.userId, "account.invitation_accepted", {
-      ...invitationAuditMetadata(invitation.id),
-    }),
-  );
   return { accepted: true };
 }
