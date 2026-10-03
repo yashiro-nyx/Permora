@@ -107,7 +107,8 @@ export async function listApproverOptions(dependencies: Overrides = {}) {
   );
   return result.rows;
 }
-  const [resources, permissions, roles, fields, policies] = await Promise.all([
+export async function listCatalogResources(): Promise<CatalogResourceDto[]> {
+  const [resources, permissions, roles, fields, scopes, policies] = await Promise.all([
     query<{
       id: string;
       name: string;
@@ -132,6 +133,17 @@ export async function listApproverOptions(dependencies: Overrides = {}) {
     query<{ resource_id: string; field_name: string; label: string; required: boolean }>(
       `SELECT resource_id, field_name, label, required
          FROM catalog_scope_field ORDER BY sort_order`,
+    ),
+    query<{
+      id: string;
+      resource_id: string;
+      field_name: string;
+      institutional_code: string;
+      display_name: string;
+      active: boolean;
+    }>(
+      `SELECT id, resource_id, field_name, institutional_code, display_name, active
+         FROM scope_option ORDER BY field_name, display_name`,
     ),
     query<{
       id: string;
@@ -179,6 +191,15 @@ export async function listApproverOptions(dependencies: Overrides = {}) {
         fieldName: field.field_name,
         label: field.label,
         required: field.required,
+      })),
+    scopeOptions: scopes.rows
+      .filter((scope) => scope.resource_id === resource.id)
+      .map((scope) => ({
+        id: scope.id,
+        fieldName: scope.field_name,
+        institutionalCode: scope.institutional_code,
+        displayName: scope.display_name,
+        active: scope.active,
       })),
     currentPolicy: (() => {
       const policy = policies.rows.find((row) => row.resource_id === resource.id);
@@ -921,17 +942,19 @@ export async function listUserIdentifiers(
   userId: string,
 ): Promise<InstitutionalIdentifierDto[]> {
   const result = await query<{
+    id: string;
     identifier_type: "student_number" | "staff_number";
     issuer: string;
     normalized_value: string;
   }>(
-    `SELECT identifier_type, issuer, normalized_value
+    `SELECT id, identifier_type, issuer, normalized_value
        FROM institutional_identifier
       WHERE user_id = $1
       ORDER BY identifier_type, issuer`,
     [userId],
   );
   return result.rows.map((row) => ({
+    id: row.id,
     identifierType: row.identifier_type,
     issuer: row.issuer,
     identifier: row.normalized_value,
