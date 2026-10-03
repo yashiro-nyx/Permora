@@ -49,6 +49,7 @@ async function main() {
     "tests/stage2b-operations.integration.test.ts",
     "tests/configure-access.integration.test.ts",
     "tests/account-management.integration.test.ts",
+    "tests/integration/admin-governance.integration.test.ts",
   ]) {
     const child: ChildProcess = spawn(
       process.execPath,
