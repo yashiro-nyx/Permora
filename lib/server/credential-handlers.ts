@@ -1,24 +1,53 @@
 import "server-only";
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import type { TrustedIdentity } from "@/lib/auth-types";
 import { appUrl } from "./config";
+import { query } from "./db";
 import { getTrustedIdentityFromHeaders } from "./identity-data";
-import { transaction } from "./db";
+import {
+  PasswordChangeConflictError,
+  updatePasswordAndAudit,
+} from "./password";
 
 export interface CredentialHandlerDependencies {
   getIdentity: (headers: Headers) => Promise<TrustedIdentity | null>;
-  changePassword: (
-    request: Request,
-    currentPassword: string,
-    newPassword: string,
-  ) => Promise<Response>;
-  recordPasswordChange: (userId: string) => Promise<void>;
+  getCurrentSession: (
+    headers: Headers,
+  ) => Promise<{ userId: string; sessionId: string } | null>;
+  verifyPassword: (hash: string, password: string) => Promise<boolean>;
+  hashPassword: (password: string) => Promise<string>;
+  updatePassword: typeof updatePasswordAndAudit;
+}
+
+async function getCurrentSession(headers: Headers) {
+  const { auth } = await import("./auth");
+  const current = await auth.api.getSession({
+    headers,
+    query: { disableCookieCache: true },
+  });
+  return current
+    ? { userId: current.user.id, sessionId: current.session.id }
+    : null;
+}
+
+async function verifyConfiguredPassword(hash: string, password: string) {
+  const { auth } = await import("./auth");
+  const authContext = await auth.$context;
+  return authContext.password.verify({ hash, password });
+}
+
+async function hashConfiguredPassword(password: string) {
+  const { auth } = await import("./auth");
+  const authContext = await auth.$context;
+  return authContext.password.hash(password);
 }
 
 const defaults: CredentialHandlerDependencies = {
   getIdentity: getTrustedIdentityFromHeaders,
-  changePassword: changePasswordThroughBetterAuth,
-  recordPasswordChange,
+  getCurrentSession,
+  verifyPassword: verifyConfiguredPassword,
+  hashPassword: hashConfiguredPassword,
+  updatePassword: updatePasswordAndAudit,
 };
 
 const responseHeaders = {
@@ -26,20 +55,8 @@ const responseHeaders = {
   Pragma: "no-cache",
   Vary: "Cookie, Origin",
 };
-
-function withSetCookies(response: Response, body: unknown, status: number) {
-  const headers = new Headers(responseHeaders);
-  const getSetCookie = (response.headers as Headers & {
-    getSetCookie?: () => string[];
-  }).getSetCookie;
-  const cookies = getSetCookie
-    ? getSetCookie.call(response.headers)
-    : [response.headers.get("set-cookie")].filter(
-        (value): value is string => Boolean(value),
-      );
-  for (const cookie of cookies) headers.append("set-cookie", cookie);
-  return Response.json(body, { status, headers });
-}
+const PASSWORD_CHANGE_RATE_LIMIT = { windowSeconds: 60, maxAttempts: 60 } as const;
+const PASSWORD_CHANGE_RATE_LIMIT_PREFIX = "permora:password-change:";
 
 function json(body: unknown, status = 200) {
   return Response.json(body, { status, headers: responseHeaders });
@@ -56,39 +73,31 @@ function hasTrustedOrigin(request: Request) {
   }
 }
 
-async function changePasswordThroughBetterAuth(
-  request: Request,
-  currentPassword: string,
-  newPassword: string,
-) {
-  const { auth } = await import("./auth");
-  const headers = new Headers(request.headers);
-  headers.delete("content-length");
-  headers.set("content-type", "application/json");
-  const authRequest = new Request(
-    new URL("/api/auth/change-password", appUrl),
-    {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        currentPassword,
-        newPassword,
-        revokeOtherSessions: true,
-      }),
-    },
+async function passwordChangeRateLimitAllowed(request: Request) {
+  const address =
+    request.headers.get("x-forwarded-for")?.split(",", 1)[0]?.trim() ||
+    request.headers.get("x-real-ip")?.trim() ||
+    "unknown";
+  const addressHash = createHash("sha256").update(address).digest("hex");
+  const key = `${PASSWORD_CHANGE_RATE_LIMIT_PREFIX}${addressHash}`;
+  const now = Date.now();
+  const cutoff = now - PASSWORD_CHANGE_RATE_LIMIT.windowSeconds * 1000;
+  const result = await query<{ count: number }>(
+    `INSERT INTO "rateLimit" (id, key, count, "lastRequest")
+     VALUES ($1,$1,1,$2)
+     ON CONFLICT (key) DO UPDATE
+       SET count = CASE
+             WHEN "rateLimit"."lastRequest" <= $3 THEN 1
+             ELSE LEAST("rateLimit".count + 1, $4)
+           END,
+           "lastRequest" = CASE
+             WHEN "rateLimit"."lastRequest" <= $3 THEN $2
+             ELSE "rateLimit"."lastRequest"
+           END
+     RETURNING count`,
+    [key, now, cutoff, PASSWORD_CHANGE_RATE_LIMIT.maxAttempts + 1],
   );
-  return auth.handler(authRequest);
-}
-
-async function recordPasswordChange(userId: string) {
-  await transaction(async (client) => {
-    await client.query(
-      `INSERT INTO audit_event
-        (id, actor_user_id, subject_user_id, event_type, metadata)
-       VALUES ($1,$2,$2,'account.password_changed',$3::jsonb)`,
-      [randomUUID(), userId, JSON.stringify({ otherSessionsRevoked: true })],
-    );
-  });
+  return result.rows[0].count <= PASSWORD_CHANGE_RATE_LIMIT.maxAttempts;
 }
 
 export async function handlePasswordChangeRequest(
@@ -140,14 +149,89 @@ export async function handlePasswordChangeRequest(
       400,
     );
 
-  let changed: Response;
   try {
-    changed = await dependencies.changePassword(
-      request,
-      value.currentPassword,
-      value.newPassword,
-    );
+    if (!(await passwordChangeRateLimitAllowed(request)))
+      return json(
+        {
+          error: {
+            code: "rate_limited",
+            message: "Too many attempts. Wait a few minutes and try again.",
+          },
+        },
+        429,
+      );
   } catch (caught) {
+    console.error("Password change rate limit failed", {
+      error: caught instanceof Error ? caught.name : "UnknownError",
+    });
+    return json(
+      { error: { code: "service_unavailable", message: "Password change is temporarily unavailable." } },
+      503,
+    );
+  }
+
+  let currentSession: { userId: string; sessionId: string } | null;
+  let credential: { id: string; password_hash: string } | undefined;
+  let passwordMatches: boolean;
+  let newPasswordHash: string;
+  try {
+    currentSession = await dependencies.getCurrentSession(request.headers);
+    if (!currentSession || currentSession.userId !== identity.id)
+      return json(
+        { error: { code: "unauthenticated", message: "Authentication is required." } },
+        401,
+      );
+    const result = await query<{ id: string; password_hash: string }>(
+      `SELECT id, password AS password_hash FROM account
+        WHERE "userId" = $1 AND "providerId" = 'credential'
+          AND password IS NOT NULL
+        LIMIT 1`,
+      [identity.id],
+    );
+    credential = result.rows[0];
+    if (!credential)
+      return json(
+        {
+          error: {
+            code: "invalid_credentials",
+            message: "The current password is incorrect or the new password is invalid.",
+          },
+        },
+        400,
+      );
+    passwordMatches = await dependencies.verifyPassword(
+      credential.password_hash,
+      value.currentPassword,
+    );
+    if (!passwordMatches)
+      return json(
+        {
+          error: {
+            code: "invalid_credentials",
+            message: "The current password is incorrect or the new password is invalid.",
+          },
+        },
+        400,
+      );
+    newPasswordHash = await dependencies.hashPassword(value.newPassword);
+    await dependencies.updatePassword({
+      userId: identity.id,
+      currentSessionId: currentSession.sessionId,
+      credentialId: credential.id,
+      oldPasswordHash: credential.password_hash,
+      newPasswordHash,
+    });
+  } catch (caught) {
+    if (caught instanceof PasswordChangeConflictError)
+      return json(
+        {
+          error: {
+            code: "password_change_conflict",
+            message: "The password changed during this request. Verify your current password and try again.",
+          },
+        },
+        409,
+      );
     console.error("Password change failed", {
       error: caught instanceof Error ? caught.name : "UnknownError",
     });
@@ -156,40 +240,5 @@ export async function handlePasswordChangeRequest(
       503,
     );
   }
-  if (!changed.ok) {
-    const status = changed.status === 429 ? 429 : changed.status === 400 ? 400 : 503;
-    return withSetCookies(
-      changed,
-      {
-        error: {
-          code: status === 429 ? "rate_limited" : "password_change_failed",
-          message:
-            status === 429
-              ? "Too many attempts. Wait a few minutes and try again."
-              : status === 400
-                ? "The current password is incorrect or the new password is invalid."
-                : "Password change is temporarily unavailable.",
-        },
-      },
-      status,
-    );
-  }
-
-  try {
-    await dependencies.recordPasswordChange(identity.id);
-  } catch (caught) {
-    console.error("Password change audit failed", {
-      error: caught instanceof Error ? caught.name : "UnknownError",
-    });
-    return withSetCookies(
-      changed,
-      {
-        success: true,
-        warning:
-          "Your password changed and other sessions were revoked, but the audit record could not be confirmed. Contact support.",
-      },
-      200,
-    );
-  }
-  return withSetCookies(changed, { success: true }, 200);
+  return json({ success: true }, 200);
 }

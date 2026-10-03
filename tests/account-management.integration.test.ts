@@ -28,11 +28,13 @@ if (!testDatabase.databaseName.endsWith("_test"))
 
 const password = "Account integration password 2026";
 const invitationPassword = "Invitation acceptance password 2026";
+const changedPassword = "Account changed password 2026";
 let pool: Pool;
 let passwordHash = "";
 let loginAddress = 0;
 let accountService: typeof import("../lib/server/account-service");
 let invitationService: typeof import("../lib/server/invitation-service");
+let credentialHandlers: typeof import("../lib/server/credential-handlers");
 let getTrustedIdentityFromHeaders: typeof import("../lib/server/identity-data")["getTrustedIdentityFromHeaders"];
 let hashPassword: typeof import("../lib/server/password")["hashPassword"];
 
@@ -128,6 +130,48 @@ async function login(email: string, passwordForLogin = password) {
   const cookie = response.headers.get("set-cookie")?.split(";")[0] ?? "";
   assert.ok(cookie);
   return cookie;
+}
+
+async function attemptLogin(email: string, passwordForLogin: string) {
+  const { auth } = await import("../lib/server/auth");
+  const current = loginAddress++;
+  return auth.handler(
+    new Request("http://localhost:3000/api/auth/sign-in/email", {
+      method: "POST",
+      headers: {
+        origin: "http://localhost:3000",
+        "content-type": "application/json",
+        "x-forwarded-for": `127.0.${Math.floor(current / 250)}.${(current % 250) + 1}`,
+      },
+      body: JSON.stringify({ email, password: passwordForLogin }),
+    }),
+  );
+}
+
+function passwordChangeRequest(
+  cookie: string,
+  currentPassword: string,
+  newPassword: string,
+) {
+  return new Request("http://localhost:3000/api/account/password", {
+    method: "POST",
+    headers: {
+      cookie,
+      origin: "http://localhost:3000",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
+
+async function sessionId(cookie: string) {
+  const { auth } = await import("../lib/server/auth");
+  const current = await auth.api.getSession({
+    headers: new Headers({ cookie }),
+    query: { disableCookieCache: true },
+  });
+  assert.ok(current);
+  return current.session.id;
 }
 
 function dependencies(cookie: string, revokeUserSessions?: (userId: string) => Promise<void>) {
@@ -236,6 +280,7 @@ before(async () => {
   ).getTrustedIdentityFromHeaders;
   accountService = await import("../lib/server/account-service");
   invitationService = await import("../lib/server/invitation-service");
+  credentialHandlers = await import("../lib/server/credential-handlers");
 });
 
 after(closeApplicationTestPool);
@@ -505,6 +550,166 @@ test("invitation revocation is isolated to its target account", async () => {
     [[target.id, otherTarget.id]],
   );
   assert.deepEqual(credentials.rows.map((row) => row.user_id), [target.id]);
+});
+
+test("password change rejects an incorrect current password", async () => {
+  const user = await seedUser(["student"], "Wrong Password Change User");
+  const cookie = await login(user.email);
+  const response = await credentialHandlers.handlePasswordChangeRequest(
+    passwordChangeRequest(cookie, "Incorrect current password 2026", changedPassword),
+  );
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).success, undefined);
+  await login(user.email);
+  assert.notEqual(
+    (await attemptLogin(user.email, changedPassword)).status,
+    200,
+  );
+});
+
+test("password change rejects a stale credential hash", async () => {
+  const user = await seedUser(["student"], "Stale Password Change User");
+  const cookie = await login(user.email);
+  let signalHashStarted!: () => void;
+  let releaseHash!: () => void;
+  const hashStarted = new Promise<void>((resolve) => {
+    signalHashStarted = resolve;
+  });
+  const hashGate = new Promise<void>((resolve) => {
+    releaseHash = resolve;
+  });
+  const request = passwordChangeRequest(cookie, password, changedPassword);
+  const responsePromise = credentialHandlers.handlePasswordChangeRequest(
+    request,
+    {
+      hashPassword: async (newPassword) => {
+        const newHash = await hashPassword(newPassword);
+        signalHashStarted();
+        await hashGate;
+        return newHash;
+      },
+    },
+  );
+  await hashStarted;
+  const interveningPassword = "Concurrent password update 2026";
+  await pool.query(
+    `UPDATE account SET password = $1
+      WHERE "userId" = $2 AND "providerId" = 'credential'`,
+    [await hashPassword(interveningPassword), user.id],
+  );
+  releaseHash();
+
+  const response = await responsePromise;
+  assert.equal(response.status, 409);
+  assert.equal((await response.json()).success, undefined);
+  assert.notEqual((await attemptLogin(user.email, password)).status, 200);
+  await login(user.email, interveningPassword);
+  const events = await pool.query<{ count: number }>(
+    `SELECT count(*)::int AS count FROM audit_event
+      WHERE subject_user_id = $1 AND event_type = 'account.password_changed'`,
+    [user.id],
+  );
+  assert.equal(events.rows[0].count, 0);
+});
+
+test("password audit failure rolls back the change and preserves the old password", async () => {
+  const user = await seedUser(["student"], "Password Audit Rollback User");
+  const cookie = await login(user.email);
+  await pool.query(`
+    CREATE FUNCTION reject_password_change_audit_test() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW.event_type = 'account.password_changed' THEN
+        RAISE EXCEPTION 'test password audit rejection' USING ERRCODE = '23514';
+      END IF;
+      RETURN NEW;
+    END;
+    $$
+  `);
+  await pool.query(`
+    CREATE TRIGGER reject_password_change_audit_test
+    BEFORE INSERT ON audit_event
+    FOR EACH ROW EXECUTE FUNCTION reject_password_change_audit_test()
+  `);
+  let response: Response;
+  try {
+    response = await credentialHandlers.handlePasswordChangeRequest(
+      passwordChangeRequest(cookie, password, changedPassword),
+    );
+  } finally {
+    await pool.query(
+      "DROP TRIGGER reject_password_change_audit_test ON audit_event",
+    );
+    await pool.query("DROP FUNCTION reject_password_change_audit_test()");
+  }
+
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).success, undefined);
+  await login(user.email);
+  assert.notEqual(
+    (await attemptLogin(user.email, changedPassword)).status,
+    200,
+  );
+  const events = await pool.query<{ count: number }>(
+    `SELECT count(*)::int AS count FROM audit_event
+      WHERE subject_user_id = $1 AND event_type = 'account.password_changed'`,
+    [user.id],
+  );
+  assert.equal(events.rows[0].count, 0);
+});
+
+test("password change revokes other sessions and keeps the current session", async () => {
+  const user = await seedUser(["student"], "Password Session Revocation User");
+  const currentCookie = await login(user.email);
+  const otherCookie = await login(user.email);
+  const currentSessionId = await sessionId(currentCookie);
+  const otherSessionId = await sessionId(otherCookie);
+  assert.notEqual(currentSessionId, otherSessionId);
+
+  const response = await credentialHandlers.handlePasswordChangeRequest(
+    passwordChangeRequest(currentCookie, password, changedPassword),
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { success: true });
+
+  const sessions = await pool.query<{ id: string }>(
+    'SELECT id FROM "session" WHERE "userId" = $1',
+    [user.id],
+  );
+  assert.deepEqual(sessions.rows.map((row) => row.id), [currentSessionId]);
+  assert.equal(
+    await getTrustedIdentityFromHeaders(new Headers({ cookie: currentCookie }))
+      .then((identity) => identity?.id),
+    user.id,
+  );
+  assert.equal(
+    await getTrustedIdentityFromHeaders(new Headers({ cookie: otherCookie })),
+    null,
+  );
+  await login(user.email, changedPassword);
+});
+
+test("password change signs in with the new password and records its audit event", async () => {
+  const user = await seedUser(["student"], "Password Change Sign-in User");
+  const cookie = await login(user.email);
+  const response = await credentialHandlers.handlePasswordChangeRequest(
+    passwordChangeRequest(cookie, password, changedPassword),
+  );
+  assert.equal(response.status, 200);
+  await login(user.email, changedPassword);
+  assert.notEqual((await attemptLogin(user.email, password)).status, 200);
+  const events = await pool.query<{
+    count: number;
+    other_sessions_revoked: boolean;
+  }>(
+    `SELECT count(*)::int AS count,
+            bool_or(metadata->>'otherSessionsRevoked' = 'true') AS other_sessions_revoked
+       FROM audit_event
+      WHERE subject_user_id = $1 AND event_type = 'account.password_changed'`,
+    [user.id],
+  );
+  assert.equal(events.rows[0].count, 1);
+  assert.equal(events.rows[0].other_sessions_revoked, true);
 });
 
 test("account reads require an active administrator session", async () => {
