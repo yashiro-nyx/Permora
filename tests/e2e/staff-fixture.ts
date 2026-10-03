@@ -44,10 +44,20 @@ export const E2E = {
     id: "e2000000-0000-4000-8000-000000000004",
     email: testEmail("requester"),
   },
-  workflowRequester: {
-    id: "e2000000-0000-4000-8000-000000000005",
-    email: testEmail("workflow-requester"),
-  },
+  workflowRequesters: [
+    {
+      id: "e2000000-0000-4000-8000-000000000005",
+      email: testEmail("workflow-requester-1"),
+    },
+    {
+      id: "e2000000-0000-4000-8000-000000000008",
+      email: testEmail("workflow-requester-2"),
+    },
+    {
+      id: "e2000000-0000-4000-8000-000000000009",
+      email: testEmail("workflow-requester-3"),
+    },
+  ],
   requests: {
     approve: "e2000000-0000-4000-8000-000000000101",
     retry: "e2000000-0000-4000-8000-000000000102",

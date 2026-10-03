@@ -34,7 +34,6 @@ test.beforeAll(async ({ browser }) => {
     viewport: { width: 1440, height: 1000 },
     extraHTTPHeaders: e2eClientHeaders(42),
   });
-  await signIn(requesterPage, E2E.workflowRequester.email);
   await signIn(adminPage, E2E.administrator.email);
   await signIn(activationAdminPage, E2E.activationAdministrator.email);
 });
@@ -45,7 +44,19 @@ test.afterAll(async () => {
   await activationAdminPage.close();
 });
 
-test("request submission, deterministic routing, approval, and requester status stay connected", async () => {
+test("request submission, deterministic routing, approval, and requester status stay connected", async ({ browser }, testInfo) => {
+  await requesterPage.close();
+  requesterPage = await browser.newPage({
+    viewport: { width: 1440, height: 1000 },
+    extraHTTPHeaders: e2eClientHeaders(40),
+  });
+  const workflowRequester =
+    E2E.workflowRequesters[testInfo.repeatEachIndex];
+  if (!workflowRequester)
+    throw new Error(
+      `No workflow requester fixture for repeat ${testInfo.repeatEachIndex + 1}.`,
+    );
+  await signIn(requesterPage, workflowRequester.email);
   await requesterPage.goto("/requests/new");
   await requesterPage
     .getByLabel("Select resource")

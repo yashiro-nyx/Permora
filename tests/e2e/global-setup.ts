@@ -211,11 +211,13 @@ export default async function globalSetup() {
       name: "Sam Requester",
       role: "student",
     });
-    await user(client, passwordHash, {
-      ...E2E.workflowRequester,
-      name: "Taylor Workflow",
-      role: "student",
-    });
+    for (const workflowRequester of E2E.workflowRequesters) {
+      await user(client, passwordHash, {
+        ...workflowRequester,
+        name: "Taylor Workflow",
+        role: "student",
+      });
+    }
     const approverResponsibility =
       "e2000000-0000-4000-8000-000000000201";
     const otherResponsibility = "e2000000-0000-4000-8000-000000000202";
