@@ -1,4 +1,4 @@
-import { StaffReviewQueue } from "@/components/staff-review-queue";
+import { AdminUnassignedAssignments } from "@/components/admin-unassigned-assignments";
 import {
   ApprovalQueryError,
   listUnassignedRoutingFailures,
@@ -30,7 +30,7 @@ export default async function Page({
       "unassigned",
     );
     const data = await listUnassignedRoutingFailures(filters);
-    return <StaffReviewQueue data={data} filters={filters} mode="unassigned" />;
+    return <AdminUnassignedAssignments data={data} filters={filters} />;
   } catch (error) {
     if (error instanceof ApprovalQueryError) {
       const filters = parseApprovalListFilters(
@@ -39,10 +39,9 @@ export default async function Page({
       );
       const data = await listUnassignedRoutingFailures(filters);
       return (
-        <StaffReviewQueue
+        <AdminUnassignedAssignments
           data={data}
           filters={filters}
-          mode="unassigned"
           invalidMessage={error.message}
         />
       );

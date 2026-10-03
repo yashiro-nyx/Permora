@@ -690,6 +690,101 @@ h3 {
 .staff-pagination nav {
   align-items: center;
 }
+.responsibility-form {
+  display: grid;
+  gap: 22px;
+  padding: 24px;
+}
+.responsibility-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.responsibility-scope-modes {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+.responsibility-scope-mode,
+.responsibility-scope-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.responsibility-scope-mode input,
+.responsibility-scope-option input {
+  flex: 0 0 18px;
+  margin-top: 2px;
+}
+.responsibility-scope-mode span,
+.responsibility-scope-option span {
+  min-width: 0;
+}
+.responsibility-scope-mode strong,
+.responsibility-scope-option strong {
+  display: block;
+  font-size: 13px;
+}
+.responsibility-scope-mode small,
+.responsibility-scope-option small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.responsibility-scope-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.responsibility-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.responsibility-table {
+  min-width: 840px;
+}
+.responsibility-table .table-secondary {
+  overflow-wrap: anywhere;
+}
+.admin-assignment-control {
+  display: grid;
+  gap: 10px;
+  min-width: 190px;
+  max-width: 280px;
+}
+.admin-assignment-control summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.admin-assignment-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.admin-assignment-feedback {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.admin-assignment-feedback[data-tone="danger"] {
+  color: var(--danger);
+}
+.admin-assignment-feedback[data-tone="success"] {
+  color: var(--success);
+}
 .disabled-link {
   pointer-events: none;
   opacity: 0.5;
@@ -1837,6 +1932,21 @@ dd {
   }
   .form-grid {
     grid-template-columns: 1fr;
+  }
+  .responsibility-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .responsibility-form {
+    padding: 20px;
+  }
+  .responsibility-actions {
+    flex-direction: column-reverse;
+  }
+  .responsibility-actions .button {
+    width: 100%;
+  }
+  .admin-assignment-control {
+    max-width: 220px;
   }
   .review-fields {
     grid-template-columns: 1fr;
