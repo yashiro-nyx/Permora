@@ -16,9 +16,11 @@ import {
 export function AppShell({
   children,
   identity,
+  canReview,
 }: {
   children: ReactNode;
   identity: TrustedIdentity;
+  canReview: boolean;
 }) {
   const path = usePathname();
   const router = useRouter();
@@ -28,7 +30,7 @@ export function AppShell({
   const role = primaryRole(identity);
   const requester = role !== "admin" && role !== "approver";
   const focused = path === "/requests/new";
-  const navigation = navigationForIdentity(identity);
+  const navigation = navigationForIdentity(identity, canReview);
   const active = (href: string) =>
     href === "/requests"
       ? path === href || (path.startsWith("/requests/") && !focused)

@@ -40,7 +40,7 @@ test("approver dashboard and queue use scoped live data and validated filters", 
     fullPage: true,
   });
 
-  await page.goto("/review");
+  await navigation.getByText("Review Requests").click();
   await expect(page.getByRole("heading", { name: "Review requests" })).toBeVisible();
   await expect(page.getByRole("row", { name: /E2E-APPROVE/ })).toBeVisible();
   await expect(page.getByText("E2E-OTHER")).toHaveCount(0);
@@ -227,4 +227,23 @@ test("only administrators can view unassigned routing failures", async () => {
     path: "test-results/admin-unassigned-desktop.png",
     fullPage: true,
   });
+});
+
+test("administrator without responsibility gets a setup link, not review navigation", async () => {
+  await page.getByRole("button", { name: "Log out" }).click();
+  await signIn(page, E2E.activationAdministrator.email);
+
+  const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(navigation.getByText("Review Requests")).toHaveCount(0);
+  await expect(
+    page.getByText("No approval responsibility configured", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Configure an approver responsibility" }).click();
+  await expect(page).toHaveURL(/\/admin\/responsibilities$/);
+  await expect(
+    page.getByRole("heading", { name: "Approver responsibilities" }),
+  ).toBeVisible();
+
+  await page.goto("/review");
+  await expect(page).toHaveURL(/\/dashboard\?unavailable=approver/);
 });

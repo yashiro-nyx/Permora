@@ -40,9 +40,16 @@ export function primaryRole(identity: TrustedIdentity): Role {
   return identity.requesterRole ?? "student";
 }
 
-export function navigationForIdentity(identity: TrustedIdentity) {
+export function navigationForIdentity(
+  identity: TrustedIdentity,
+  canReview: boolean,
+) {
   const role = primaryRole(identity);
-  if (role === "admin") return administratorNavigation;
-  if (role === "approver") return approverNavigation;
-  return requesterNavigation;
+  const navigation =
+    role === "admin"
+      ? administratorNavigation
+      : role === "approver"
+        ? approverNavigation
+        : requesterNavigation;
+  return canReview ? navigation : navigation.filter(([href]) => href !== "/review");
 }

@@ -91,6 +91,11 @@ export function StaffDashboard({
         <Alert title="No approval responsibility configured" tone="warning">
           You can inspect unassigned routing failures, but assigned review data
           remains unavailable until an active responsibility is configured.
+          <p>
+            <Link href="/admin/responsibilities">
+              Configure an approver responsibility
+            </Link>
+          </p>
         </Alert>
       )}
       <section className="metric-grid staff-metric-grid" aria-label="Review summary">
