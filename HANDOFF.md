@@ -8,7 +8,7 @@ Permora is an access-request and approval application for a proposed Philippine 
 
 The stack is Next.js 15 App Router, React 19, TypeScript 5, Tailwind CSS 4, Better Auth 1.7 email/password authentication, Argon2id, PostgreSQL through `pg`, and Neon. The design source is [University Access Request in Figma](https://www.figma.com/design/eP1FKbWJWPSCL3f34tM0Wt/University-Access-Request?node-id=0-1); code uses the Permora name and no invented logo.
 
-The project has completed **Stage 2B Milestones 1–5 and Stage 2C activation/lifecycle implementation slices 1–7**. Real accounts, owner-scoped requests, approval reads/decisions, requester notifications, administrator audit, manual activation, lifecycle status, retry/reconciliation, expiry/revocation boundaries, and an operator runbook exist. Real university-system integration and automatic job scheduling remain deferred.
+The project has completed **Stage 2B Milestones 1–5 and Stage 2C activation/lifecycle implementation slices 1–7**. Real accounts, owner-scoped requests, approval reads/decisions, requester notifications, administrator audit, manual activation, lifecycle status, retry/reconciliation, expiry/revocation boundaries, and an operator runbook exist. Administrator pages include user management at `/users`, responsibility management at `/admin/responsibilities`, and eligible assignment of `pending_routing` requests at `/admin/unassigned`. Real university-system integration and automatic job scheduling remain deferred.
 
 Security goals are server-trusted identity and roles, owner isolation, least privilege, full-scope fail-closed routing, revocable sessions, CSRF/origin protection, database rate limiting, transactional immutable evidence, optimistic concurrency, idempotency, and strict separation of approval from activation.
 
@@ -21,7 +21,7 @@ One shared `/login` page verifies email/password credentials. The server loads a
 | Student | Own dashboard, eligible request form, own list/details | Other users' requests, grading, staff/admin routes, another student's portal record |
 | Faculty | Owner-scoped requester workflow and eligible faculty resources/scopes | Unassigned sections/projects and staff/admin operations unless separately trusted |
 | Approver | Own assigned queue/details and decisions within current full-scope responsibility | Other assignments, unassigned failures, self/partial-scope approval, activation |
-| Administrator | Admin dashboard, unassigned failures, activation queue/status, manual activation/retry, audit; review decisions only with explicit responsibility | Automatic access to all reviews, responsibility bypass, activation of own request or a request they originally approved, external provisioning integration, deferred management operations |
+| Administrator | Admin dashboard, user management, responsibility management, eligible assignment of unassigned requests, activation queue/status, manual activation/retry, audit; review decisions only with explicit responsibility | Automatic access to all reviews, responsibility bypass, activation of own request or a request they originally approved, external provisioning integration, catalog policy UI, reports UI, delegation/preferences/retention UI |
 
 Navigation is presentation. Server layouts, services, and handlers enforce authorization.
 
@@ -59,9 +59,16 @@ Start
 - `app/api/auth/[...all]/route.ts`: Better Auth endpoint.
 - `app/api/review/requests/*`: sanitized queue/detail reads and transactional decisions.
 - `app/api/admin/unassigned-requests/route.ts`: administrator-only routing failures.
+- `app/api/admin/unassigned-requests/[id]/assign/route.ts`: administrator assignment of eligible approvers to pending-routing requests.
 - `app/api/admin/activations/[id]/activate/route.ts`: same-origin active-admin manual activation entrypoint.
+- `app/(portal)/admin/responsibilities/`: responsibility list/add/end UI with explicit confirmation for resource-wide scope.
+- `app/(portal)/admin/unassigned/`: pending-routing queue and eligible-assignee controls.
+- `app/(portal)/users/`: account directory and account creation/profile/role management; invitations are separate from profile editing.
 - `components/`: shared UI, requester screens, staff queue/detail/decision UI.
 - `lib/server/auth.ts`: Better Auth, Argon2id, sessions, rate limits, admission.
+- `lib/password-hash.ts`: standalone Argon2 hash/verify helpers shared with server password flows; it does not import the server-only database module.
+- `lib/server/invitation-service.ts` and `lib/server/password.ts`: invitation acceptance and password/session/audit updates with transactional atomicity.
+- `lib/server/admin-governance-service.ts`: responsibility management, unassigned assignment, delegation, identifiers, analytics, notification preferences, and retention dry-run services; UI and integration coverage vary by capability.
 - `lib/server/identity*.ts`: identity and role/responsibility guards.
 - `lib/server/request-service.ts`: owner-scoped request reads/writes and policy.
 - `lib/server/approval-read-service.ts`: explicit sanitized DTOs.
@@ -71,7 +78,7 @@ Start
 - `lib/server/db.ts`: server-only pool and transaction wrapper.
 - `lib/resource-catalog.ts`: typed product catalog; database policy is runtime authority.
 - `scripts/`: migrations, provisioning, access configuration, reconciliation, test runner.
-- `db/migrations/`: ordered, append-only SQL migrations `0001`–`0007`.
+- `db/migrations/`: ordered, append-only SQL migrations `0001`–`0009` (`0008` account management; `0009` administrator governance).
 - `scripts/reconcile-activations.ts`, `scripts/expire-activations.ts`: dry-run-by-default lifecycle commands.
 - `docs/activation-operations.md`: manual activation, recovery, expiry, and escalation runbook.
 - `tests/`: unit, isolated PostgreSQL integration, route authorization, Playwright.
@@ -83,13 +90,13 @@ The app requires Node runtime APIs (`pg`, native Argon2). Do not move database/a
 
 **Completed:** no-public-registration email/password accounts; Argon2id; revocable HttpOnly sessions; database rate limiting; active-account admission; server roles; owner-scoped request workflow; deterministic full-scope non-self routing; transactional approval; admin/requester activation status UI; server-checked active-admin activation with requester/original-approver exclusion; separate transaction 1 / adapter / transaction 2; successful `ordinary_entitlement` creation; immutable outcome events and notifications; dry-run retry reconciliation and expiry commands; terminal revocation/expiry boundaries; linked new-request renewals; guarded migrations and isolated lifecycle tests.
 
-**Partial:** in-app notification presentation/read state and read-only audit presentation are implemented, while external delivery, notification preferences, audit export/retention/redaction and external monitoring are deferred; renewal revalidation exists but revision/resubmission policy is incomplete; assignments are administrator-maintained until integrations exist.
+**Partial:** in-app notification presentation/read state and read-only audit presentation are implemented; external delivery is absent. Notification-preference service/handler and provisional retention dry-run service/API exist, but no UI or matching integration test was found; destructive archival is disabled. Delegation/absence and institutional-identifier services/APIs have integration coverage but no admin UI. Analytics service/API exists, but `/reports` remains a deferred page and no matching integration test was found. Renewal revalidation exists but revision/resubmission policy is incomplete.
 
-**Deferred:** live university provisioning adapters; automatic scheduling/monitoring for expiry and reconciliation; revocation UI/CLI (the guarded server service exists); password recovery, MFA and SSO; multi-stage approval, delegation and reassignment; external notifications, audit exports/retention, analytics and monitoring; most administrator CRUD; institutional integrations.
+**Deferred:** live university provisioning adapters; automatic scheduling/monitoring for expiry and reconciliation; revocation UI/CLI (the guarded server service exists); password recovery, MFA and SSO; multi-stage approval; admin UIs for delegation, institutional identifiers, reports, notification preferences, retention, and resource/permission policy; external notifications, audit exports/redaction, and monitoring; institutional integrations.
 
 **Demo/test-only:** historical `lib/demo-service.ts` and older demo components are not mounted in the real flow. Playwright recreates only a guarded `_test` database and seeds synthetic accounts. Its configuration generates a cryptographically random run namespace, password, and auth secret in memory for each invocation; optional dedicated `PERMORA_E2E_*` inputs are validated and never fall back to development/production credentials. Browser/localStorage records are never trusted or imported.
 
-**Known boundary:** this is suitable only as a clearly labeled, access-controlled prototype/pilot after deliberate configuration. It is not a complete production access-control service. Manual activation, retry/expiry commands, and lifecycle status are implemented, but no university provisioning adapter, automatic job schedule, revocation UI/CLI, or broad monitoring exists. Recommended next milestone: complete administrator assignment/entitlement governance, then add an institution-owned adapter, monitored scheduling, and operational observability.
+**Known boundary:** this is suitable only as a clearly labeled, access-controlled prototype/pilot after deliberate configuration. It is not a complete production access-control service. Manual activation, retry/expiry commands, and lifecycle status are implemented, but no university provisioning adapter, automatic job schedule, revocation UI/CLI, or broad monitoring exists. Review Requests redirects administrators without an approval responsibility to `/dashboard?unavailable=approver`; this is intentional, though the UX could be clearer. Repeating a request assignment returns `409` instead of replaying the original success.
 
 ## F. Local setup
 
@@ -227,9 +234,9 @@ All package scripts and their intended use:
 | `npm run activations:reconcile -- --database-target <target> <flags>` | Dry-run-by-default 15-minute stuck activation reconciliation; `--apply` is explicit |
 | `npm run activations:expire -- --database-target <target> <flags>` | Dry-run-by-default activated entitlement expiry; `--apply` is explicit |
 
-Integration tests load `.env.local`, require only `TEST_DATABASE_URL`, delete inherited development/migration variables, validate PostgreSQL plus `_test`, recreate only the test schema, and run sequentially. Playwright has the same guard, uses port 3200, and one worker. Both are destructive to the configured test database.
+Integration tests load local configuration, require only `TEST_DATABASE_URL`, delete inherited development/migration variables, validate PostgreSQL plus `_test`, recreate only the test schema, and run sequentially. Playwright has the same guard, uses port 3200, and one worker. Both are destructive to the configured test database.
 
-Latest Stage 2C verification on 2026-09-29 passed 53 unit tests, 60 isolated PostgreSQL integration tests, and 20 Playwright tests, plus lint, typecheck, and `git diff --check`. These latest runs used the current Node 24.21 environment; rerun under the repository-pinned Node 22 before release. A production build was not part of this Stage 2C verification. Integration and browser runners use only the guarded `_test` database and remove development/migration URLs from child processes.
+Latest verified `npm test` result: 63 passed; the runtime version was not recorded. Full integration results need to be rerun before release. The latest Node 22 Playwright result reported was 24 passed, 1 failed, and 0 skipped, before the workflow repeat-fixture isolation change; rerun before release. Targeted ESLint and `npm run typecheck` passed after the latest workflow fixture change; full lint and production build need rerunning before release. Integration and browser runners use only the guarded `_test` database and remove development/migration URLs from child processes.
 
 `db:migrate` validates the selected target before using its migration connection, takes an advisory transaction lock, applies files lexically, and tracks `schema_migration`. Development and production require a matching runtime/migration pair; test uses only its guarded test URL. Inspect status safely with:
 
@@ -250,7 +257,7 @@ psql "$DATABASE_MIGRATION_URL" -c \
 
 ## K. GitHub publication checklist
 
-Security audit recorded on 2026-09-21: `.env.local` and `.kiro/` were ignored; no live database URL, password, private key, session token, or production secret was found in the tracked-file scan. The full-history category scan found only superseded synthetic E2E literals. History was not rewritten. Re-run the publication checks on the exact commit to be published; the current 2026-09-28 working branch is `feature/stage-2b-milestone-5` with intentional uncommitted implementation and documentation changes.
+Security audit recorded on 2026-09-21: `.env.local` and `.kiro/` were ignored; no live database URL, password, private key, session token, or production secret was found in the tracked-file scan. The full-history category scan found only superseded synthetic E2E literals. History was not rewritten. Re-run the publication checks on the exact commit to be published.
 
 - [x] Current source contains no fixed E2E username, password, or auth secret; each guarded run generates ephemeral values or accepts explicitly test-only overrides.
 - [x] Full-history filename/category audit completed without printing values. Earlier commits contain the superseded deterministic synthetic E2E credential category in `playwright.config.ts` and `tests/e2e/staff-fixture.ts`; no live-system credential was identified. History was not rewritten.
@@ -280,11 +287,11 @@ Use public visibility only after approval. Do not rewrite history. The repositor
 
 | Check | Current result |
 | --- | --- |
-| Git | Existing repository; publication must use a reviewed clean commit. The documentation audit was performed on `feature/stage-2b-milestone-5` with intentional uncommitted changes. |
+| Git | Existing repository; publication must use a reviewed clean commit. Confirm the active branch and worktree state at release time. |
 | Sensitive local files | `.env.local` and `.kiro/` are present locally and ignored. Recheck ignored/tracked status and the complete working tree immediately before publication. |
 | Tracked-secret scan | No likely live secret found; placeholder URLs exist in `.env.example`, an unreachable fallback exists in `lib/server/db.ts`, and historical synthetic test literals are categorized above. Current E2E credentials are ephemeral |
 | Node/package configuration | npm with lockfile; Node 22 pinned in `.nvmrc` and `engines`; Next 15.5.25, React 19.3, TypeScript 5.9, Tailwind 4.3, Better Auth 1.7.5 |
-| Build configuration | Standard Next.js defaults; no `next.config.*` or `vercel.json`; production build succeeds locally |
+| Build configuration | Standard Next.js defaults; no `next.config.*` or `vercel.json`; rerun the production build before release |
 | Vercel compatibility | App Router and Node runtime are compatible; native Argon2 and `pg` require Node functions. Preview origin/database isolation and serverless connection sizing need deliberate configuration |
 | Build-time variables | The build does not intentionally connect to PostgreSQL. Current fallbacks allow compilation without live credentials, but deployment environments should still define runtime variables before release validation |
 | Runtime variables | `DATABASE_URL`, `AUTH_SECRET`, and exact `APP_URL`; production/preview values must be isolated. Migration and test variables are operational, not browser/runtime configuration |
@@ -308,7 +315,7 @@ Use public visibility only after approval. Do not rewrite history. The repositor
 11. Verify `/api/health`, login errors, logout revocation, ownership, assignee isolation, admin-only unassigned access, routing, decisions, audit history, `approved_pending_activation`, rate limiting, and absence of an active entitlement after approval.
 12. Roll back application code through the Vercel dashboard or `vercel rollback <deployment-id>`/`vercel promote <previous-url>`. Migrations are forward-only: deploy a corrective migration or use authorized Neon PITR/restore, and keep application/schema versions compatible.
 
-The health route is an availability probe, not a disclosure endpoint or substitute for monitoring. Deferred activation, recovery, notification delivery, admin maintenance, and full observability block a complete production service. Do not deploy until variables and databases are deliberately configured.
+The health route is an availability probe, not a disclosure endpoint or substitute for monitoring. Deferred recovery, notification delivery, catalog-policy and governance UIs, and full observability block a complete production service. Production currently has migrations `0001`–`0006`; `0007`–`0009` remain pending there. Migrations `0008` and `0009` were applied manually to development. Apply all pending production migrations through the controlled operator procedure before releasing this branch. Do not deploy until variables and databases are deliberately configured.
 
 ## M. Operational and security rules
 

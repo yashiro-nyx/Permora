@@ -1,16 +1,15 @@
 # Permora Project Progress Checklist
 
-Last updated: September 29, 2026
+Last updated: October 3, 2026
 Repository: `yashiro-nyx/Permora`  
 Production prototype: <https://permora.vercel.app>  
-Current development branch: `develop`  
-Milestone 5 branch: `feature/stage-2b-milestone-5`
+Current development branch: `feature/account-management-audit-fixes`
 
 ## Project status summary
 
 Permora is a university access-request and approval system built with Next.js, React, TypeScript, Tailwind CSS, Better Auth, PostgreSQL, Neon, and Vercel.
 
-The requester workflow, database-backed authentication, approval routing, protected staff review, requester notifications, administrator audit, and Stage 2C manual activation lifecycle are implemented. Automatic expiry scheduling and real university provisioning integrations remain outstanding.
+The requester workflow, database-backed authentication, approval routing, protected staff review, requester notifications, administrator audit, Stage 2C manual activation lifecycle, user management, approver-responsibility management, and safe assignment of pending-routing requests are implemented. Automatic expiry scheduling and real university provisioning integrations remain outstanding.
 
 Stage 2B Milestone 5 is **complete**. Stage 2C lifecycle slices 1–7 are implemented for manual administrator operation. `approved_pending_activation` remains the approval decision; activation is stored separately and only successful manual confirmation creates an entitlement. No live university provisioning adapter or automatic job schedule exists.
 
@@ -188,7 +187,7 @@ Status: **Completed**
 - [x] Pass 43 PostgreSQL integration tests against the guarded `_test` database.
 - [x] Pass 20 Playwright E2E tests.
 - [x] Pass ESLint, TypeScript checking, the production build, and `git diff --check`.
-- [x] Push `feature/stage-2b-milestone-5` and open a pull request into `develop`.
+- [x] Push the Stage 2B Milestone 5 feature branch and open a pull request into `develop`.
 
 ## 10. Stage 2C — Activation and lifecycle management
 
@@ -215,26 +214,33 @@ Status: **In progress — manual lifecycle implemented; integration and scheduli
 - [x] Add user activation and deactivation controls.
 - [x] Add secure temporary-password or invitation workflows.
 - [ ] Add resource and permission policy management.
-- [ ] Add approver-responsibility management.
-- [ ] Add safe reassignment for unassigned requests.
-- [ ] Add approver delegation and absence handling.
-- [ ] Add institutional identifier maintenance.
-- [ ] Add analytics and operational reports.
-- [ ] Add notification preferences when external delivery is introduced.
-- [ ] Define retention and archival policies.
+- [x] Add approver-responsibility management (UI at `/admin/responsibilities`: list, add, confirmed end, explicit resource-wide confirmation).
+- [x] Add safe reassignment for unassigned requests (pending_routing only, at `/admin/unassigned`).
+- [ ] Add approver delegation and absence handling (service and integration tests exist; no admin UI yet).
+- [ ] Add institutional identifier maintenance (service and integration tests exist; no admin UI yet).
+- [ ] Add analytics and operational reports (service/API exists; no reports UI or matching integration test found).
+- [ ] Add notification preferences when external delivery is introduced (service/handler exists; no preferences route, UI, or matching integration test found).
+- [ ] Define retention and archival policies (provisional dry-run service/API exists; destructive archival is disabled; no admin UI or matching integration test found).
+
+### Known issues
+
+- Administrators without an approval responsibility who open Review Requests are redirected to `/dashboard?unavailable=approver`. This is intentional; the UX could be clearer.
+- Repeating an assignment for the same request returns `409` rather than replaying the original success.
+- Production still needs migrations `0007`, `0008`, and `0009` before this branch is released. Migrations `0008` and `0009` were applied manually to the development database.
 
 ## 12. Deployment and environments
 
 - [x] Create the GitHub repository.
 - [x] Push `main` to GitHub.
 - [x] Create and push `develop`.
-- [x] Create and push `feature/stage-2b-milestone-5`.
+- [x] Create and push the Stage 2B Milestone 5 feature branch.
 - [x] Deploy the production prototype to Vercel.
 - [x] Configure Node.js 22.
 - [x] Create a production health endpoint.
 - [x] Verify production application and database availability.
 - [x] Create Neon production, development, and test branches.
 - [x] Apply migrations `0001`–`0006` to production using a controlled operator environment.
+- [ ] Apply migrations `0007`–`0009` to production using a controlled operator environment (pending; `0008` and `0009` were applied manually to development).
 - [x] Provision production prototype accounts.
 - [x] Verify the live request-to-approval workflow.
 - [x] Confirm that approval does not activate access.
@@ -277,18 +283,17 @@ npm run build
 git diff --check
 ```
 
-- [x] All unit tests pass (53 tests).
-- [x] All PostgreSQL integration tests pass against the guarded `_test` database (60 tests).
-- [x] All Playwright tests pass against isolated test fixtures (20 tests).
-- [x] ESLint passes.
-- [x] TypeScript checking passes.
-- [ ] Re-run the production build after Stage 2C changes.
-- [ ] Re-run the verification suite under the repository-pinned Node.js 22 runtime (latest Stage 2C run used Node 24.21).
-- [x] `git diff --check` reports no formatting errors.
-- [x] The working tree contains only intended changes.
-- [x] No secrets, `.env.local`, database URLs, credentials, or generated test artifacts are staged.
-- [x] Database migrations remain versioned; migration `0007` was validated on `_test` before any development apply; existing migrations were not rewritten.
-- [x] Documentation matches actual behavior.
+- [x] `npm test`: 63 tests passed in the last verified run; runtime version was not recorded.
+- [ ] `npm run test:integration`: re-run before release.
+- [ ] `npm run test:e2e`: the latest Node 22 result reported was 24 passed, 1 failed, 0 skipped, before the workflow repeat-fixture isolation change; re-run before release.
+- [ ] Full `npm run lint`: re-run before release (targeted ESLint passed for the latest code changes).
+- [x] `npm run typecheck` passed in the latest verified run.
+- [ ] `npm run build`: re-run before release.
+- [ ] Verify all checks under the repository-pinned Node.js 22 runtime.
+- [ ] `git diff --check`: re-run before release.
+- [ ] Recheck the full working tree and staged files before release.
+- [ ] Database migration status: production has `0001`–`0006`; `0007`–`0009` are pending. Development had `0008` and `0009` applied manually.
+- [ ] Recheck documentation against behavior after the release verification suite.
 - [ ] A teammate reviews authorization, ownership, and database-target boundaries.
 
 ## 15. Git workflow for remaining work
