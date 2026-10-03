@@ -98,7 +98,7 @@ async function seedUser(
   role: "student" | "approver",
   password: string,
 ) {
-  const { hashPassword } = await import("../lib/server/password");
+  const { hashPassword } = await import("../lib/password-hash");
   const id = randomUUID();
   const now = new Date();
   await pool.query(

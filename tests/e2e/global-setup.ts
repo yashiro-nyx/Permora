@@ -100,6 +100,7 @@ async function request(
     id: string;
     displayId: string;
     submittedHoursAgo: number;
+    requesterId?: string;
     approverId?: string;
     responsibilityId?: string;
   },
@@ -117,7 +118,7 @@ async function request(
     [
       input.id,
       input.displayId,
-      E2E.requester.id,
+      input.requesterId ?? E2E.requester.id,
       input.approverId ? "pending_review" : "pending_routing",
       input.submittedHoursAgo,
     ],
@@ -191,6 +192,11 @@ export default async function globalSetup() {
       role: "admin",
     });
     await user(client, passwordHash, {
+      ...E2E.assignmentRequester,
+      name: "Casey Assignment",
+      role: "student",
+    });
+    await user(client, passwordHash, {
       ...E2E.approver,
       name: "Reese Approver",
       role: "approver",
@@ -249,6 +255,12 @@ export default async function globalSetup() {
       id: E2E.requests.unassigned,
       displayId: "E2E-UNASSIGNED",
       submittedHoursAgo: 1,
+    });
+    await request(client, {
+      id: E2E.requests.assignment,
+      displayId: "E2E-ASSIGN",
+      submittedHoursAgo: 2,
+      requesterId: E2E.assignmentRequester.id,
     });
     await client.query(
       `INSERT INTO access_request

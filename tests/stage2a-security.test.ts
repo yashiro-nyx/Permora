@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { extractRequestInput } from "../lib/request-input";
-import { hashPassword, verifyPassword } from "../lib/server/password";
+import { hashPassword, verifyPassword } from "../lib/password-hash";
 
 test("request input drops client-supplied identity and role fields", () => {
   const input = extractRequestInput([

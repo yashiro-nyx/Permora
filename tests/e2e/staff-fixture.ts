@@ -36,6 +36,10 @@ export const E2E = {
     id: "e2000000-0000-4000-8000-000000000006",
     email: testEmail("activation-administrator"),
   },
+  assignmentRequester: {
+    id: "e2000000-0000-4000-8000-000000000007",
+    email: testEmail("assignment-requester"),
+  },
   requester: {
     id: "e2000000-0000-4000-8000-000000000004",
     email: testEmail("requester"),
@@ -50,6 +54,7 @@ export const E2E = {
     stale: "e2000000-0000-4000-8000-000000000103",
     anotherApprover: "e2000000-0000-4000-8000-000000000104",
     unassigned: "e2000000-0000-4000-8000-000000000105",
+    assignment: "e2000000-0000-4000-8000-000000000108",
     notificationApproved: "e2000000-0000-4000-8000-000000000106",
     notificationDenied: "e2000000-0000-4000-8000-000000000107",
   },

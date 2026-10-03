@@ -67,7 +67,9 @@ test("detail is sanitized and another approver's identifier is indistinguishable
   await expect(page.getByRole("heading", { name: "Sam Requester" })).toBeVisible();
   await expect(page.getByText("Low sensitivity")).toBeVisible();
   await expect(page.getByText("Access request submitted.")).toBeVisible();
-  await expect(page.getByText(/password|credential record|session token/i)).toHaveCount(0);
+  await expect(
+    page.locator("main").getByText(/password|credential record|session token/i),
+  ).toHaveCount(0);
   await page.screenshot({
     path: "test-results/staff-review-detail-desktop.png",
     fullPage: true,

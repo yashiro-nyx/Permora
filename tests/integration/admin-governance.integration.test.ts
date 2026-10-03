@@ -318,7 +318,7 @@ before(async () => {
   assert.equal(database.rows[0]?.name, testDatabase.databaseName);
   assert.ok(database.rows[0]?.name.endsWith("_test"));
   await applyMigrations();
-  const { hashPassword } = await import("../../lib/server/password");
+  const { hashPassword } = await import("../../lib/password-hash");
   passwordHash = await hashPassword(password);
   service = await import("../../lib/server/admin-governance-service");
   handlers = await import("../../lib/server/admin-governance-handlers");

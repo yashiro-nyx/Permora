@@ -255,7 +255,7 @@ before(async () => {
   );
   assert.equal(database.rows[0].name, testDatabase.databaseName);
   await applyMigrations();
-  const { hashPassword } = await import("../lib/server/password");
+  const { hashPassword } = await import("../lib/password-hash");
   passwordHash = await hashPassword(password);
   const users = [];
   for (const [role, name] of [

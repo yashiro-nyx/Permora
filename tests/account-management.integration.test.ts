@@ -36,7 +36,7 @@ let accountService: typeof import("../lib/server/account-service");
 let invitationService: typeof import("../lib/server/invitation-service");
 let credentialHandlers: typeof import("../lib/server/credential-handlers");
 let getTrustedIdentityFromHeaders: typeof import("../lib/server/identity-data")["getTrustedIdentityFromHeaders"];
-let hashPassword: typeof import("../lib/server/password")["hashPassword"];
+let hashPassword: typeof import("../lib/password-hash")["hashPassword"];
 
 async function applyMigrations() {
   const client = await pool.connect();
@@ -273,7 +273,7 @@ before(async () => {
   assert.equal(database.rows[0].name, testDatabase.databaseName);
   assert.ok(database.rows[0].name.endsWith("_test"));
   await applyMigrations();
-  hashPassword = (await import("../lib/server/password")).hashPassword;
+  hashPassword = (await import("../lib/password-hash")).hashPassword;
   passwordHash = await hashPassword(password);
   getTrustedIdentityFromHeaders = (
     await import("../lib/server/identity-data")

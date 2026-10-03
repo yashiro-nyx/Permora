@@ -185,13 +185,16 @@ test("server role boundaries keep requester and administrator routes separate", 
   await expect(
     adminPage.getByRole("heading", { name: "Unassigned requests" }),
   ).toBeVisible();
-  await expect(adminPage.getByText("E2E-UNASSIGNED")).toBeVisible();
+  await expect(
+    adminPage.getByRole("row", { name: /E2E-UNASSIGNED/ }),
+  ).toBeVisible();
   await adminPage.goto("/users");
   await expect(
     adminPage.getByRole("heading", { name: "User management" }),
   ).toBeVisible();
+  await expect(adminPage.getByLabel("Search accounts")).toBeVisible();
   await expect(
-    adminPage.getByText(/no management controls/i),
+    adminPage.getByRole("link", { name: "Create user" }),
   ).toBeVisible();
 });
 
