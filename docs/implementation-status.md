@@ -141,9 +141,8 @@ Figma contains desktop evidence only. Mobile drawers, stacked layouts, errors, e
 
 - [x] **Completed:** Node 22 repository requirement and guarded isolated test-runner configuration.
 - [x] **Completed:** integration and E2E runners require only `TEST_DATABASE_URL`, verify the database name ends in `_test`, remove development/migration variables, and use the same Neon branch/database through its pooled endpoint.
-- [x] **Completed:** last verified `npm test` run passed 63 tests; the runtime version was not recorded. `npm run typecheck` and targeted ESLint passed after the workflow fixture change.
-- [ ] **Re-run before release:** integration suite, full lint, production build, `git diff --check`, and complete verification under Node 22.
-- [ ] **Re-run before release:** Playwright suite. The latest Node 22 result reported was 24 passed, 1 failed, 0 skipped, before workflow repeat-fixture isolation was added.
+- [x] **Verified 2026-10-09 under Node.js 24.21.0:** `npm test` passed 63 tests; guarded PostgreSQL integration passed 83 tests against the isolated `_test` database; Playwright passed 26 tests; full lint, typecheck, production build, and `git diff --check` passed.
+- [ ] **Required before release:** repeat the verification suite under the repository-pinned Node.js 22 runtime.
 - [ ] **Deployment state:** production has migrations `0001`–`0006`; `0007`–`0009` are pending. Migrations `0008` and `0009` were applied manually to development.
 - [x] **Completed:** database CLIs require an explicit development/test/production target, reject mixed runtime/migration endpoints, and require explicit production confirmation.
 - [x] **Completed:** private/no-store health endpoint and credential-safe errors.

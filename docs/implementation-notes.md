@@ -59,4 +59,4 @@ Current approval ends at `approved_pending_activation`. Activation, provisioning
 
 The original prototype passed its contemporary unit/browser checks, but those results prove only historical client behavior. Current acceptance uses real server services and isolated PostgreSQL fixtures.
 
-As of the 2026-09-28 Node 22 audit, 43 unit tests, 43 PostgreSQL integration tests, and 20 Playwright tests pass, together with lint, typecheck, production build, and `git diff --check`. Automated database tests require only a guarded `TEST_DATABASE_URL` whose database name ends in `_test`.
+As of the 2026-10-09 Node 24.21.0 verification, 63 unit tests, 83 PostgreSQL integration tests, and 26 Playwright tests pass, together with lint, typecheck, production build, and `git diff --check`. Automated database tests require only a guarded `TEST_DATABASE_URL` whose database name ends in `_test`. Repeat this suite under the repository-pinned Node.js 22 runtime before release.

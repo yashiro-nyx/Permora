@@ -1,9 +1,9 @@
 # Permora Project Progress Checklist
 
-Last updated: October 3, 2026
+Last updated: October 9, 2026
 Repository: `yashiro-nyx/Permora`  
 Production prototype: <https://permora.vercel.app>  
-Current development branch: `feature/account-management-audit-fixes`
+Current checked-out branch: `main` (`feature/account-management-audit-fixes` exists as a remote-tracking branch)
 
 ## Project status summary
 
@@ -283,14 +283,14 @@ npm run build
 git diff --check
 ```
 
-- [x] `npm test`: 63 tests passed in the last verified run; runtime version was not recorded.
-- [ ] `npm run test:integration`: re-run before release.
-- [ ] `npm run test:e2e`: the latest Node 22 result reported was 24 passed, 1 failed, 0 skipped, before the workflow repeat-fixture isolation change; re-run before release.
-- [ ] Full `npm run lint`: re-run before release (targeted ESLint passed for the latest code changes).
-- [x] `npm run typecheck` passed in the latest verified run.
-- [ ] `npm run build`: re-run before release.
+- [x] `npm test`: 63 tests passed under Node.js 24.21.0 on October 9, 2026.
+- [x] `npm run test:integration`: 83 guarded PostgreSQL tests passed against the isolated `_test` database under Node.js 24.21.0 on October 9, 2026.
+- [x] `npm run test:e2e`: 26 Playwright tests passed against the isolated `_test` database under Node.js 24.21.0 on October 9, 2026.
+- [x] Full `npm run lint` passed on October 9, 2026.
+- [x] `npm run typecheck` passed on October 9, 2026 after the production build generated `.next/types`.
+- [x] `npm run build` passed on October 9, 2026.
+- [x] `git diff --check` passed on October 9, 2026.
 - [ ] Verify all checks under the repository-pinned Node.js 22 runtime.
-- [ ] `git diff --check`: re-run before release.
 - [ ] Recheck the full working tree and staged files before release.
 - [ ] Database migration status: production has `0001`–`0006`; `0007`–`0009` are pending. Development had `0008` and `0009` applied manually.
 - [ ] Recheck documentation against behavior after the release verification suite.
