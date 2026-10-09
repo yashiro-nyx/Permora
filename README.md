@@ -74,7 +74,7 @@ git diff --check
 
 Integration and Playwright runs destructively recreate only the guarded `TEST_DATABASE_URL` database after confirming its name ends in `_test`. They remove inherited development/migration variables and never fall back to development or production. Playwright generates fresh synthetic account emails, password, and auth secret in memory per run.
 
-The latest Node 22 audit passed 43 unit tests, 43 PostgreSQL integration tests, and 20 Playwright tests. Lint, typecheck, production build, and diff checks also passed.
+The latest October 9, 2026 verification under Node.js 24.21.0 passed 63 unit tests, 83 guarded PostgreSQL integration tests, and 26 Playwright tests. Lint, typecheck, production build, and diff checks also passed. Re-run the suite under the repository-pinned Node.js 22 runtime before release.
 
 ## Health endpoint
 
