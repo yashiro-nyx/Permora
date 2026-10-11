@@ -19,6 +19,12 @@ import {
   AdministratorRoutingError,
   listEligibleResponsibilitiesForRequest,
 } from "@/lib/approval-domain";
+import {
+  limitOffset,
+  paginationMeta,
+  parsePageParams,
+  type Paginated,
+} from "@/lib/pagination";
 import { query, transaction } from "./db";
 import type { TrustedIdentity } from "@/lib/auth-types";
 import type {
@@ -554,8 +560,13 @@ export async function endResponsibility(
   });
 }
 
-export async function listDelegations(dependencies: Overrides = {}) {
+export async function listDelegations(
+  searchParams: URLSearchParams = new URLSearchParams(),
+  dependencies: Overrides = {},
+): Promise<Paginated<DelegationDto>> {
   await requireActiveAdmin(dependencies);
+  const params = parsePageParams(searchParams);
+  const { limit, offset } = limitOffset(params);
   const result = await query<{
     id: string;
     delegator_id: string;
@@ -565,17 +576,21 @@ export async function listDelegations(dependencies: Overrides = {}) {
     valid_from: Date | string;
     valid_until: Date | string;
     cancelled_at: Date | string | null;
+    total_count: number;
   }>(
     `SELECT delegation.id,
             delegator.id AS delegator_id, delegator.name AS delegator_name,
             substitute.id AS substitute_id, substitute.name AS substitute_name,
-            delegation.valid_from, delegation.valid_until, delegation.cancelled_at
+            delegation.valid_from, delegation.valid_until, delegation.cancelled_at,
+            count(*) OVER()::int AS total_count
        FROM approver_delegation delegation
        JOIN "user" delegator ON delegator.id = delegation.delegator_user_id
        JOIN "user" substitute ON substitute.id = delegation.substitute_user_id
-      ORDER BY delegation.valid_from DESC, delegation.id`,
+      ORDER BY delegation.valid_from DESC, delegation.id
+      LIMIT $1 OFFSET $2`,
+    [limit, offset],
   );
-  return result.rows.map((row): DelegationDto => ({
+  const items = result.rows.map((row): DelegationDto => ({
     id: row.id,
     delegator: { id: row.delegator_id, name: row.delegator_name },
     substitute: { id: row.substitute_id, name: row.substitute_name },
@@ -587,6 +602,8 @@ export async function listDelegations(dependencies: Overrides = {}) {
       new Date(row.valid_from) <= new Date() &&
       new Date(row.valid_until) > new Date(),
   }));
+  const total = Number(result.rows[0]?.total_count ?? 0);
+  return { items, pagination: paginationMeta(total, params) };
 }
 
 async function assertEligibleApprover(client: PoolClient, userId: string) {
@@ -918,7 +935,7 @@ export async function updateNotificationPreferences(
         "invalid_input",
         "External notification delivery is not configured.",
       );
-    await client.query(
+    const upserted = await client.query<{ updated_at: Date | string }>(
       `INSERT INTO user_notification_preference
         (user_id, in_app_enabled, external_email_enabled, external_sms_enabled,
          external_push_enabled, updated_at)
@@ -928,13 +945,24 @@ export async function updateNotificationPreferences(
              external_email_enabled = false,
              external_sms_enabled = false,
              external_push_enabled = false,
-             updated_at = now()`,
+             updated_at = now()
+       RETURNING updated_at`,
       [identity.id, next.inAppEnabled],
     );
     await insertAudit(client, identity.id, "notification_preference.updated", {
       inAppEnabled: next.inAppEnabled,
     });
-    return getNotificationPreferences(identity.id);
+    // Return the committed values directly. Re-reading through the pooled
+    // `query` here would run outside this transaction and could observe a stale
+    // row before commit, so build the DTO from the values just written.
+    return {
+      inAppEnabled: next.inAppEnabled,
+      externalEmailEnabled: false,
+      externalSmsEnabled: false,
+      externalPushEnabled: false,
+      externalDeliveryConfigured: false,
+      updatedAt: iso(upserted.rows[0].updated_at),
+    } satisfies NotificationPreferenceDto;
   });
 }
 

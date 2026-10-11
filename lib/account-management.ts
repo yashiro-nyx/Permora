@@ -139,12 +139,15 @@ export function parseUserListFilters(params: URLSearchParams): UserListFilters {
   const statusValue = params.get("status")?.trim() || undefined;
   if (statusValue && statusValue !== "active" && statusValue !== "deactivated")
     throw new AccountServiceError("invalid_input");
+  // Snap pageSize to the platform options (10/25/50); default 10.
+  const requestedSize = paginationValue(params.get("pageSize"), 10, 100);
+  const pageSize = [10, 25, 50].includes(requestedSize) ? requestedSize : 10;
   return {
     search,
     role: roleValue as Role | undefined,
     status: statusValue as UserListFilters["status"],
     page: paginationValue(params.get("page"), 1, 10_000),
-    pageSize: paginationValue(params.get("pageSize"), 25, 100),
+    pageSize,
   };
 }
 

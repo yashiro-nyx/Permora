@@ -1,1 +1,5 @@
-export { default } from "../../review/loading";
+import { PageSkeleton } from "@/components/ui";
+
+export default function Loading() {
+  return <PageSkeleton shape="table" label="Loading unassigned requests…" />;
+}

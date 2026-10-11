@@ -1,13 +1,21 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import type {
   ApproverResponsibilityDto,
   CatalogResourceDto,
 } from "@/lib/server/admin-governance-types";
-import { Alert, Card, Confirm, Empty, Field, PageHeading } from "./ui";
+import { useToast } from "./toast";
+import {
+  Alert,
+  Card,
+  Confirm,
+  Empty,
+  Field,
+  PageHeading,
+  TablePagination,
+} from "./ui";
 
 type ResponsibilityList = Awaited<
   ReturnType<typeof import("@/lib/server/admin-governance-service").listResponsibilities>
@@ -48,6 +56,7 @@ export function AdminApproverResponsibilities({
   resources: CatalogResourceDto[];
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [approverUserId, setApproverUserId] = useState("");
   const [resourceId, setResourceId] = useState("");
   const [permissionId, setPermissionId] = useState("");
@@ -87,11 +96,17 @@ export function AdminApproverResponsibilities({
         }),
       });
       if (!response.ok) {
-        setFailure(safeMutationMessage(response.status, await errorCode(response)));
+        const message = safeMutationMessage(response.status, await errorCode(response));
+        setFailure(message);
+        toast.error({ title: "Responsibility not added", description: message });
         if (response.status === 404) router.refresh();
         return;
       }
       setSuccess("Responsibility added.");
+      toast.success({
+        title: "Responsibility added",
+        description: "The approver can now review matching requests.",
+      });
       setApproverUserId("");
       setResourceId("");
       setPermissionId("");
@@ -116,11 +131,17 @@ export function AdminApproverResponsibilities({
         { method: "POST" },
       );
       if (!response.ok) {
-        setFailure(safeMutationMessage(response.status, await errorCode(response)));
+        const message = safeMutationMessage(response.status, await errorCode(response));
+        setFailure(message);
+        toast.error({ title: "Responsibility not ended", description: message });
         if (response.status === 404) router.refresh();
         return;
       }
       setSuccess("Responsibility ended.");
+      toast.success({
+        title: "Responsibility ended",
+        description: "The approver will no longer be routed matching requests.",
+      });
       setEnding(null);
       router.refresh();
     } catch {
@@ -129,9 +150,6 @@ export function AdminApproverResponsibilities({
       setEndBusy(false);
     }
   }
-
-  const page = data.pagination.page;
-  const pageCount = Math.max(1, data.pagination.pageCount);
 
   return (
     <>
@@ -322,14 +340,15 @@ export function AdminApproverResponsibilities({
             </table>
           </div>
         )}
-        {data.pagination.total > data.pagination.pageSize && (
-          <div className="pagination staff-pagination">
-            <span>Page {page} of {pageCount} · {data.pagination.total} responsibilities</span>
-            <nav aria-label="Responsibility pagination">
-              <Link className={`button button-outline ${page <= 1 ? "disabled-link" : ""}`} aria-disabled={page <= 1} tabIndex={page <= 1 ? -1 : undefined} href={`?page=${Math.max(1, page - 1)}`}>Previous</Link>
-              <Link className={`button button-outline ${page >= pageCount ? "disabled-link" : ""}`} aria-disabled={page >= pageCount} tabIndex={page >= pageCount ? -1 : undefined} href={`?page=${Math.min(pageCount, page + 1)}`}>Next</Link>
-            </nav>
-          </div>
+        {data.items.length > 0 && (
+          <TablePagination
+            page={data.pagination.page}
+            pageSize={data.pagination.pageSize}
+            total={data.pagination.total}
+            pageCount={data.pagination.pageCount}
+            itemCount={data.items.length}
+            label="Responsibility pagination"
+          />
         )}
       </Card>
       {confirmResourceWide && (

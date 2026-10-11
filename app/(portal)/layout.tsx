@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/app-shell";
+import { ToastProvider } from "@/components/toast";
 import {
   hasActiveApprovalResponsibility,
   requireIdentity,
@@ -26,8 +27,10 @@ export default async function PortalLayout({
     }
   }
   return (
-    <AppShell identity={identity} canReview={canReview}>
-      {children}
-    </AppShell>
+    <ToastProvider>
+      <AppShell identity={identity} canReview={canReview}>
+        {children}
+      </AppShell>
+    </ToastProvider>
   );
 }

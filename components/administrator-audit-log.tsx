@@ -1,9 +1,15 @@
-import Link from "next/link";
 import type {
   AuditFilters,
   AuditListDto,
 } from "@/lib/server/operations-types";
-import { Alert, Card, Empty, LinkButton, PageHeading } from "./ui";
+import {
+  Alert,
+  Card,
+  Empty,
+  LinkButton,
+  PageHeading,
+  TablePagination,
+} from "./ui";
 
 function dateTimeLabel(value: string) {
   return new Intl.DateTimeFormat("en-PH", {
@@ -11,17 +17,6 @@ function dateTimeLabel(value: string) {
     timeStyle: "short",
     timeZone: "Asia/Manila",
   }).format(new Date(value));
-}
-
-function hrefFor(filters: AuditFilters, page: number) {
-  const params = new URLSearchParams();
-  if (filters.search) params.set("search", filters.search);
-  if (filters.eventType) params.set("eventType", filters.eventType);
-  if (filters.from) params.set("from", filters.from);
-  if (filters.to) params.set("to", filters.to);
-  params.set("page", String(page));
-  params.set("pageSize", String(filters.pageSize));
-  return `/audit?${params}`;
 }
 
 export function AdministratorAuditLog({
@@ -159,49 +154,16 @@ export function AdministratorAuditLog({
             </table>
           </div>
         )}
-        <div className="pagination staff-pagination">
-          <span>
-            Showing <strong>{data.items.length}</strong> of{" "}
-            <strong>{data.pagination.total}</strong> events
-          </span>
-          <nav aria-label="Audit pagination">
-            <Link
-              className={`button button-outline ${data.pagination.page <= 1 ? "disabled-link" : ""}`}
-              aria-disabled={data.pagination.page <= 1}
-              tabIndex={data.pagination.page <= 1 ? -1 : undefined}
-              href={hrefFor(
-                filters,
-                Math.max(1, data.pagination.page - 1),
-              )}
-            >
-              Previous
-            </Link>
-            <span>
-              Page {data.pagination.page} of{" "}
-              {Math.max(1, data.pagination.pageCount)}
-            </span>
-            <Link
-              className={`button button-outline ${data.pagination.page >= data.pagination.pageCount ? "disabled-link" : ""}`}
-              aria-disabled={
-                data.pagination.page >= data.pagination.pageCount
-              }
-              tabIndex={
-                data.pagination.page >= data.pagination.pageCount
-                  ? -1
-                  : undefined
-              }
-              href={hrefFor(
-                filters,
-                Math.min(
-                  Math.max(1, data.pagination.pageCount),
-                  data.pagination.page + 1,
-                ),
-              )}
-            >
-              Next
-            </Link>
-          </nav>
-        </div>
+        {data.items.length > 0 && (
+          <TablePagination
+            page={data.pagination.page}
+            pageSize={data.pagination.pageSize}
+            total={data.pagination.total}
+            pageCount={data.pagination.pageCount}
+            itemCount={data.items.length}
+            label="Audit pagination"
+          />
+        )}
       </Card>
       <Alert title="Immutable and read-only" tone="info">
         Audit records cannot be edited or deleted here. Administrator access

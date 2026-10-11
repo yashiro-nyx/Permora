@@ -532,30 +532,24 @@ test("detail DTO is explicit and excludes authentication and security records", 
 });
 
 test("filters and bounded pagination produce deterministic results", async () => {
+  // With the minimum allowed page size (10), all 3 seeded r-lab requests
+  // appear on page 1. The test verifies stable DESC ordering and the total count.
   const first = await queue(
-    "/api/review/requests?resource=r-lab&from=2026-09-16&to=2026-09-16&page=1&pageSize=2",
-    cookieApproverA,
-  );
-  const second = await queue(
-    "/api/review/requests?resource=r-lab&from=2026-09-16&to=2026-09-16&page=2&pageSize=2",
+    "/api/review/requests?resource=r-lab&from=2026-09-16&to=2026-09-16&page=1&pageSize=10",
     cookieApproverA,
   );
   const firstBody = await first.json();
-  const secondBody = await second.json();
   assert.deepEqual(
     firstBody.items.map((item: { requestId: string }) => item.requestId),
-    [deterministicIds[2], deterministicIds[1]],
-  );
-  assert.deepEqual(
-    secondBody.items.map((item: { requestId: string }) => item.requestId),
-    [deterministicIds[0]],
+    [deterministicIds[2], deterministicIds[1], deterministicIds[0]],
   );
   assert.equal(firstBody.pagination.total, 3);
+  // pageSize is snapped to the closest allowed value (10/25/50); 999 → 50.
   const bounded = await queue(
     "/api/review/requests?pageSize=999",
     cookieApproverA,
   );
-  assert.equal((await bounded.json()).pagination.pageSize, 100);
+  assert.equal((await bounded.json()).pagination.pageSize, 50);
 });
 
 test("empty filters and invalid query input are handled safely", async () => {
@@ -565,7 +559,7 @@ test("empty filters and invalid query input are handled safely", async () => {
   );
   assert.deepEqual(await empty.json(), {
     items: [],
-    pagination: { page: 1, pageSize: 20, total: 0, pageCount: 0 },
+    pagination: { page: 1, pageSize: 10, total: 0, pageCount: 0 },
   });
   for (const query of [
     "status=pending_routing",
@@ -581,6 +575,70 @@ test("empty filters and invalid query input are handled safely", async () => {
     );
     assert.equal(response.status, 400);
     assert.equal((await response.json()).error.code, "invalid_query");
+  }
+});
+
+test("requestable scope options stay unique when overlapping assignments exist", async () => {
+  // Regression for the duplicate React key crash on /requests/new: a requester
+  // can legitimately hold more than one active assignment pointing at the same
+  // scope option (for example a permission-specific assignment plus a
+  // permission-agnostic one). The eligibility join then emits that option once
+  // per assignment, so getRequestableResources must de-duplicate by option id.
+  const sharedLab = await seedScope("laboratory", "regression-shared");
+  const sharedSoftware = await seedScope("software", "regression-shared");
+  const assign = async (
+    scopeId: string,
+    permissionId: string | null,
+  ) => {
+    await pool.query(
+      `INSERT INTO requester_assignment
+        (id,user_id,resource_id,scope_option_id,permission_id,evidence,
+         valid_from,assigned_by)
+       VALUES ($1,$2,'r-lab',$3,$4,'Regression fixture assignment.',
+         '2026-01-01T00:00:00Z',$2)`,
+      [randomUUID(), requester, scopeId, permissionId],
+    );
+  };
+  // Two overlapping assignments for the SAME laboratory option.
+  await assign(sharedLab, "lab:designated-account");
+  await assign(sharedLab, null);
+  await assign(sharedSoftware, null);
+
+  const { getRequestableResources } = await import(
+    "../lib/server/request-service"
+  );
+  const identity: TrustedIdentity & { requesterRole: "student" | "faculty" } = {
+    id: requester,
+    name: "Requester One",
+    email: "requester-one@permora.test",
+    department: "Engineering",
+    active: true,
+    roles: ["student"],
+    requesterRole: "student",
+  };
+  const resources = await getRequestableResources(identity);
+  const lab = resources.find((resource) => resource.id === "r-lab");
+  assert.ok(lab, "student should be eligible for r-lab");
+  const laboratory = lab.scopeFields.find(
+    (field) => field.fieldName === "laboratory",
+  );
+  assert.ok(laboratory, "laboratory scope field should be present");
+  const sharedMatches = laboratory.options.filter(
+    (option) => option.id === sharedLab,
+  );
+  assert.equal(
+    sharedMatches.length,
+    1,
+    "the shared laboratory option must appear exactly once despite two assignments",
+  );
+  // Every rendered option id must be unique (the React key invariant).
+  for (const field of lab.scopeFields) {
+    const ids = field.options.map((option) => option.id);
+    assert.equal(
+      new Set(ids).size,
+      ids.length,
+      `scope field ${field.fieldName} must not contain duplicate option ids`,
+    );
   }
 });
 

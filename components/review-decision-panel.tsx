@@ -8,6 +8,7 @@ import {
   validateDecisionReason,
 } from "@/lib/review-ui";
 import { Alert, Button, Confirm, Field, Icon } from "./ui";
+import { useToast } from "./toast";
 
 type Attempt = { decision: ApprovalDecision; idempotencyKey: string };
 
@@ -27,6 +28,7 @@ export function ReviewDecisionPanel({
   expectedVersion: number;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const reasonRef = useRef<HTMLTextAreaElement>(null);
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState("");
@@ -74,11 +76,15 @@ export function ReviewDecisionPanel({
         | null;
       if (!response.ok) {
         const stale = response.status === 409;
+        const text = decisionFailureMessage(response.status, payload?.error?.code);
         setMessage({
           tone: stale ? "warning" : "danger",
           title: stale ? "Request refreshed" : "Decision not saved",
-          text: decisionFailureMessage(response.status, payload?.error?.code),
+          text,
         });
+        if (stale)
+          toast.warning({ title: "Request refreshed", description: text });
+        else toast.error({ title: "Decision not saved", description: text });
         if (response.status === 401) router.replace("/login");
         if (stale || response.status === 404) {
           setAttempt(null);
@@ -87,21 +93,33 @@ export function ReviewDecisionPanel({
         return;
       }
       setAttempt(null);
+      const successText =
+        attempt.decision === "approve"
+          ? "The request is approved and awaiting activation. No access has been activated."
+          : "The requester-visible decision and audit event were recorded.";
       setMessage({
         tone: "success",
         title: "Decision recorded",
-        text:
+        text: successText,
+      });
+      toast.success({
+        title:
           attempt.decision === "approve"
-            ? "The request is approved and awaiting activation. No access has been activated."
-            : "The requester-visible decision and audit event were recorded.",
+            ? "Request approved"
+            : attempt.decision === "deny"
+              ? "Request denied"
+              : "Returned for revision",
+        description: successText,
       });
       router.refresh();
     } catch {
+      const text = decisionFailureMessage(503);
       setMessage({
         tone: "danger",
         title: "Decision not saved",
-        text: decisionFailureMessage(503),
+        text,
       });
+      toast.error({ title: "Decision not saved", description: text });
     } finally {
       setSubmitting(false);
     }

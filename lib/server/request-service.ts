@@ -2,6 +2,14 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { routePendingRequest } from "../approval-domain";
+import {
+  DEFAULT_PAGE_SIZE,
+  limitOffset,
+  PAGE_SIZE_OPTIONS,
+  paginationMeta,
+  type Paginated,
+  type PageParams,
+} from "../pagination";
 import { query, transaction } from "./db";
 import type { TrustedIdentity } from "./identity";
 import type {
@@ -111,7 +119,17 @@ export async function getRequestableResources(
           label: row.label,
           options: [],
         };
-        if (row.id && row.display_name && row.institutional_code)
+        // A requester may hold more than one active assignment pointing at the
+        // same scope option (for example a permission-specific assignment and a
+        // permission-agnostic one). The eligibility join then emits that option
+        // once per assignment, so de-duplicate by option id before building the
+        // dropdown to keep each value — and its React key — unique.
+        if (
+          row.id &&
+          row.display_name &&
+          row.institutional_code &&
+          !field.options.some((option) => option.id === row.id)
+        )
           field.options.push({
             id: row.id,
             fieldName: row.field_name,
@@ -309,8 +327,18 @@ export async function listOwnedRequests(
     resource?: string;
     from?: string;
     to?: string;
+    page?: number;
+    pageSize?: number;
   } = {},
-) {
+): Promise<Paginated<AccessRequestDto>> {
+  const params: PageParams = {
+    page: filters.page && filters.page >= 1 ? Math.floor(filters.page) : 1,
+    pageSize:
+      filters.pageSize &&
+      (PAGE_SIZE_OPTIONS as readonly number[]).includes(filters.pageSize)
+        ? filters.pageSize
+        : DEFAULT_PAGE_SIZE,
+  };
   const values: unknown[] = [userId];
   const where = ["ar.requester_user_id = $1"];
   const add = (condition: string, value: unknown) => {
@@ -343,11 +371,22 @@ export async function listOwnedRequests(
       "(ar.display_id ILIKE '%' || ? || '%' OR r.name ILIKE '%' || ? || '%' OR cp.label ILIKE '%' || ? || '%')",
       filters.query.trim(),
     );
-  const result = await query<RawRequest>(
-    `${baseRequestSql} WHERE ${where.join(" AND ")} ORDER BY ar.submitted_at DESC`,
+  const { limit, offset } = limitOffset(params);
+  values.push(limit, offset);
+  // Stable, deterministic ordering (submitted_at then id) so rows never shift
+  // between pages. count(*) OVER() returns the pre-pagination total.
+  const result = await query<RawRequest & { total_count: number }>(
+    `${baseRequestSql.replace(
+      "SELECT ar.id,",
+      "SELECT count(*) OVER()::int AS total_count, ar.id,",
+    )} WHERE ${where.join(" AND ")}
+      ORDER BY ar.submitted_at DESC, ar.id DESC
+      LIMIT $${values.length - 1} OFFSET $${values.length}`,
     values,
   );
-  return hydrateRequests(result.rows);
+  const items = await hydrateRequests(result.rows);
+  const total = Number(result.rows[0]?.total_count ?? 0);
+  return { items, pagination: paginationMeta(total, params) };
 }
 
 export async function getOwnedRequest(userId: string, id: string) {

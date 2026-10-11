@@ -22,9 +22,14 @@ function createPool() {
     ? process.env.TEST_DATABASE_URL
     : (process.env.DATABASE_URL ??
       "postgresql://unconfigured:unconfigured@127.0.0.1:1/permora_unconfigured");
+  // The browser-test server handles concurrent requests (e.g. a mutation's
+  // transaction overlapping a page render), so it needs more than one
+  // connection to avoid self-contention timeouts. The sequential integration
+  // runner keeps a single connection. Production uses the full pool.
+  const testPoolMax = isBrowserTest ? 4 : 1;
   return new ResilientPool({
     connectionString,
-    max: isTest ? 1 : 10,
+    max: isTest ? testPoolMax : 10,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: isTest ? 15_000 : 5_000,
     keepAlive: true,

@@ -191,7 +191,8 @@ export async function handleResponsibilityEnd(
 export async function handleDelegationList(request: Request) {
   try {
     const identity = await adminFrom(request);
-    return json({ items: await listDelegations(adminDeps(identity)) });
+    const searchParams = new URL(request.url).searchParams;
+    return json(await listDelegations(searchParams, adminDeps(identity)));
   } catch (caught) {
     return mapped(caught);
   }

@@ -1,24 +1,19 @@
 "use client";
 
-import Link from "next/link";
 import type {
   ApprovalListFilters,
   PaginatedDto,
   UnassignedRequestDto,
 } from "@/lib/server/approval-read-types";
 import { AdminUnassignedAssignment } from "./admin-unassigned-assignment";
-import { Alert, Card, Empty, LinkButton, PageHeading } from "./ui";
-
-function hrefFor(filters: ApprovalListFilters, page: number) {
-  const params = new URLSearchParams();
-  if (filters.search) params.set("search", filters.search);
-  if (filters.resource) params.set("resource", filters.resource);
-  if (filters.from) params.set("from", filters.from);
-  if (filters.to) params.set("to", filters.to);
-  params.set("page", String(page));
-  params.set("pageSize", String(filters.pageSize));
-  return `/admin/unassigned?${params}`;
-}
+import {
+  Alert,
+  Card,
+  Empty,
+  LinkButton,
+  PageHeading,
+  TablePagination,
+} from "./ui";
 
 export function AdminUnassignedAssignments({
   data,
@@ -95,15 +90,15 @@ export function AdminUnassignedAssignments({
             </table>
           </div>
         )}
-        {data.pagination.total > data.pagination.pageSize && (
-          <div className="pagination staff-pagination">
-            <span>Showing <strong>{data.items.length}</strong> of <strong>{data.pagination.total}</strong> results</span>
-            <nav aria-label="Unassigned request pagination">
-              <Link className={`button button-outline ${data.pagination.page <= 1 ? "disabled-link" : ""}`} aria-disabled={data.pagination.page <= 1} tabIndex={data.pagination.page <= 1 ? -1 : undefined} href={hrefFor(filters, Math.max(1, data.pagination.page - 1))}>Previous</Link>
-              <span>Page {data.pagination.page} of {Math.max(1, data.pagination.pageCount)}</span>
-              <Link className={`button button-outline ${data.pagination.page >= data.pagination.pageCount ? "disabled-link" : ""}`} aria-disabled={data.pagination.page >= data.pagination.pageCount} tabIndex={data.pagination.page >= data.pagination.pageCount ? -1 : undefined} href={hrefFor(filters, Math.min(data.pagination.pageCount, data.pagination.page + 1))}>Next</Link>
-            </nav>
-          </div>
+        {data.items.length > 0 && (
+          <TablePagination
+            page={data.pagination.page}
+            pageSize={data.pagination.pageSize}
+            total={data.pagination.total}
+            pageCount={data.pagination.pageCount}
+            itemCount={data.items.length}
+            label="Unassigned request pagination"
+          />
         )}
       </Card>
     </>

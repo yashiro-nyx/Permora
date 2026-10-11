@@ -16,6 +16,7 @@ test("user list filters validate values and bound pagination", () => {
   assert.deepEqual(
     parseUserListFilters(
       new URLSearchParams(
+        // An out-of-range / non-whitelisted pageSize snaps to the default (10).
         "search=%20Avery%20&role=admin&status=deactivated&page=4&pageSize=999",
       ),
     ),
@@ -24,15 +25,24 @@ test("user list filters validate values and bound pagination", () => {
       role: "admin",
       status: "deactivated",
       page: 4,
-      pageSize: 100,
+      pageSize: 10,
     },
+  );
+  // Whitelisted page sizes (10/25/50) are honored.
+  assert.equal(
+    parseUserListFilters(new URLSearchParams("pageSize=25")).pageSize,
+    25,
+  );
+  assert.equal(
+    parseUserListFilters(new URLSearchParams("pageSize=50")).pageSize,
+    50,
   );
   assert.deepEqual(parseUserListFilters(new URLSearchParams()), {
     search: undefined,
     role: undefined,
     status: undefined,
     page: 1,
-    pageSize: 25,
+    pageSize: 10,
   });
   assert.throws(
     () => parseUserListFilters(new URLSearchParams("role=owner")),

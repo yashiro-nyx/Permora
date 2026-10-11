@@ -10,6 +10,7 @@ import type {
   UserListFilters,
 } from "@/lib/server/account-types";
 import { InvitationControls } from "./invitation-controls";
+import { useToast } from "./toast";
 import {
   Alert,
   Badge,
@@ -20,6 +21,7 @@ import {
   Field,
   LinkButton,
   PageHeading,
+  TablePagination,
 } from "./ui";
 
 const roleNames: Record<Role, string> = {
@@ -32,16 +34,6 @@ const roleOptions = Object.keys(roleNames) as Role[];
 
 function roleText(roles: Role[]) {
   return roles.map((role) => roleNames[role]).join(", ");
-}
-
-function queryHref(filters: UserListFilters, page: number) {
-  const params = new URLSearchParams();
-  if (filters.search) params.set("search", filters.search);
-  if (filters.role) params.set("role", filters.role);
-  if (filters.status) params.set("status", filters.status);
-  params.set("page", String(page));
-  params.set("pageSize", String(filters.pageSize));
-  return `/users?${params.toString()}`;
 }
 
 function UserActions({ user }: { user: AccountUserDto }) {
@@ -63,11 +55,6 @@ export function AccountDirectory({
   filters: UserListFilters;
   invalidMessage?: string;
 }) {
-  const pageCount = Math.max(1, data.pagination.pageCount);
-  const start = data.pagination.total
-    ? (filters.page - 1) * filters.pageSize + 1
-    : 0;
-  const end = Math.min(filters.page * filters.pageSize, data.pagination.total);
   return (
     <>
       <PageHeading
@@ -122,6 +109,7 @@ export function AccountDirectory({
             </select>
           </div>
           <input type="hidden" name="pageSize" value={filters.pageSize} />
+          <input type="hidden" name="page" value="1" />
           <Button type="submit">Apply filters</Button>
           <LinkButton href="/users" variant="ghost">
             Clear
@@ -195,28 +183,14 @@ export function AccountDirectory({
             </ul>
           </>
         )}
-        <div className="pagination account-pagination">
-          <span>Showing <strong>{start}–{end}</strong> of <strong>{data.pagination.total}</strong> accounts</span>
-          <nav aria-label="Account pages">
-            <Link
-              className={`button button-outline ${filters.page <= 1 ? "disabled-link" : ""}`}
-              aria-disabled={filters.page <= 1}
-              tabIndex={filters.page <= 1 ? -1 : undefined}
-              href={queryHref(filters, Math.max(1, filters.page - 1))}
-            >
-              Previous
-            </Link>
-            <span aria-current="page">Page {filters.page} of {pageCount}</span>
-            <Link
-              className={`button button-outline ${filters.page >= pageCount ? "disabled-link" : ""}`}
-              aria-disabled={filters.page >= pageCount}
-              tabIndex={filters.page >= pageCount ? -1 : undefined}
-              href={queryHref(filters, Math.min(pageCount, filters.page + 1))}
-            >
-              Next
-            </Link>
-          </nav>
-        </div>
+        <TablePagination
+          page={data.pagination.page}
+          pageSize={data.pagination.pageSize}
+          total={data.pagination.total}
+          pageCount={data.pagination.pageCount}
+          itemCount={data.items.length}
+          label="User directory pagination"
+        />
       </Card>
     </>
   );
@@ -275,6 +249,7 @@ export function AccountEditor({ mode, user, actorId }: {
   actorId: string;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [name, setName] = useState(user?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
   const [department, setDepartment] = useState(user?.department ?? "");
@@ -326,10 +301,20 @@ export function AccountEditor({ mode, user, actorId }: {
       if (!response.ok) throw new Error(failureMessage(body, "The account could not be saved."));
       const result = body as { user: AccountUserDto };
       setNotice("Account saved.");
+      toast.success({
+        title: "Changes saved",
+        description:
+          mode === "create"
+            ? "The new user account was created."
+            : "The user's account details were updated.",
+      });
       if (mode === "create") router.replace(`/users/${result.user.id}`);
       router.refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The account could not be saved.");
+      const message =
+        caught instanceof Error ? caught.message : "The account could not be saved.";
+      setError(message);
+      toast.error({ title: "Unable to save changes", description: message });
       if (caught instanceof Error && /not found|changed|already|last active/i.test(caught.message))
         router.refresh();
     } finally {
@@ -356,15 +341,40 @@ export function AccountEditor({ mode, user, actorId }: {
       });
       const body: unknown = await response.json();
       if (!response.ok) throw new Error(failureMessage(body, "The account status could not be changed."));
-      setNotice(responseBodyMessage(body, confirm === "deactivate" ? "Account deactivated." : "Account reactivated."));
-      if ((body as { sessionsRevoked?: unknown }).sessionsRevoked === false)
-        setNoticeTone("warning");
+      const confirmedAction = confirm;
+      setNotice(responseBodyMessage(body, confirmedAction === "deactivate" ? "Account deactivated." : "Account reactivated."));
+      const sessionsWarning =
+        (body as { sessionsRevoked?: unknown }).sessionsRevoked === false;
+      if (sessionsWarning) setNoticeTone("warning");
+      if (sessionsWarning)
+        toast.warning({
+          title:
+            confirmedAction === "deactivate"
+              ? "Account deactivated"
+              : "Account reactivated",
+          description:
+            "The status changed, but existing sessions may still be active. Review session invalidation.",
+        });
+      else
+        toast.success({
+          title:
+            confirmedAction === "deactivate"
+              ? "Account deactivated"
+              : "Account reactivated",
+          description:
+            confirmedAction === "deactivate"
+              ? "The account can no longer sign in."
+              : "The account can sign in again.",
+        });
       setConfirm(null);
       setReason("");
       router.refresh();
-      if (confirm === "deactivate" && user.id === actorId) router.replace("/users");
+      if (confirmedAction === "deactivate" && user.id === actorId) router.replace("/users");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The account status could not be changed.");
+      const message =
+        caught instanceof Error ? caught.message : "The account status could not be changed.";
+      setError(message);
+      toast.error({ title: "Unable to update account", description: message });
       setConfirm(null);
       router.refresh();
     } finally {

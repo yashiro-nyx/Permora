@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import type { TrustedIdentity } from "@/lib/auth-types";
 import { Alert, Button, Icon, Modal } from "./ui";
+import { NotificationBell } from "./notification-bell";
 import { initials, roleLabels } from "@/lib/model";
 import {
   navigationForIdentity,
@@ -107,6 +108,7 @@ export function AppShell({
           )}
         </div>
         <div className="header-right">
+          <NotificationBell canReceive={identity.requesterRole !== null} />
           <div className="header-user">
             <strong>{identity.name}</strong>
             <small>{roleLabels[role]}</small>

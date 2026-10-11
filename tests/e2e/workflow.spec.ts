@@ -164,10 +164,19 @@ test("request submission, deterministic routing, approval, and requester status 
     .check();
   await activationRow.getByLabel("External reference").fill("E2E-MANUAL-WORKFLOW");
   await activationRow.getByRole("button", { name: "Record activation" }).click();
-  await expect(activationRow.getByRole("status")).toContainText(
-    "Access activation recorded.",
-  );
-  await expect(activationRow).toContainText("Active");
+  // The confirmation is surfaced at the queue level (the "Activation outcome"
+  // banner) so it survives the refresh that transitions this row to a terminal
+  // "Active" state. Scope to that banner specifically: the same confirmation
+  // text can also appear in the in-row status, so a page-wide text match would
+  // be ambiguous under strict mode.
+  await expect(
+    activationAdminPage
+      .getByRole("status")
+      .filter({ hasText: "Activation outcome" }),
+  ).toContainText("Access activation recorded.");
+  await expect(
+    activationAdminPage.getByRole("row", { name: new RegExp(displayId!) }),
+  ).toContainText("Active");
 
   await requesterPage.goto(`/requests/${requestId}`);
   await expect(requesterPage.getByText("Active", { exact: true })).toBeVisible();

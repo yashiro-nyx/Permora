@@ -1,5 +1,7 @@
 import type { Role } from "./model";
 
+import { snapPageSize } from "./pagination";
+
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -97,7 +99,7 @@ export function parseResponsibilityListFilters(params: URLSearchParams) {
     approver,
     resource,
     page: paginationValue(params.get("page"), 1, 10_000),
-    pageSize: paginationValue(params.get("pageSize"), 25, 100),
+    pageSize: snapPageSize(paginationValue(params.get("pageSize"), 10, 50)),
   };
 }
 

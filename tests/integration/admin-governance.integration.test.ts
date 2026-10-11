@@ -214,7 +214,12 @@ async function seedRequest(input: {
   requester: UserFixture;
   resourceId?: string;
   permissionId?: string;
-  status?: "pending_routing" | "pending_review" | "denied";
+  status?:
+    | "pending_routing"
+    | "pending_review"
+    | "denied"
+    | "approved_pending_activation"
+    | "returned_for_revision";
   version?: number;
   scopes?: ScopeFixture[];
 }) {
@@ -838,4 +843,796 @@ test("institutional identifiers enforce issuer-scoped uniqueness and audit updat
     [admin.id, firstUser.id, secondUser.id],
   );
   assert.equal(audit.rows[0].count, 2);
+});
+
+test("catalog administration reads, toggles availability, and adds audited scopes", async () => {
+  const admin = await seedUser(["admin"], "Catalog Admin", true);
+  const nonAdmin = await seedUser(["student"], "Catalog Student", true);
+  const adminCookie = await login(admin.email);
+  const nonAdminCookie = await login(nonAdmin.email);
+
+  function catalogGet(url: string, cookie: string) {
+    return new Request(url, {
+      headers: { cookie, origin: "http://localhost:3000" },
+    });
+  }
+
+  // Unauthenticated and non-admin reads are rejected.
+  const anonymous = await handlers.handleCatalogGet(
+    new Request("http://localhost:3000/api/admin/catalog"),
+  );
+  assert.equal(anonymous.status, 401);
+  const studentRead = await handlers.handleCatalogGet(
+    catalogGet("http://localhost:3000/api/admin/catalog", nonAdminCookie),
+  );
+  assert.equal(studentRead.status, 403);
+
+  // Administrator read returns the seeded catalog with policy, permissions, and scopes.
+  const read = await handlers.handleCatalogGet(
+    catalogGet("http://localhost:3000/api/admin/catalog", adminCookie),
+  );
+  assert.equal(read.status, 200);
+  const readBody = (await read.json()) as {
+    resources: Array<{
+      id: string;
+      available: boolean;
+      permissions: Array<{ id: string; enabled: boolean; requesterRoles: string[] }>;
+      scopeFields: Array<{ fieldName: string }>;
+      currentPolicy: { provisional: boolean } | null;
+    }>;
+  };
+  const lms = readBody.resources.find((resource) => resource.id === "r-lms");
+  assert.ok(lms, "expected the seeded LMS resource");
+  assert.equal(lms.available, true);
+  assert.ok(lms.permissions.some((p) => p.id === "lms:course-participation"));
+  assert.ok(lms.currentPolicy?.provisional);
+
+  // Non-admin availability toggle is forbidden and makes no change.
+  const forbiddenToggle = await handlers.handleCatalogToggle(
+    jsonRequest("http://localhost:3000/api/admin/catalog", nonAdminCookie, {
+      kind: "resource",
+      id: "r-lms",
+      enabled: false,
+    }, "PATCH"),
+  );
+  assert.equal(forbiddenToggle.status, 403);
+  const afterForbidden = await pool.query<{ available: boolean }>(
+    "SELECT available FROM catalog_resource WHERE id = 'r-lms'",
+  );
+  assert.equal(afterForbidden.rows[0].available, true);
+
+  // Cross-origin toggle is rejected even for an administrator.
+  const crossOrigin = await handlers.handleCatalogToggle(
+    new Request("http://localhost:3000/api/admin/catalog", {
+      method: "PATCH",
+      headers: {
+        cookie: adminCookie,
+        origin: "http://evil.example",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ kind: "resource", id: "r-lms", enabled: false }),
+    }),
+  );
+  assert.equal(crossOrigin.status, 403);
+  const crossOriginBody = (await crossOrigin.json()) as { error?: { code?: string } };
+  assert.equal(crossOriginBody.error?.code, "invalid_origin");
+
+  // Administrator toggles resource availability off, then a permission off, each audited.
+  const resourceOff = await handlers.handleCatalogToggle(
+    jsonRequest("http://localhost:3000/api/admin/catalog", adminCookie, {
+      kind: "resource",
+      id: "r-lms",
+      enabled: false,
+    }, "PATCH"),
+  );
+  assert.equal(resourceOff.status, 200);
+  const resourceState = await pool.query<{ available: boolean }>(
+    "SELECT available FROM catalog_resource WHERE id = 'r-lms'",
+  );
+  assert.equal(resourceState.rows[0].available, false);
+  const resourceAudit = await pool.query<{ count: number }>(
+    `SELECT count(*)::int AS count FROM audit_event
+      WHERE actor_user_id = $1 AND event_type = 'catalog.availability_updated'
+        AND metadata ->> 'kind' = 'resource'
+        AND metadata ->> 'id' = 'r-lms'
+        AND metadata ->> 'enabled' = 'false'`,
+    [admin.id],
+  );
+  assert.equal(resourceAudit.rows[0].count, 1);
+
+  const permissionOff = await handlers.handleCatalogToggle(
+    jsonRequest("http://localhost:3000/api/admin/catalog", adminCookie, {
+      kind: "permission",
+      id: "lms:course-participation",
+      enabled: false,
+    }, "PATCH"),
+  );
+  assert.equal(permissionOff.status, 200);
+  const permissionState = await pool.query<{ enabled: boolean }>(
+    "SELECT enabled FROM catalog_permission WHERE id = 'lms:course-participation'",
+  );
+  assert.equal(permissionState.rows[0].enabled, false);
+
+  // Restore availability so later ordering of tests is unaffected.
+  await handlers.handleCatalogToggle(
+    jsonRequest("http://localhost:3000/api/admin/catalog", adminCookie, {
+      kind: "resource",
+      id: "r-lms",
+      enabled: true,
+    }, "PATCH"),
+  );
+  await handlers.handleCatalogToggle(
+    jsonRequest("http://localhost:3000/api/admin/catalog", adminCookie, {
+      kind: "permission",
+      id: "lms:course-participation",
+      enabled: true,
+    }, "PATCH"),
+  );
+
+  // Toggling an unknown record returns not_found.
+  await assertGovernanceError(
+    () =>
+      service.toggleCatalogAvailability(
+        { kind: "resource", id: "r-does-not-exist", enabled: false },
+        adminDependencies(admin),
+      ),
+    "not_found",
+  );
+
+  // Scope creation requires a valid resource/field pair and is admin-only.
+  const nonAdminScope = await handlers.handleScopeCreate(
+    jsonRequest("http://localhost:3000/api/admin/catalog/scopes", nonAdminCookie, {
+      resourceId: "r-lms",
+      fieldName: "courseSection",
+      institutionalCode: `GOV-${randomUUID()}`,
+      displayName: "Rejected scope",
+    }),
+  );
+  assert.equal(nonAdminScope.status, 403);
+
+  await assertGovernanceError(
+    () =>
+      service.createScopeOption(
+        {
+          resourceId: "r-lms",
+          fieldName: "laboratory", // not a field of r-lms
+          institutionalCode: `GOV-${randomUUID()}`,
+          displayName: "Invalid field scope",
+        },
+        adminDependencies(admin),
+      ),
+    "invalid_input",
+  );
+
+  // The server upper-cases institutional codes; submit a lower-case input and
+  // assert the stored and listed values are the normalized upper-case form.
+  const code = `GOV-${randomUUID()}`.slice(0, 40).toUpperCase();
+  const createdScope = await handlers.handleScopeCreate(
+    jsonRequest("http://localhost:3000/api/admin/catalog/scopes", adminCookie, {
+      resourceId: "r-lms",
+      fieldName: "courseSection",
+      institutionalCode: code.toLowerCase(),
+      displayName: "Integration Course Section",
+    }),
+  );
+  assert.equal(createdScope.status, 200);
+  const createdScopeBody = (await createdScope.json()) as {
+    result: { id: string };
+  };
+  const storedScope = await pool.query<{
+    institutional_code: string;
+    display_name: string;
+    resource_id: string;
+    field_name: string;
+  }>(
+    `SELECT institutional_code, display_name, resource_id, field_name
+       FROM scope_option WHERE id = $1`,
+    [createdScopeBody.result.id],
+  );
+  assert.equal(storedScope.rows[0].institutional_code, code);
+  assert.equal(storedScope.rows[0].resource_id, "r-lms");
+  assert.equal(storedScope.rows[0].field_name, "courseSection");
+  const scopeAudit = await pool.query<{ count: number }>(
+    `SELECT count(*)::int AS count FROM audit_event
+      WHERE actor_user_id = $1 AND event_type = 'catalog.scope_option_created'
+        AND metadata ->> 'scopeOptionId' = $2`,
+    [admin.id, createdScopeBody.result.id],
+  );
+  assert.equal(scopeAudit.rows[0].count, 1);
+
+  // Duplicate institutional code for the same resource field conflicts.
+  await assertGovernanceError(
+    () =>
+      service.createScopeOption(
+        {
+          resourceId: "r-lms",
+          fieldName: "courseSection",
+          institutionalCode: code,
+          displayName: "Duplicate code scope",
+        },
+        adminDependencies(admin),
+      ),
+    "conflict",
+  );
+
+  // The new scope is visible through the admin scope list endpoint.
+  const scopeList = await handlers.handleScopeList(
+    catalogGet(
+      "http://localhost:3000/api/admin/catalog/scopes?resource=r-lms",
+      adminCookie,
+    ),
+  );
+  assert.equal(scopeList.status, 200);
+  const scopeListBody = (await scopeList.json()) as {
+    options: Array<{ institutionalCode: string }>;
+  };
+  assert.ok(
+    scopeListBody.options.some((option) => option.institutionalCode === code),
+  );
+});
+
+test("delegation list and circular rejection back the absence management UI", async () => {
+  const admin = await seedUser(["admin"], "Delegation List Admin", true);
+  const nonAdmin = await seedUser(["student"], "Delegation List Student", true);
+  const first = await seedUser(["approver"], "Absence Approver One");
+  const second = await seedUser(["approver"], "Absence Approver Two");
+  const adminCookie = await login(admin.email);
+  const nonAdminCookie = await login(nonAdmin.email);
+  const adminDeps = adminDependencies(admin);
+
+  // The list endpoint is administrator-only.
+  const unauth = await handlers.handleDelegationList(
+    new Request("http://localhost:3000/api/admin/delegations"),
+  );
+  assert.equal(unauth.status, 401);
+  const forbidden = await handlers.handleDelegationList(
+    new Request("http://localhost:3000/api/admin/delegations", {
+      headers: { cookie: nonAdminCookie, origin: "http://localhost:3000" },
+    }),
+  );
+  assert.equal(forbidden.status, 403);
+
+  const validFrom = new Date(Date.now() - 60_000).toISOString();
+  const validUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const created = await service.createDelegation(
+    {
+      delegatorUserId: first.id,
+      substituteUserId: second.id,
+      validFrom,
+      validUntil,
+    },
+    adminDeps,
+  );
+
+  // The list endpoint returns a sanitized, named, active-flagged record for the UI.
+  const listed = await handlers.handleDelegationList(
+    new Request("http://localhost:3000/api/admin/delegations", {
+      headers: { cookie: adminCookie, origin: "http://localhost:3000" },
+    }),
+  );
+  assert.equal(listed.status, 200);
+  const listedBody = (await listed.json()) as {
+    items: Array<{
+      id: string;
+      delegator: { id: string; name: string };
+      substitute: { id: string; name: string };
+      active: boolean;
+      cancelledAt: string | null;
+    }>;
+  };
+  const record = listedBody.items.find((item) => item.id === created.id);
+  assert.ok(record, "expected the created delegation in the list");
+  assert.equal(record.delegator.id, first.id);
+  assert.equal(record.substitute.id, second.id);
+  assert.equal(record.active, true);
+  assert.equal(record.cancelledAt, null);
+
+  // A reverse delegation that overlaps the same window is rejected as circular,
+  // the exact code the UI surfaces as a distinct message.
+  const circular = await handlers.handleDelegationCreate(
+    jsonRequest("http://localhost:3000/api/admin/delegations", adminCookie, {
+      delegatorUserId: second.id,
+      substituteUserId: first.id,
+      validFrom,
+      validUntil,
+    }),
+  );
+  assert.equal(circular.status, 409);
+  const circularBody = (await circular.json()) as { error?: { code?: string } };
+  assert.equal(circularBody.error?.code, "circular_delegation");
+
+  // A second overlapping absence for the same approver is a plain conflict.
+  await assertGovernanceError(
+    () =>
+      service.createDelegation(
+        {
+          delegatorUserId: first.id,
+          substituteUserId: second.id,
+          validFrom,
+          validUntil,
+        },
+        adminDeps,
+      ),
+    "conflict",
+  );
+});
+
+test("identifier list and in-place update back the maintenance UI", async () => {
+  const admin = await seedUser(["admin"], "Identifier UI Admin", true);
+  const nonAdmin = await seedUser(["student"], "Identifier UI Student", true);
+  const subject = await seedUser(["student"], "Identifier UI Subject");
+  const adminCookie = await login(admin.email);
+  const nonAdminCookie = await login(nonAdmin.email);
+
+  // The per-account list endpoint is administrator-only and UUID-validated.
+  const unauth = await handlers.handleIdentifierList(
+    new Request(`http://localhost:3000/api/admin/users/${subject.id}/identifiers`),
+    subject.id,
+  );
+  assert.equal(unauth.status, 401);
+  const forbidden = await handlers.handleIdentifierList(
+    new Request(`http://localhost:3000/api/admin/users/${subject.id}/identifiers`, {
+      headers: { cookie: nonAdminCookie, origin: "http://localhost:3000" },
+    }),
+    subject.id,
+  );
+  assert.equal(forbidden.status, 403);
+  const badId = await handlers.handleIdentifierList(
+    new Request("http://localhost:3000/api/admin/users/not-a-uuid/identifiers", {
+      headers: { cookie: adminCookie, origin: "http://localhost:3000" },
+    }),
+    "not-a-uuid",
+  );
+  assert.equal(badId.status, 400);
+
+  // An empty account lists no identifiers.
+  const emptyList = await handlers.handleIdentifierList(
+    new Request(`http://localhost:3000/api/admin/users/${subject.id}/identifiers`, {
+      headers: { cookie: adminCookie, origin: "http://localhost:3000" },
+    }),
+    subject.id,
+  );
+  assert.equal(emptyList.status, 200);
+  assert.deepEqual(((await emptyList.json()) as { items: unknown[] }).items, []);
+
+  // Create a lower-case value through the PUT handler; it is normalized upper-case.
+  const created = await handlers.handleIdentifierUpsert(
+    jsonRequest(
+      `http://localhost:3000/api/admin/users/${subject.id}/identifiers`,
+      adminCookie,
+      { identifierType: "student_number", issuer: "campus-registrar", identifier: "2026-ab12" },
+      "PUT",
+    ),
+    subject.id,
+  );
+  assert.equal(created.status, 200);
+  const createdBody = (await created.json()) as {
+    items: Array<{ id: string; identifierType: string; issuer: string; identifier: string }>;
+  };
+  assert.equal(createdBody.items.length, 1);
+  assert.equal(createdBody.items[0].identifier, "2026-AB12");
+  assert.equal(createdBody.items[0].identifierType, "student_number");
+
+  // Updating the same type + issuer with a new value replaces it in place
+  // (no second row) and records a fresh audit event.
+  const updated = await handlers.handleIdentifierUpsert(
+    jsonRequest(
+      `http://localhost:3000/api/admin/users/${subject.id}/identifiers`,
+      adminCookie,
+      { identifierType: "student_number", issuer: "campus-registrar", identifier: "2026-ZZ99" },
+      "PUT",
+    ),
+    subject.id,
+  );
+  assert.equal(updated.status, 200);
+  const updatedBody = (await updated.json()) as {
+    items: Array<{ identifier: string }>;
+  };
+  assert.equal(updatedBody.items.length, 1);
+  assert.equal(updatedBody.items[0].identifier, "2026-ZZ99");
+  const rows = await pool.query<{ count: number }>(
+    `SELECT count(*)::int AS count FROM institutional_identifier
+      WHERE user_id = $1 AND identifier_type = 'student_number' AND issuer = 'campus-registrar'`,
+    [subject.id],
+  );
+  assert.equal(rows.rows[0].count, 1);
+  const auditCount = await pool.query<{ count: number }>(
+    `SELECT count(*)::int AS count FROM audit_event
+      WHERE actor_user_id = $1 AND subject_user_id = $2
+        AND event_type = 'institutional_identifier.updated'`,
+    [admin.id, subject.id],
+  );
+  assert.equal(auditCount.rows[0].count, 2);
+
+  // A second identifier type coexists; the list returns both for the UI.
+  await handlers.handleIdentifierUpsert(
+    jsonRequest(
+      `http://localhost:3000/api/admin/users/${subject.id}/identifiers`,
+      adminCookie,
+      { identifierType: "staff_number", issuer: "hr", identifier: "STAFF-7" },
+      "PUT",
+    ),
+    subject.id,
+  );
+  const finalList = await handlers.handleIdentifierList(
+    new Request(`http://localhost:3000/api/admin/users/${subject.id}/identifiers`, {
+      headers: { cookie: adminCookie, origin: "http://localhost:3000" },
+    }),
+    subject.id,
+  );
+  const finalBody = (await finalList.json()) as {
+    items: Array<{ identifierType: string; identifier: string }>;
+  };
+  assert.equal(finalBody.items.length, 2);
+  assert.ok(finalBody.items.some((i) => i.identifierType === "staff_number" && i.identifier === "STAFF-7"));
+  assert.ok(finalBody.items.some((i) => i.identifierType === "student_number" && i.identifier === "2026-ZZ99"));
+});
+
+test("analytics summary aggregates request and lifecycle states for the reports UI", async () => {
+  const admin = await seedUser(["admin"], "Analytics Admin", true);
+  const nonAdmin = await seedUser(["student"], "Analytics Student", true);
+  const requester = await seedUser(["student"], "Analytics Requester");
+  const adminCookie = await login(admin.email);
+  const nonAdminCookie = await login(nonAdmin.email);
+
+  // Unauthenticated and non-admin access is rejected before any data is read.
+  const anonymous = await handlers.handleAnalytics(
+    new Request("http://localhost:3000/api/admin/analytics"),
+  );
+  assert.equal(anonymous.status, 401);
+  const forbidden = await handlers.handleAnalytics(
+    new Request("http://localhost:3000/api/admin/analytics", {
+      headers: { cookie: nonAdminCookie, origin: "http://localhost:3000" },
+    }),
+  );
+  assert.equal(forbidden.status, 403);
+
+  // Seed a known distribution of request statuses for this requester.
+  await seedRequest({ requester, status: "pending_review" });
+  await seedRequest({ requester, status: "pending_routing" });
+  await seedRequest({ requester, status: "approved_pending_activation" });
+  await seedRequest({ requester, status: "approved_pending_activation" });
+  await seedRequest({ requester, status: "denied" });
+  await seedRequest({ requester, status: "returned_for_revision" });
+
+  const response = await handlers.handleAnalytics(
+    new Request("http://localhost:3000/api/admin/analytics", {
+      headers: { cookie: adminCookie, origin: "http://localhost:3000" },
+    }),
+  );
+  assert.equal(response.status, 200);
+  // The response is private/no-store and discloses no raw records.
+  assert.match(response.headers.get("cache-control") ?? "", /no-store/);
+  const body = (await response.json()) as {
+    requests: {
+      total: number;
+      byStatus: Record<string, number>;
+      pendingReview: number;
+      pendingRouting: number;
+      approvedPendingActivation: number;
+    };
+    users: { total: number; active: number; inactive: number };
+    entitlements: { active: number; expired: number; revoked: number };
+    activation: { activated: number; failed: number; activating: number };
+    approverWorkload: Array<{ approverName: string; openAssignments: number }>;
+    generatedAt: string;
+  };
+
+  // Aggregated counts reflect at least the seeded distribution (the suite shares
+  // a database, so other tests may add more; assert lower bounds and derived
+  // values that must hold regardless of other rows).
+  assert.ok(body.requests.total >= 6);
+  assert.ok((body.requests.byStatus.approved_pending_activation ?? 0) >= 2);
+  assert.ok((body.requests.byStatus.denied ?? 0) >= 1);
+  assert.ok((body.requests.byStatus.returned_for_revision ?? 0) >= 1);
+  assert.ok(body.requests.pendingReview >= 1);
+  assert.ok(body.requests.pendingRouting >= 1);
+  assert.ok(body.users.total >= 3);
+  assert.equal(body.users.total, body.users.active + body.users.inactive);
+  assert.equal(typeof body.entitlements.active, "number");
+  assert.equal(typeof body.activation.activated, "number");
+
+  // Safe DTO: no personal request content or account identifiers leak.
+  const serialized = JSON.stringify(body);
+  assert.equal(serialized.includes(requester.email), false);
+  assert.equal(serialized.includes("Governance integration fixture request purpose."), false);
+  assert.equal(serialized.includes("REQ-GOV-"), false);
+  // generatedAt is an ISO timestamp.
+  assert.ok(!Number.isNaN(Date.parse(body.generatedAt)));
+
+  // A far-past date window yields an empty request set without error.
+  const emptyWindow = await service.getAnalyticsSummary(
+    new URLSearchParams({ from: "1999-01-01", to: "1999-01-02" }),
+    adminDependencies(admin),
+  );
+  assert.equal(emptyWindow.requests.total, 0);
+  assert.deepEqual(emptyWindow.requests.byStatus, {});
+  assert.equal(emptyWindow.approvalTurnaroundHours, null);
+  // User and entitlement aggregates are not date-filtered and remain available.
+  assert.ok(emptyWindow.users.total >= 3);
+
+  // An invalid date filter is rejected by validation (surfaced as 400 upstream).
+  await assertGovernanceError(
+    () =>
+      service.getAnalyticsSummary(
+        new URLSearchParams({ from: "not-a-date" }),
+        adminDependencies(admin),
+      ),
+    "invalid_input",
+  );
+});
+
+test("notification preferences are per-account, save in-app, and reject external channels", async () => {
+  const first = await seedUser(["student"], "Preference Student One", true);
+  const second = await seedUser(["approver"], "Preference Approver Two", true);
+  const firstCookie = await login(first.email);
+  const secondCookie = await login(second.email);
+
+  // Unauthenticated reads are rejected.
+  const anonymous = await handlers.handlePreferenceGet(
+    new Request("http://localhost:3000/api/notifications/preferences"),
+  );
+  assert.equal(anonymous.status, 401);
+
+  // Default preferences for a fresh account: in-app on, external off/unconfigured.
+  const initial = await handlers.handlePreferenceGet(
+    new Request("http://localhost:3000/api/notifications/preferences", {
+      headers: { cookie: firstCookie, origin: "http://localhost:3000" },
+    }),
+  );
+  assert.equal(initial.status, 200);
+  const initialBody = (await initial.json()) as {
+    preference: {
+      inAppEnabled: boolean;
+      externalEmailEnabled: boolean;
+      externalDeliveryConfigured: boolean;
+    };
+  };
+  assert.equal(initialBody.preference.inAppEnabled, true);
+  assert.equal(initialBody.preference.externalEmailEnabled, false);
+  assert.equal(initialBody.preference.externalDeliveryConfigured, false);
+
+  // Turning in-app off persists and is recorded; external stays false.
+  const update = await handlers.handlePreferenceUpdate(
+    jsonRequest(
+      "http://localhost:3000/api/notifications/preferences",
+      firstCookie,
+      { inAppEnabled: false },
+      "PATCH",
+    ),
+  );
+  assert.equal(update.status, 200);
+  const updateBody = (await update.json()) as {
+    preference: { inAppEnabled: boolean; externalEmailEnabled: boolean };
+  };
+  assert.equal(updateBody.preference.inAppEnabled, false);
+  assert.equal(updateBody.preference.externalEmailEnabled, false);
+
+  const stored = await pool.query<{
+    in_app_enabled: boolean;
+    external_email_enabled: boolean;
+    external_sms_enabled: boolean;
+    external_push_enabled: boolean;
+  }>(
+    `SELECT in_app_enabled, external_email_enabled, external_sms_enabled, external_push_enabled
+       FROM user_notification_preference WHERE user_id = $1`,
+    [first.id],
+  );
+  assert.equal(stored.rows[0].in_app_enabled, false);
+  assert.equal(stored.rows[0].external_email_enabled, false);
+  assert.equal(stored.rows[0].external_sms_enabled, false);
+  assert.equal(stored.rows[0].external_push_enabled, false);
+  const audit = await pool.query<{ count: number }>(
+    `SELECT count(*)::int AS count FROM audit_event
+      WHERE actor_user_id = $1 AND event_type = 'notification_preference.updated'`,
+    [first.id],
+  );
+  assert.ok(audit.rows[0].count >= 1);
+
+  // Persistence after a fresh read reflects the saved value.
+  const reread = await handlers.handlePreferenceGet(
+    new Request("http://localhost:3000/api/notifications/preferences", {
+      headers: { cookie: firstCookie, origin: "http://localhost:3000" },
+    }),
+  );
+  const rereadBody = (await reread.json()) as { preference: { inAppEnabled: boolean } };
+  assert.equal(rereadBody.preference.inAppEnabled, false);
+
+  // The second account is unaffected by the first account's change (ownership).
+  const secondRead = await handlers.handlePreferenceGet(
+    new Request("http://localhost:3000/api/notifications/preferences", {
+      headers: { cookie: secondCookie, origin: "http://localhost:3000" },
+    }),
+  );
+  const secondBody = (await secondRead.json()) as { preference: { inAppEnabled: boolean } };
+  assert.equal(secondBody.preference.inAppEnabled, true);
+
+  // Enabling any external channel is rejected and persists nothing.
+  for (const channel of [
+    "externalEmailEnabled",
+    "externalSmsEnabled",
+    "externalPushEnabled",
+  ]) {
+    const rejected = await handlers.handlePreferenceUpdate(
+      jsonRequest(
+        "http://localhost:3000/api/notifications/preferences",
+        secondCookie,
+        { [channel]: true },
+        "PATCH",
+      ),
+    );
+    assert.equal(rejected.status, 400, `${channel} must be rejected`);
+    const rejectedBody = (await rejected.json()) as { error?: { code?: string } };
+    assert.equal(rejectedBody.error?.code, "invalid_input");
+  }
+  const secondStored = await pool.query<{ count: number }>(
+    `SELECT count(*)::int AS count FROM user_notification_preference
+      WHERE user_id = $1
+        AND (external_email_enabled OR external_sms_enabled OR external_push_enabled)`,
+    [second.id],
+  );
+  assert.equal(secondStored.rows[0].count, 0);
+
+  // An empty or unknown-field body is rejected before any write.
+  const emptyBody = await handlers.handlePreferenceUpdate(
+    jsonRequest("http://localhost:3000/api/notifications/preferences", firstCookie, {}, "PATCH"),
+  );
+  assert.equal(emptyBody.status, 400);
+  const unknownField = await handlers.handlePreferenceUpdate(
+    jsonRequest(
+      "http://localhost:3000/api/notifications/preferences",
+      firstCookie,
+      { smsCarrier: "acme" },
+      "PATCH",
+    ),
+  );
+  assert.equal(unknownField.status, 400);
+
+  // The update handler enforces same-origin.
+  const crossOrigin = await handlers.handlePreferenceUpdate(
+    new Request("http://localhost:3000/api/notifications/preferences", {
+      method: "PATCH",
+      headers: {
+        cookie: firstCookie,
+        origin: "http://evil.example",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ inAppEnabled: true }),
+    }),
+  );
+  assert.equal(crossOrigin.status, 403);
+
+  // The DTO exposes no delivery credentials, tokens, or provider configuration.
+  const serialized = JSON.stringify(rereadBody);
+  for (const forbidden of ["token", "secret", "password", "apiKey", "provider"]) {
+    assert.equal(
+      serialized.toLowerCase().includes(forbidden.toLowerCase()),
+      false,
+      `DTO unexpectedly contains "${forbidden}": ${serialized}`,
+    );
+  }
+});
+
+test("retention policies list and dry-run previews never modify data", async () => {
+  const admin = await seedUser(["admin"], "Retention Admin", true);
+  const nonAdmin = await seedUser(["student"], "Retention Student", true);
+  const recipient = await seedUser(["student"], "Retention Recipient");
+  const adminCookie = await login(admin.email);
+  const nonAdminCookie = await login(nonAdmin.email);
+  const adminDeps = adminDependencies(admin);
+
+  // List is administrator-only.
+  const unauthList = await handlers.handleRetentionList(
+    new Request("http://localhost:3000/api/admin/retention"),
+  );
+  assert.equal(unauthList.status, 401);
+  const forbiddenList = await handlers.handleRetentionList(
+    new Request("http://localhost:3000/api/admin/retention", {
+      headers: { cookie: nonAdminCookie, origin: "http://localhost:3000" },
+    }),
+  );
+  assert.equal(forbiddenList.status, 403);
+
+  // The seeded provisional policy classes are returned with their flags.
+  const list = await handlers.handleRetentionList(
+    new Request("http://localhost:3000/api/admin/retention", {
+      headers: { cookie: adminCookie, origin: "http://localhost:3000" },
+    }),
+  );
+  assert.equal(list.status, 200);
+  const listBody = (await list.json()) as {
+    items: Array<{ recordClass: string; retentionDays: number | null; immutable: boolean }>;
+  };
+  const auditClass = listBody.items.find((i) => i.recordClass === "audit_event");
+  const notificationClass = listBody.items.find((i) => i.recordClass === "user_notification");
+  assert.ok(auditClass);
+  assert.equal(auditClass.immutable, true);
+  assert.equal(auditClass.retentionDays, null);
+  assert.ok(notificationClass);
+  assert.equal(notificationClass.immutable, false);
+  assert.equal(notificationClass.retentionDays, 730);
+
+  // Seed two notifications older than the 730-day window so they are eligible.
+  // user_notification requires a request and a request_event (both NOT NULL).
+  for (const index of [0, 1]) {
+    const requestId = await seedRequest({ requester: recipient, status: "denied" });
+    const eventId = randomUUID();
+    await pool.query(
+      `INSERT INTO request_event
+        (id, request_id, actor_user_id, event_type, occurred_at, detail)
+       VALUES ($1,$2,$3,'review_denied',now() - interval '800 days','Historical denial event.')`,
+      [eventId, requestId, admin.id],
+    );
+    await pool.query(
+      `INSERT INTO user_notification
+        (id, recipient_user_id, request_id, request_event_id, notification_type, title, body, created_at)
+       VALUES ($1,$2,$3,$4,'request_denied','Old notice','Historical notice',
+         now() - interval '800 days' - ($5 || ' minutes')::interval)`,
+      [randomUUID(), recipient.id, requestId, eventId, String(index)],
+    );
+  }
+  const notificationsBefore = await pool.query<{ count: number }>(
+    "SELECT count(*)::int AS count FROM user_notification",
+  );
+
+  // Non-admin preview is rejected.
+  const forbiddenPreview = await handlers.handleRetentionPreview(
+    jsonRequest("http://localhost:3000/api/admin/retention", nonAdminCookie, {
+      recordClass: "user_notification",
+      apply: false,
+    }),
+  );
+  assert.equal(forbiddenPreview.status, 403);
+
+  // A dry-run preview reports the eligible count and changes nothing.
+  const preview = await handlers.handleRetentionPreview(
+    jsonRequest("http://localhost:3000/api/admin/retention", adminCookie, {
+      recordClass: "user_notification",
+      apply: false,
+    }),
+  );
+  assert.equal(preview.status, 200);
+  const previewBody = (await preview.json()) as {
+    result: { eligibleCount: number; applied: boolean; immutable: boolean; message: string };
+  };
+  assert.ok(previewBody.result.eligibleCount >= 2);
+  assert.equal(previewBody.result.applied, false);
+  assert.match(previewBody.result.message, /No records were changed/);
+  const notificationsAfter = await pool.query<{ count: number }>(
+    "SELECT count(*)::int AS count FROM user_notification",
+  );
+  assert.equal(notificationsAfter.rows[0].count, notificationsBefore.rows[0].count);
+
+  // Immutable classes return a zero count and an explanatory message.
+  const immutablePreview = await service.previewRetention(
+    { recordClass: "audit_event", apply: false },
+    adminDeps,
+  );
+  assert.equal(immutablePreview.eligibleCount, 0);
+  assert.equal(immutablePreview.immutable, true);
+  assert.match(immutablePreview.message, /cannot be archived/i);
+
+  // Attempting to apply is refused server-side (immutable code -> 409).
+  const applyAttempt = await handlers.handleRetentionPreview(
+    jsonRequest("http://localhost:3000/api/admin/retention", adminCookie, {
+      recordClass: "user_notification",
+      apply: true,
+    }),
+  );
+  assert.equal(applyAttempt.status, 409);
+  const applyBody = (await applyAttempt.json()) as { error?: { code?: string } };
+  assert.equal(applyBody.error?.code, "immutable");
+  const notificationsAfterApply = await pool.query<{ count: number }>(
+    "SELECT count(*)::int AS count FROM user_notification",
+  );
+  assert.equal(notificationsAfterApply.rows[0].count, notificationsBefore.rows[0].count);
+
+  // Unknown classes are not found; the safe DTO exposes no record contents.
+  await assertGovernanceError(
+    () => service.previewRetention({ recordClass: "unknown_class", apply: false }, adminDeps),
+    "not_found",
+  );
+  const serialized = JSON.stringify(previewBody);
+  assert.equal(serialized.includes("Historical notice"), false);
+  assert.equal(serialized.includes(recipient.id), false);
 });

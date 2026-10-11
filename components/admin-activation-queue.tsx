@@ -6,9 +6,17 @@ import { activationStatusSummary } from "@/lib/activation-presentation";
 import type { AdministratorActivationItem } from "@/lib/server/activation-read-service";
 import { dateLabel } from "@/lib/model";
 import { Alert, Badge, Card, Empty, Field, PageHeading } from "./ui";
+import { useToast } from "./toast";
 
-function ActivationControls({ item }: { item: AdministratorActivationItem }) {
+function ActivationControls({
+  item,
+  onOutcome,
+}: {
+  item: AdministratorActivationItem;
+  onOutcome: (message: string) => void;
+}) {
   const router = useRouter();
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [externalReference, setExternalReference] = useState("");
@@ -53,18 +61,37 @@ function ActivationControls({ item }: { item: AdministratorActivationItem }) {
         };
         if (!response.ok)
           throw new Error(result.error?.message ?? "Activation could not be started.");
-        setMessage(
-          result.status === "activated"
-            ? "Access activation recorded."
-            : "Activation attempt recorded.",
-        );
+        const activated = result.status === "activated";
+        const outcome = activated
+          ? "Access activation recorded."
+          : "Activation attempt recorded.";
+        setMessage(outcome);
+        if (activated)
+          toast.success({
+            title: "Access activated",
+            description: "The approved access was activated and recorded.",
+          });
+        else
+          toast.info({
+            title: "Activation attempt recorded",
+            description:
+              "The activation attempt was recorded. Review its status in the queue.",
+          });
+        // Surface the outcome at the queue level before refreshing: a refresh
+        // can swap this row's controls for a terminal state and unmount this
+        // component, which would otherwise discard the in-row confirmation.
+        onOutcome(outcome);
         router.refresh();
       } catch (error) {
-        setFailure(
+        const failureText =
           error instanceof Error
             ? error.message
-            : "Activation could not be started. Try again.",
-        );
+            : "Activation could not be started. Try again.";
+        toast.error({
+          title: "Activation not completed",
+          description: failureText,
+        });
+        setFailure(failureText);
       } finally {
         setBusy(false);
       }
@@ -126,6 +153,7 @@ export function AdminActivationQueue({
 }: {
   items: AdministratorActivationItem[];
 }) {
+  const [outcome, setOutcome] = useState("");
   return (
     <>
       <PageHeading
@@ -136,6 +164,11 @@ export function AdminActivationQueue({
       <Alert title="Manual provisioning" tone="warning">
         Permora does not connect to university systems yet. Record success only after verifying access in the target system.
       </Alert>
+      {outcome && (
+        <div role="status">
+          <Alert title="Activation outcome" tone="success">{outcome}</Alert>
+        </div>
+      )}
       <Card className="staff-queue-card">
         {!items.length ? (
           <Empty
@@ -181,7 +214,7 @@ export function AdminActivationQueue({
                       </td>
                       <td>
                         {summary.canStart ? (
-                          <ActivationControls item={item} />
+                          <ActivationControls item={item} onOutcome={setOutcome} />
                         ) : (
                           <span className="small muted">No action available</span>
                         )}

@@ -1,9 +1,13 @@
 # Permora Project Progress Checklist
 
-Last updated: October 3, 2026
+Last updated: October 11, 2026
 Repository: `yashiro-nyx/Permora`  
 Production prototype: <https://permora.vercel.app>  
-Current development branch: `feature/account-management-audit-fixes`
+Current local branch: `main` (working tree). The administrator-maintenance,
+notification-preference, retention, enhanced password-change, and
+automatic-expiration work verified below is **implemented and verified locally
+but is not yet committed, pushed, or deployed**. The deployed Vercel prototype
+still reflects an earlier state. See Section 12 and 14 for the deployment gap.
 
 ## Project status summary
 
@@ -75,9 +79,10 @@ Stage 2B Milestone 5 is **complete**. Stage 2C lifecycle slices 1–7 are implem
 - [x] Fix the Better Auth `rateLimit` schema incompatibility.
 - [x] Add guarded PostgreSQL integration tests.
 - [x] Prevent integration fixtures from using a database whose name does not end in `_test`.
-- [ ] Add a password-change interface for institution-provisioned users.
-- [ ] Add secure password recovery and reset delivery.
-- [ ] Add optional or required MFA according to final university policy.
+- [x] Add a password-change interface for institution-provisioned users (`/account/password`: current-password verification, 12–128 length, must differ, confirmation, self-only, rate limiting, session revocation, audit; enhanced with show/hide, a live four-level strength indicator, and a requirements checklist).
+- [ ] Add secure password recovery and reset delivery (blocked: requires an email-delivery service, a reset-token migration, and recovery policy — not implemented; no simulated delivery or token exposure).
+- [ ] Add optional or required MFA according to final university policy (blocked: requires the two-factor plugin, a schema migration, and an enrollment/backup-code flow).
+- [ ] Add institutional SSO (blocked: requires an institutional identity-provider integration).
 - [ ] Build an administrator account-management interface to replace routine terminal provisioning.
 
 ## 5. Stage 2B Milestone 1 — Approval foundation
@@ -200,7 +205,8 @@ Status: **In progress — manual lifecycle implemented; integration and scheduli
 - [x] Create `ordinary_entitlement` only after successful provisioning confirmation.
 - [x] Record activation success/failure and lifecycle changes as immutable events.
 - [x] Notify the requester of success/failure through owner-scoped in-app notifications.
-- [ ] Configure automatic expiration scheduling; `activations:expire` exists and is dry-run by default but currently requires operator invocation.
+- [x] Implement automatic access expiration via a protected endpoint (`POST /api/maintenance/expire-activations`, bearer-secret-protected and disabled by default) that reuses the existing idempotent, concurrency-safe expiry service. The `activations:expire` CLI also remains (dry-run by default).
+- [ ] Wire the automatic-expiration endpoint to an actual schedule (e.g. a Vercel Cron job sending the bearer secret) and add monitoring. Not enabled in production as part of this change.
 - [x] Expire or revoke entitlement lifecycles safely and terminally; the revocation service is not yet exposed as UI/CLI.
 - [x] Implement renewal as a new linked request rather than extending/reactivating the old request.
 - [x] Add retryable failure and 15-minute stuck-activation reconciliation with dry-run default.
@@ -213,19 +219,20 @@ Status: **In progress — manual lifecycle implemented; integration and scheduli
 - [x] Build user-account creation and maintenance UI.
 - [x] Add user activation and deactivation controls.
 - [x] Add secure temporary-password or invitation workflows.
-- [ ] Add resource and permission policy management.
+- [x] Add resource and permission policy management (UI at `/resources` and `/permissions`: availability toggles and scope-option creation; policy-version/duration editing remains deferred).
 - [x] Add approver-responsibility management (UI at `/admin/responsibilities`: list, add, confirmed end, explicit resource-wide confirmation).
 - [x] Add safe reassignment for unassigned requests (pending_routing only, at `/admin/unassigned`).
-- [ ] Add approver delegation and absence handling (service and integration tests exist; no admin UI yet).
-- [ ] Add institutional identifier maintenance (service and integration tests exist; no admin UI yet).
-- [ ] Add analytics and operational reports (service/API exists; no reports UI or matching integration test found).
-- [ ] Add notification preferences when external delivery is introduced (service/handler exists; no preferences route, UI, or matching integration test found).
-- [ ] Define retention and archival policies (provisional dry-run service/API exists; destructive archival is disabled; no admin UI or matching integration test found).
+- [x] Add approver delegation and absence handling (UI at `/admin/delegations`: list/create/cancel; server rejects self/circular/overlapping).
+- [x] Add institutional identifier maintenance (UI at `/admin/identifiers`: account search, per-account list, add/update; no delete).
+- [x] Add analytics and operational reports (read-only dashboard at `/reports` from the sanitized analytics service; integration test added).
+- [x] Add per-account notification preferences (UI at `/account/notifications`: in-app editable; external delivery unavailable and rejected server-side). External delivery itself remains deferred.
+- [x] Add retention management UI (list + non-destructive dry-run preview at `/admin/retention`). Destructive archival, retention-period editing, and legal-hold remain deferred pending institutional policy.
 
 ### Known issues
 
 - Administrators without an approval responsibility who open Review Requests are redirected to `/dashboard?unavailable=approver`. This is intentional; the UX could be clearer.
 - Repeating an assignment for the same request returns `409` rather than replaying the original success.
+- The previously intermittent manual-activation E2E (`workflow.spec.ts`) was traced to a client render race (the per-row success message was unmounted by `router.refresh()`); fixed by surfacing the confirmation at the activation-queue level. A residual dev-server cold-recompile warm-up effect means 100% elimination is not proven, but it is no longer an activation-logic defect.
 - Production still needs migrations `0007`, `0008`, and `0009` before this branch is released. Migrations `0008` and `0009` were applied manually to the development database.
 
 ## 12. Deployment and environments
@@ -283,18 +290,23 @@ npm run build
 git diff --check
 ```
 
-- [x] `npm test`: 63 tests passed in the last verified run; runtime version was not recorded.
-- [ ] `npm run test:integration`: re-run before release.
-- [ ] `npm run test:e2e`: the latest Node 22 result reported was 24 passed, 1 failed, 0 skipped, before the workflow repeat-fixture isolation change; re-run before release.
-- [ ] Full `npm run lint`: re-run before release (targeted ESLint passed for the latest code changes).
-- [x] `npm run typecheck` passed in the latest verified run.
-- [ ] `npm run build`: re-run before release.
-- [ ] Verify all checks under the repository-pinned Node.js 22 runtime.
-- [ ] `git diff --check`: re-run before release.
-- [ ] Recheck the full working tree and staged files before release.
-- [ ] Database migration status: production has `0001`–`0006`; `0007`–`0009` are pending. Development had `0008` and `0009` applied manually.
-- [ ] Recheck documentation against behavior after the release verification suite.
-- [ ] A teammate reviews authorization, ownership, and database-target boundaries.
+Local verification run on 2026-10-11 under the pinned Node.js 22.23.2 against the
+guarded `_test` database (`permora_test`). These results confirm **local
+implementation completeness**; they are not a statement that the changes are
+committed or deployed (see Section 12).
+
+- [x] `npm test`: **109 passed / 0 failed** (Node 22.23.2).
+- [x] `npm run test:integration`: **95 passed / 0 failed** across nine guarded PostgreSQL files (`_test` suffix confirmed).
+- [x] `npm run test:e2e`: **54 passed / 0 failed** on Chromium in a single full run (no retries), including the full requester→approval→activation→expiry workflow.
+- [x] Full `npm run lint`: passed.
+- [x] `npm run typecheck`: passed.
+- [x] `npm run build`: passed (compiled successfully).
+- [x] All checks executed under the repository-pinned Node.js 22 runtime.
+- [x] `git diff --check`: clean.
+- [ ] **Not yet done — release gating:** recheck the full working tree and *stage* the changes. All of the above is currently uncommitted (working-tree only); nothing is pushed or deployed.
+- [ ] **Database migration status:** production has `0001`–`0006`; `0007`–`0009` are **pending on production**. The development database (`neondb`) has all of `0001`–`0009` applied.
+- [ ] Recheck documentation against behavior after a release verification suite in CI.
+- [ ] A teammate reviews authorization, ownership, and database-target boundaries before merge.
 
 ## 15. Git workflow for remaining work
 

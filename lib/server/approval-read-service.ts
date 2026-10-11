@@ -1,6 +1,7 @@
 import "server-only";
 import type { QueryResultRow } from "pg";
 import type { TrustedIdentity } from "@/lib/auth-types";
+import { snapPageSize } from "@/lib/pagination";
 import { query } from "./db";
 import type {
   ApprovalListFilters,
@@ -79,7 +80,7 @@ export function parseApprovalListFilters(
     to,
     search,
     page: positiveInteger(searchParams.get("page"), 1, 10_000),
-    pageSize: positiveInteger(searchParams.get("pageSize"), 20, 100),
+    pageSize: snapPageSize(positiveInteger(searchParams.get("pageSize"), 10, 50)),
   };
 }
 

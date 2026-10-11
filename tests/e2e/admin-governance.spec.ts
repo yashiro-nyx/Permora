@@ -58,7 +58,7 @@ test("resource-wide responsibilities require confirmation; an added responsibili
   await admin.getByRole("dialog", { name: "Confirm resource-wide responsibility" })
     .getByRole("button", { name: "Confirm resource-wide scope" }).click();
   await admin.getByRole("button", { name: "Add responsibility" }).click();
-  await expect(admin.getByRole("status").filter({ hasText: "Responsibility added." })).toBeVisible();
+  await expect(admin.getByRole("status").filter({ hasText: "Update complete" }).filter({ hasText: "Responsibility added." })).toBeVisible();
 
   const row = admin.getByRole("row", { name: /Avery Administrator.*Library E-Resources.*Use restricted academic collections.*Resource-wide/ });
   await expect(row).toBeVisible();
@@ -66,7 +66,7 @@ test("resource-wide responsibilities require confirmation; an added responsibili
   const endDialog = admin.getByRole("dialog", { name: "End responsibility?" });
   await expect(endDialog).toContainText("cannot be undone");
   await endDialog.getByRole("button", { name: "End responsibility" }).click();
-  await expect(admin.getByRole("status").filter({ hasText: "Responsibility ended." })).toBeVisible();
+  await expect(admin.getByRole("status").filter({ hasText: "Update complete" }).filter({ hasText: "Responsibility ended." })).toBeVisible();
   await expect(row).toContainText("Ended");
 });
 

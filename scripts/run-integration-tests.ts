@@ -50,6 +50,7 @@ async function main() {
     "tests/configure-access.integration.test.ts",
     "tests/account-management.integration.test.ts",
     "tests/integration/admin-governance.integration.test.ts",
+    "tests/integration/scheduled-expiration.integration.test.ts",
   ]) {
     const child: ChildProcess = spawn(
       process.execPath,

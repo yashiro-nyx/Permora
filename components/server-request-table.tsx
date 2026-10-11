@@ -2,23 +2,37 @@
 import { Fragment, useState } from "react";
 import Link from "next/link";
 import type { AccessRequestDto } from "@/lib/server/request-types";
+import type { PaginationMeta } from "@/lib/pagination";
 import { dateLabel } from "@/lib/model";
-import { Badge, Button, Empty, Icon, LinkButton, Pagination } from "./ui";
+import {
+  Badge,
+  Button,
+  Empty,
+  Icon,
+  LinkButton,
+  Pagination,
+  TablePagination,
+} from "./ui";
 import { ServerTimeline } from "./server-timeline";
 
 export function ServerRequestTable({
   rows,
   compact = false,
   paginate = true,
+  serverPagination,
 }: {
   rows: AccessRequestDto[];
   compact?: boolean;
   paginate?: boolean;
+  /** When provided, rows are already server-paginated; render URL controls. */
+  serverPagination?: PaginationMeta;
 }) {
   const [page, setPage] = useState(1);
   const [expanded, setExpanded] = useState<string | null>(null);
+  // Server-paginated: rows are the current page already; never client-slice.
+  const clientPaginate = paginate && !serverPagination;
   const actualPage = Math.min(page, Math.max(1, Math.ceil(rows.length / 5)));
-  const shown = paginate
+  const shown = clientPaginate
     ? rows.slice((actualPage - 1) * 5, actualPage * 5)
     : rows;
   if (!rows.length)
@@ -212,8 +226,23 @@ export function ServerRequestTable({
           </tbody>
         </table>
       </div>
-      {paginate && (
-        <Pagination page={actualPage} total={rows.length} onChange={setPage} />
+      {serverPagination ? (
+        <TablePagination
+          page={serverPagination.page}
+          pageSize={serverPagination.pageSize}
+          total={serverPagination.total}
+          pageCount={serverPagination.pageCount}
+          itemCount={rows.length}
+          label="Request history pagination"
+        />
+      ) : (
+        clientPaginate && (
+          <Pagination
+            page={actualPage}
+            total={rows.length}
+            onChange={setPage}
+          />
+        )
       )}
     </>
   );

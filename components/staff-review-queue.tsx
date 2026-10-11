@@ -8,27 +8,18 @@ import type {
   UnassignedRequestDto,
 } from "@/lib/server/approval-read-types";
 import { reviewQueueActionLabel } from "@/lib/review-ui";
-import { Badge, Card, Empty, LinkButton, PageHeading } from "./ui";
+import {
+  Badge,
+  Card,
+  Empty,
+  LinkButton,
+  PageHeading,
+  TablePagination,
+} from "./ui";
 
 type QueueData =
   | PaginatedDto<ReviewQueueItemDto>
   | PaginatedDto<UnassignedRequestDto>;
-
-function hrefFor(
-  pathname: string,
-  filters: ApprovalListFilters,
-  page: number,
-) {
-  const params = new URLSearchParams();
-  if (filters.search) params.set("search", filters.search);
-  if (filters.status) params.set("status", filters.status);
-  if (filters.resource) params.set("resource", filters.resource);
-  if (filters.from) params.set("from", filters.from);
-  if (filters.to) params.set("to", filters.to);
-  params.set("page", String(page));
-  params.set("pageSize", String(filters.pageSize));
-  return `${pathname}?${params}`;
-}
 
 function assignmentAge(value: string) {
   const milliseconds = Math.max(0, Date.now() - Date.parse(value));
@@ -266,43 +257,16 @@ export function StaffReviewQueue({
             </table>
           </div>
         )}
-        <div className="pagination staff-pagination">
-          <span>
-            Showing <strong>{data.items.length}</strong> of{" "}
-            <strong>{data.pagination.total}</strong> results
-          </span>
-          <nav aria-label="Pagination">
-            <Link
-              className={`button button-outline ${data.pagination.page <= 1 ? "disabled-link" : ""}`}
-              aria-disabled={data.pagination.page <= 1}
-              tabIndex={data.pagination.page <= 1 ? -1 : undefined}
-              href={hrefFor(pathname, filters, Math.max(1, data.pagination.page - 1))}
-            >
-              Previous
-            </Link>
-            <span>
-              Page {data.pagination.page} of{" "}
-              {Math.max(1, data.pagination.pageCount)}
-            </span>
-            <Link
-              className={`button button-outline ${data.pagination.page >= data.pagination.pageCount ? "disabled-link" : ""}`}
-              aria-disabled={data.pagination.page >= data.pagination.pageCount}
-              tabIndex={
-                data.pagination.page >= data.pagination.pageCount ? -1 : undefined
-              }
-              href={hrefFor(
-                pathname,
-                filters,
-                Math.min(
-                  Math.max(1, data.pagination.pageCount),
-                  data.pagination.page + 1,
-                ),
-              )}
-            >
-              Next
-            </Link>
-          </nav>
-        </div>
+        {data.items.length > 0 && (
+          <TablePagination
+            page={data.pagination.page}
+            pageSize={data.pagination.pageSize}
+            total={data.pagination.total}
+            pageCount={data.pagination.pageCount}
+            itemCount={data.items.length}
+            label={`${title} pagination`}
+          />
+        )}
       </Card>
     </>
   );
