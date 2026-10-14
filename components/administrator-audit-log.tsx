@@ -86,7 +86,7 @@ export function AdministratorAuditLog({
               defaultValue={filters.to}
             />
           </div>
-          <button className="button button-primary" type="submit">
+          <button className="button button-outline" type="submit">
             Apply filters
           </button>
           <LinkButton href="/audit" variant="ghost">

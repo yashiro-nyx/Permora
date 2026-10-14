@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { EligibleApproverDto } from "@/lib/server/admin-governance-types";
 import type { UnassignedRequestDto } from "@/lib/server/approval-read-types";
+import { Button } from "./ui";
 
 type ApiBody = {
   items?: EligibleApproverDto[];
@@ -155,9 +156,9 @@ export function AdminUnassignedAssignment({
                     </option>
                   ))}
                 </select>
-                <button className="button button-primary" type="button" onClick={() => void assign()} disabled={!selectedResponsibility || submitting || refreshRequired}>
+                <Button type="button" onClick={() => void assign()} disabled={!selectedResponsibility || submitting || refreshRequired}>
                   {submitting ? "Assigning…" : "Assign request"}
-                </button>
+                </Button>
               </>
             ) : <p className="small muted">No eligible assignees are currently available.</p>
           )}

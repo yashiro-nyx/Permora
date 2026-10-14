@@ -5,7 +5,7 @@ import { useState, type FormEvent } from "react";
 import { activationStatusSummary } from "@/lib/activation-presentation";
 import type { AdministratorActivationItem } from "@/lib/server/activation-read-service";
 import { dateLabel } from "@/lib/model";
-import { Alert, Badge, Card, Empty, Field, PageHeading } from "./ui";
+import { Alert, Badge, Button, Card, Empty, Field, PageHeading } from "./ui";
 import { useToast } from "./toast";
 
 function ActivationControls({
@@ -138,9 +138,9 @@ function ActivationControls({
           </Field>
           {failure && <p className="field-error" role="alert">{failure}</p>}
           {message && <p className="small" role="status">{message}</p>}
-          <button className="button button-primary" type="submit" disabled={busy}>
+          <Button type="submit" disabled={busy}>
             {busy ? "Recording…" : "Record activation"}
-          </button>
+          </Button>
         </form>
       </details>
     );

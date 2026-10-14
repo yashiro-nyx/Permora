@@ -11,7 +11,7 @@ import {
   validateScopeOptionDraft,
 } from "@/lib/catalog-admin-ui";
 import { useToast } from "./toast";
-import { Alert, Card, Confirm, Empty, Field, PageHeading } from "./ui";
+import { Alert, Button, Card, Confirm, Empty, Field, PageHeading } from "./ui";
 
 async function errorCode(response: Response) {
   try {
@@ -233,9 +233,9 @@ export function AdminResourceCatalog({
             </Field>
           </div>
           <div className="responsibility-actions">
-            <button className="button button-primary" type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy}>
               {busy ? "Adding…" : "Add scope option"}
-            </button>
+            </Button>
           </div>
         </form>
       </Card>
@@ -279,8 +279,8 @@ export function AdminResourceCatalog({
               </p>
             )}
             <div className="responsibility-actions">
-              <button
-                className={`button ${resource.available ? "button-danger" : "button-primary"}`}
+              <Button
+                variant={resource.available ? "danger" : "primary"}
                 type="button"
                 disabled={toggleBusy || busy}
                 aria-label={`Make ${resource.name} ${resource.available ? "unavailable" : "available"}`}
@@ -294,7 +294,7 @@ export function AdminResourceCatalog({
                 }
               >
                 {resource.available ? "Make unavailable" : "Make available"}
-              </button>
+              </Button>
             </div>
             {resource.scopeFields.length > 0 && (
               <div className="table-scroll" role="region" aria-label={`${resource.name} scope options`} tabIndex={0}>

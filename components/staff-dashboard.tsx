@@ -48,7 +48,7 @@ export function StaffDashboard({
       href: "/review?status=pending_review",
     },
     {
-      label: "Approved · awaiting activation",
+      label: "Approved — awaiting activation",
       value: data?.approvedPendingActivation ?? 0,
       icon: "check",
       tone: "success",
@@ -107,7 +107,7 @@ export function StaffDashboard({
             <div>
               <div className="metric-label">{metric.label}</div>
               <div className="metric-value">
-                {String(metric.value).padStart(2, "0")}
+                {metric.value}
               </div>
             </div>
           </Link>

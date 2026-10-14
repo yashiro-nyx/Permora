@@ -49,7 +49,7 @@ export function AdminUnassignedAssignments({
             <label htmlFor="unassigned-to">Submitted until</label>
             <input id="unassigned-to" name="to" type="date" min={filters.from} defaultValue={filters.to} />
           </div>
-          <button className="button button-primary" type="submit">Apply filters</button>
+          <button className="button button-outline" type="submit">Apply filters</button>
           <LinkButton href="/admin/unassigned" variant="ghost">Clear</LinkButton>
         </form>
         <p className="sr-only" role="status">{data.pagination.total} pending-routing requests</p>

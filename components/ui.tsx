@@ -94,15 +94,15 @@ export function Badge({
     status === "pending_routing" ||
     status === "pending_review"
       ? "warning"
-      : status === "active" ||
-          status === "approved" ||
-          status === "approved_pending_activation"
+      : status === "active" || status === "approved"
         ? "success"
-        : status === "denied" ||
-            status === "returned_for_revision" ||
-            status === "revoked"
-          ? "danger"
-          : "neutral");
+        : status === "approved_pending_activation"
+          ? "info"
+          : status === "denied" ||
+              status === "returned_for_revision" ||
+              status === "revoked"
+            ? "danger"
+            : "neutral");
   return (
     <span className={`badge tone-${color}`}>
       <span aria-hidden="true" className="status-dot" />
@@ -214,7 +214,10 @@ export function Alert({
   tone?: Tone;
 }) {
   return (
-    <div className={`alert tone-${tone}`}>
+    <div
+      className={`alert tone-${tone}`}
+      role={tone === "danger" ? "alert" : undefined}
+    >
       <Icon name={tone === "success" ? "check" : "help"} />
       <div>
         <strong>{title}</strong>

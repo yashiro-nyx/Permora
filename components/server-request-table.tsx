@@ -112,8 +112,11 @@ export function ServerRequestTable({
                     )}
                     {request.status === "pending_routing" && (
                       <p className="small muted">
-                        An eligible approver must be configured
+                        Awaiting approver assignment
                       </p>
+                    )}
+                    {request.status === "approved_pending_activation" && (
+                      <p className="small muted">Approved — not yet active</p>
                     )}
                   </td>
                   <td className="request-actions-cell">

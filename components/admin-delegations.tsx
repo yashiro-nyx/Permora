@@ -13,6 +13,7 @@ import {
 import { useToast } from "./toast";
 import {
   Alert,
+  Button,
   Card,
   Confirm,
   Empty,
@@ -233,9 +234,9 @@ export function AdminDelegations({
             </Field>
           </div>
           <div className="responsibility-actions">
-            <button className="button button-primary" type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy}>
               {busy ? "Adding…" : "Add delegation"}
-            </button>
+            </Button>
           </div>
         </form>
       </Card>

@@ -251,7 +251,7 @@ export function AdminReports({
           </div>
           {formError && <p className="field-error" role="alert">{formError}</p>}
           <div className="reports-filter-actions">
-            <button className="button button-primary" type="submit">Apply filters</button>
+            <button className="button button-outline" type="submit">Apply filters</button>
             <button className="button button-ghost" type="button" onClick={clearFilters}>
               All time
             </button>

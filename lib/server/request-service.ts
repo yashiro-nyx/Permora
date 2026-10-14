@@ -406,13 +406,19 @@ export async function getOwnedRequestCounts(
     denied: number;
     expired: number;
     approved: number;
+    active: number;
   }>(
     `SELECT count(*)::int AS total,
-      count(*) FILTER (WHERE status IN ('pending_routing', 'pending_review'))::int AS pending,
-      count(*) FILTER (WHERE status = 'denied')::int AS denied,
-      count(*) FILTER (WHERE status = 'expired')::int AS expired,
-      count(*) FILTER (WHERE status = 'approved_pending_activation')::int AS approved
-      FROM access_request WHERE requester_user_id = $1`,
+      count(*) FILTER (WHERE ar.status IN ('pending_routing', 'pending_review'))::int AS pending,
+      count(*) FILTER (WHERE ar.status = 'denied')::int AS denied,
+      count(*) FILTER (WHERE ar.status = 'expired')::int AS expired,
+      count(*) FILTER (WHERE ar.status = 'approved_pending_activation')::int AS approved,
+      count(*) FILTER (
+        WHERE ra.status = 'activated' AND ra.expires_at > now()
+      )::int AS active
+      FROM access_request ar
+      LEFT JOIN request_activation ra ON ra.request_id = ar.id
+      WHERE ar.requester_user_id = $1`,
     [userId],
   );
   const row = result.rows[0] ?? {
@@ -421,8 +427,9 @@ export async function getOwnedRequestCounts(
     denied: 0,
     expired: 0,
     approved: 0,
+    active: 0,
   };
-  return { ...row, active: 0 };
+  return { ...row };
 }
 
 export async function listOwnedRequestResources(userId: string) {

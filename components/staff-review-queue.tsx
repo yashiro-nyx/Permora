@@ -9,6 +9,7 @@ import type {
 } from "@/lib/server/approval-read-types";
 import { reviewQueueActionLabel } from "@/lib/review-ui";
 import {
+  Alert,
   Badge,
   Card,
   Empty,
@@ -55,24 +56,16 @@ export function StaffReviewQueue({
         description={description}
       />
       {invalidMessage && (
-        <div className="alert tone-danger" role="alert">
-          <div>
-            <strong>Filters could not be applied</strong>
-            <p>{invalidMessage}</p>
-          </div>
-        </div>
+        <Alert title="Filters could not be applied" tone="danger">
+          {invalidMessage}
+        </Alert>
       )}
       {unassigned && (
-        <div className="alert tone-warning">
-          <div>
-            <strong>Routing must succeed before review</strong>
-            <p>
-              Manual approval and responsibility bypasses are unavailable. An
-              administrator must correct the underlying responsibility or scope
-              configuration, then run the controlled routing reconciliation.
-            </p>
-          </div>
-        </div>
+        <Alert title="Routing must succeed before review" tone="warning">
+          Manual approval and responsibility bypasses are unavailable. An
+          administrator must correct the underlying responsibility or scope
+          configuration, then run the controlled routing reconciliation.
+        </Alert>
       )}
       <Card className="staff-queue-card">
         <form className="filters" method="get" action={pathname}>
@@ -144,7 +137,7 @@ export function StaffReviewQueue({
               defaultValue={filters.to}
             />
           </div>
-          <button className="button button-primary" type="submit">
+          <button className="button button-outline" type="submit">
             Apply filters
           </button>
           <LinkButton href={pathname} variant="ghost">

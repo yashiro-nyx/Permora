@@ -13,7 +13,7 @@ import {
   validateIdentifierDraft,
 } from "@/lib/identifier-admin-ui";
 import { useToast } from "./toast";
-import { Alert, Card, Confirm, Empty, Field, PageHeading } from "./ui";
+import { Alert, Button, Card, Confirm, Empty, Field, PageHeading } from "./ui";
 
 async function errorCode(response: Response) {
   try {
@@ -298,9 +298,9 @@ export function AdminIdentifiers({
                 </Field>
               </div>
               <div className="responsibility-actions">
-                <button className="button button-primary" type="submit" disabled={busy}>
+                <Button type="submit" disabled={busy}>
                   {busy ? "Saving…" : "Save identifier"}
-                </button>
+                </Button>
               </div>
             </form>
           </Card>

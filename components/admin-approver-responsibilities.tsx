@@ -9,6 +9,7 @@ import type {
 import { useToast } from "./toast";
 import {
   Alert,
+  Button,
   Card,
   Confirm,
   Empty,
@@ -275,9 +276,9 @@ export function AdminApproverResponsibilities({
             )}
           </fieldset>
           <div className="responsibility-actions">
-            <button className="button button-primary" type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy}>
               {busy ? "Adding…" : "Add responsibility"}
-            </button>
+            </Button>
           </div>
         </form>
       </Card>
