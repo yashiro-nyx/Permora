@@ -1024,6 +1024,18 @@ test("approver deactivation reroutes reviews or preserves them as pending_routin
     replacement.id,
     administrator.id,
   );
+  // Expire any other active library responsibilities seeded by earlier tests so
+  // the routing algorithm can only route to `replacement`, not to leftover
+  // approvers from other tests that happen to have fewer open assignments.
+  await pool.query(
+    `UPDATE approver_responsibility
+        SET valid_until = now() - interval '1 second'
+      WHERE resource_id = 'r-library'
+        AND permission_id = 'library:subscribed-materials'
+        AND approver_user_id NOT IN ($1, $2)
+        AND (valid_until IS NULL OR valid_until > now())`,
+    [departing.id, replacement.id],
+  );
   const routedRequest = await seedPendingReview(
     requester.id,
     departing.id,
