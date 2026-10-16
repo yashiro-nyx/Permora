@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { TrustedIdentity } from "@/lib/auth-types";
 import type { AccessRequestDto } from "@/lib/server/request-types";
 import { dateLabel, initials, roleLabels } from "@/lib/model";
+import { activationStatusSummary } from "@/lib/activation-presentation";
 import { Alert, Badge, Card, Icon, LinkButton, PageHeading } from "./ui";
 import { ServerTimeline } from "./server-timeline";
 
@@ -15,6 +16,11 @@ export function ServerRequestDetails({
   submitted?: boolean;
 }) {
   const badgeStatus = request.status;
+  const activationSummary = activationStatusSummary(
+    request.status,
+    request.activation?.status ?? null,
+    request.activation?.retryable ?? null,
+  );
   return (
     <>
       <Link className="text-link back-link" href="/requests">
@@ -97,12 +103,38 @@ export function ServerRequestDetails({
           </Card>
         </div>
         <aside className="stack">
+          {(request.status === "approved_pending_activation" ||
+            request.activation) && (
+            <Card title="Activation status" className="activation-status-card">
+              <div className="card-body stack">
+                <Badge
+                  label={activationSummary.label}
+                  tone={activationSummary.tone}
+                />
+                <p>{activationSummary.description}</p>
+                {request.activation?.activatedAt && (
+                  <p className="small muted">
+                    Activated {dateLabel(request.activation.activatedAt)}
+                  </p>
+                )}
+                {request.activation && (
+                  <p className="small muted">
+                    Valid through {dateLabel(request.activation.expiresAt)}
+                  </p>
+                )}
+                <p className="small muted">
+                  Approval state: {request.status.replaceAll("_", " ")}
+                </p>
+              </div>
+            </Card>
+          )}
           <Card className="tip-card">
             <div className="card-body">
-              <h2>Approval does not activate access</h2>
+              <h2>Approval and activation are separate</h2>
               <p>
-                This request remains separate from downstream activation. An
-                approval alone does not create an active entitlement.
+                The approval status records the decision. The lifecycle status
+                above reflects whether access is activating, active, failed,
+                expired, or revoked.
               </p>
             </div>
           </Card>

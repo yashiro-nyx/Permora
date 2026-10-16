@@ -1,7 +1,9 @@
 export type NotificationType =
   | "request_approved_pending_activation"
   | "request_denied"
-  | "request_returned_for_revision";
+  | "request_returned_for_revision"
+  | "activation_succeeded"
+  | "activation_failed";
 
 export interface RequesterNotificationDto {
   notificationId: string;

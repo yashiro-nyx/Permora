@@ -1,6 +1,6 @@
 # Permora Stage 2B plan: approval workflow
 
-Updated 2026-09-28. Milestones 1–5 are implemented. This document records the implemented approval design, evidence, deferred boundaries, and next milestone; it is not a claim that downstream access is active.
+Updated 2026-09-29. Stage 2B Milestones 1–5 and the Stage 2C activation foundation/lifecycle/UI slices are implemented. This document records approval and activation evidence while preserving the boundary that a manual attestation is not a university-system integration.
 
 ## 1. Current administrator and approver implementation audit
 
@@ -15,8 +15,10 @@ Updated 2026-09-28. Milestones 1–5 are implemented. This document records the 
 | Requester decision visibility | **Completed** | Owner-scoped request list/detail/count/timeline expose persisted results and requested validity. |
 | Requester notifications | **Completed, in-app only** | `/notifications` and its APIs support owner-scoped All/Unread reads and read-state mutations. No external delivery exists. |
 | Administrator audit history | **Completed, read-only** | `/audit` and `GET /api/admin/audit-events` provide sanitized filters/pagination; update/delete/export are unavailable. |
+| Activation lifecycle | **Completed, manual adapter** | `/admin/activations`, `POST /api/admin/activations/[id]/activate`, transactional eligibility revalidation, separate activation state, entitlement/event/notification outcome, dry-run reconciliation and expiry scripts. No external university adapter or automatic scheduler is configured. |
+| Requester activation status | **Completed** | Owner-scoped request detail joins activation lifecycle state; activation success/failure is shown in the timeline and in-app notification center. Approval status remains unchanged. |
 | User/resource/policy administration | **Planned** | `/users` and `/resources` are guarded deferred pages. Current maintenance uses controlled CLI/migrations. |
-| Activation and entitlement operations | **Planned** | `/permissions` is deferred. Approval creates no entitlement, provisioning job, or active access. |
+| Entitlement administration | **Planned** | `/permissions` remains deferred. Activation is handled separately through `/admin/activations`; approval alone creates no entitlement or active access. |
 | Reports/analytics | **Planned** | `/reports` is a guarded deferred page. |
 | Revision resubmission | **Planned** | Return is persisted as a terminal decision, but a linked revise-and-resubmit UI is not implemented. |
 
@@ -34,6 +36,8 @@ Historical Figma frames `7:5`, `7:447`, `3:1257`, `3:2061`, and `7:1998` supplie
 | `POST /api/review/requests/[id]/decision` | Persisted assignee with current full coverage | Transactional approve, deny, or return. |
 | `/admin/unassigned` | Active administrator | Read-only routing failures. |
 | `GET /api/admin/unassigned-requests` | Active administrator | Private/no-store unassigned DTOs. |
+| `/admin/activations` | Active administrator | Approved request lifecycle queue, manual provisioning confirmation, activation status and retryable failures. |
+| `POST /api/admin/activations/[id]/activate` | Active administrator; actor cannot be requester or original approver | Same-origin manual confirmation; core validation in transaction 1, adapter outside transactions, atomic outcome in transaction 2. |
 | `/audit` | Active administrator | Sanitized immutable event history. |
 | `GET /api/admin/audit-events` | Active administrator | Private/no-store audit DTOs. |
 | `/notifications` | Active student/faculty requester | Owner-scoped in-app notification center. |
@@ -55,12 +59,19 @@ stateDiagram-v2
   PendingReview --> ApprovedPendingActivation: approve
   PendingReview --> Denied: deny with reason
   PendingReview --> ReturnedForRevision: return with reason
-  ApprovedPendingActivation --> [*]: Stage 2B end
+  ApprovedPendingActivation --> Activating: transaction 1 commits lifecycle start
+  Activating --> Activated: manual adapter confirms provisioned; transaction 2 commits
+  Activating --> Failed: adapter or revalidation failure; transaction 2 commits
+  Failed --> Activating: retryable only; new actor idempotency key
+  Activated --> Expired: expiry script after validity window
+  Activated --> Revoked: deliberate administrator service operation
+  Expired --> [*]
+  Revoked --> [*]
   Denied --> [*]: end
   ReturnedForRevision --> [*]: reviewed version remains immutable
 ```
 
-Canonical stored states are `pending_routing`, `pending_review`, `approved_pending_activation`, `denied`, `returned_for_revision`, `cancelled`, and `expired`. The current application does not transition an approved request to active or expired. `expired` is retained for historical/renewal compatibility until activation lifecycle policy is implemented.
+`access_request.status` remains `approved_pending_activation` after activation starts, succeeds, fails, expires, or is revoked: it records the immutable approval decision. The separate `request_activation.status` is authoritative for lifecycle state (`activating`, `activated`, `failed`, `expired`, or `revoked`). Requester/admin status views join the activation record rather than rewriting the approval status. Legacy request status `expired` remains valid for historical/renewal-compatible records.
 
 A returned request is not reopened. Future revision work must create a new `revision_of` request and repeat current validation/routing. Renewals similarly create a new `renewal_of` request and never reactivate an old record.
 
@@ -76,6 +87,7 @@ A returned request is not reopened. Future revision work must create a new `revi
 8. Approval revalidates requester activity/role/assignments, resource/permission/policy, dates, scopes, ordinary entitlements, and overlapping approved requests.
 9. Unauthorized and nonexistent detail IDs use equivalent responses where revealing existence would permit enumeration.
 10. Notification reads and mutations are recipient scoped. Audit reads are administrator-only and return sanitized summaries.
+11. Activation requires a server-derived active administrator checked inside transaction 1. Neither the requester nor the original approver may activate, even if the original approver also has an administrator role.
 
 ## 5. Approver routing rules
 
@@ -97,8 +109,9 @@ Delegation, reassignment, escalation, pooled review, unanimous review, and multi
 - `0004_stage_2b_approval_foundation.sql`: status/version/revision fields, responsibility-scope junction, one active review assignment, decision table, request events, immutable triggers, and review indexes.
 - `0005_enforce_approval_decision_reason.sql`: consistent denial/return reason constraints.
 - `0006_stage_2b_decision_operations.sql`: UUID idempotency keys and recipient-scoped `user_notification` records/indexes.
+- `0007_stage_2c_activation_foundation.sql`: separate request activation lifecycle and immutable activation events; extends request-event/notification outcome types. It was applied first to guarded `_test`; earlier migrations remain unchanged.
 
-The migration sequence is append-only. No migration was needed for Milestones 2, 4, or 5. Approval never inserts an `ordinary_entitlement` or activation event.
+The migration sequence is append-only. Approval still creates no entitlement; only successful activation writes an `ordinary_entitlement`.
 
 ## 7. Transaction and concurrency strategy
 
@@ -116,6 +129,8 @@ Decision processing:
 
 A stale or competing decision receives a conflict response and cannot duplicate state, events, or notifications. Database connection retries are bounded to recognized transient acquisition failures; write transactions are never replayed automatically.
 
+Activation is split across two database transactions with the adapter call between them. Transaction 1 verifies the active administrator/separation-of-duties rule, approved state, current requester role/assignment, resource/permission/scope and policy version, dates, entitlement/approved-request conflicts, then commits `activating` plus actor-scoped idempotency key. The adapter runs outside the transaction. Transaction 2 records success (entitlement, immutable activation/request/audit events, requester notification, activated state) or failure (immutable events, notification, failed state) atomically. Replays of the same actor/key return the stored attempt outcome. A failure is retryable only when its immutable event says so; retry uses a fresh per-actor key.
+
 ## 8. Audit-event requirements
 
 Implemented decision transactions record actor, requester subject, request, event type, prior/new state, policy/assignment/responsibility evidence, and minimal metadata in the same transaction. Request decisions, request events, and audit events are protected by database immutability triggers.
@@ -130,13 +145,17 @@ Still unresolved: retention and deletion authority, legal hold, redaction, expor
 | --- | --- |
 | `pending_routing` | Pending configuration. Preserved but not reviewable until a fully eligible approver is assigned. |
 | `pending_review` | Pending review. Timeline shows persisted submission and assignment events. |
-| `approved_pending_activation` | Approved — awaiting activation. Shows stored requested validity and approval history while explicitly stating access is not active. |
+| `approved_pending_activation` with no activation row | Approved — awaiting activation. Approval state remains stored here; no active access is implied. |
+| activation `activating` | Activation in progress. The request approval status remains `approved_pending_activation`. |
+| activation `activated` | Active. Requester detail shows lifecycle status and validity; success appears in the timeline and owner-scoped in-app notification. |
+| activation `failed` | Activation failed. Retry is offered only if the stored failure is retryable; the requester receives an in-app failure notification. |
+| activation `expired` / `revoked` | Terminal lifecycle result; old approval state remains unchanged. Renewal creates a new linked request, not an extension in place. |
 | `denied` | Denied. Shows the persisted public reason and timestamp. |
 | `returned_for_revision` | Revision requested. Shows the reason; linked resubmission remains planned. |
 | `cancelled` | Read-only terminal history. Cancellation operation is not implemented. |
 | `expired` | Historical/renewal-compatible state. Current Stage 2B does not fabricate expiration from approval. |
 
-Future expiration is presented as scheduled validity, never as a completed audit event. Notification records report the decision only and never claim downstream provisioning.
+Expiration is recorded only when the dry-run-first expiry script is applied after the validity end; the CLI is not automatically scheduled. Notification records distinguish approval from activation outcomes and never claim external delivery.
 
 ## 10. Test strategy and current coverage
 
@@ -147,11 +166,12 @@ Current automated coverage includes:
 - queue/detail authorization, admin boundaries, enumeration resistance, sanitized DTOs, filters, pagination, deterministic ordering, and unavailable-service responses;
 - decision origin/role/assignment/scope checks, reasons, idempotency, stale/concurrent decisions, revalidation, atomic notification/audit rollback, and no entitlement creation;
 - notification ownership/read state and administrator audit filtering/sanitization;
-- Playwright requester, staff, workflow, notification/audit, health, desktop, 768px, 390px, and 320px paths.
+- Playwright requester, staff, manual admin activation/requester status and notification, audit, health, desktop, 768px, 390px, and 320px paths.
+- combined PostgreSQL lifecycle flow: retryable failure, new-key retry, successful entitlement/event/notification, expiry, new linked renewal request, and separate revocation branch.
 
-Latest Node 22 verification passed 43 unit tests, 43 isolated PostgreSQL integration tests, and 20 Playwright tests, plus lint, typecheck, production build, and `git diff --check`. Integration/E2E data comes only from a guarded `TEST_DATABASE_URL` whose database name ends in `_test`.
+Latest Stage 2C verification on 2026-09-29 passed 53 unit tests, 60 isolated PostgreSQL integration tests, and 20 Playwright tests, plus lint, typecheck, and `git diff --check`. These latest runs used the current Node 24.21 environment; repeat them under the pinned Node 22 before release. A production build was not part of this Stage 2C verification. Integration/E2E data comes only from the guarded `_test` database.
 
-Still required before a production claim: screen-reader/browser-matrix accessibility work, load/resilience testing, backup/restore exercise, security review, monitoring/alerting, and activation tests after that domain exists.
+Still required before a production claim: screen-reader/browser-matrix accessibility work, load/resilience testing, backup/restore exercise, security review, monitoring/alerting, automatic job scheduling, and integration with real university systems.
 
 ## 11. Ordered implementation milestones
 
@@ -160,8 +180,9 @@ Still required before a production claim: screen-reader/browser-matrix accessibi
 3. **Completed — transactional decisions.**
 4. **Completed — staff review UI.**
 5. **Completed — requester notifications and administrator audit visibility.**
-6. **Planned next — activation foundation:** define approved-work queue, operator authorization, entitlement/outbox boundary, adapter contract, failure/retry/reconciliation, revocation/expiry, and requester-visible result.
-7. **Planned — administrator maintenance and governance:** user/assignment/entitlement/responsibility UI, external notifications, audit export/retention, integrations, and operational monitoring.
+6. **Completed — activation lifecycle foundation, manual adapter, revalidation/outcome transactions, retry/reconciliation, expiry/revocation boundary, administrator controls, and requester lifecycle visibility.**
+7. **Completed — combined lifecycle integration/browser coverage and [manual recovery runbook](activation-operations.md).**
+8. **Planned — administrator maintenance and institutional integrations:** user/assignment/policy UI, external notification delivery, audit governance, real provisioning adapters, scheduled job infrastructure, monitoring, and operational ownership.
 
 ## 12. Risks, assumptions, and unresolved policy decisions
 
@@ -169,7 +190,7 @@ Approved initial policies reflected in code: one stage; one fully eligible persi
 
 Unresolved decisions:
 
-- downstream provisioning owner, automatic versus manual activation, evidence, retries, revocation, expiry, and reconciliation;
+- named university provisioning owners, real adapter behavior, production evidence policy, and automatic job scheduling/monitoring;
 - whether grading/high-sensitivity resources require additional stages or separation of duties;
 - delegation, reassignment, escalation deadlines, out-of-office handling, cancellation, and approver-adjusted dates;
 - revision/resubmission behavior and any minimum denial/return reason length beyond non-empty;

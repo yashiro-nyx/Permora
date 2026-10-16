@@ -17,7 +17,9 @@ export type ProposedApproverRole =
   | "laboratory-coordinator"
   | "research-project-owner"
   | "data-steward"
-  | "it-access-administrator";
+  | "it-access-administrator"
+  | "network-operations-approver"
+  | "department-resource-owner";
 
 export interface CatalogPermission {
   id: Level;
@@ -49,7 +51,9 @@ export interface ResourceCatalogEntry {
     | "r-faculty-grading"
     | "r-library"
     | "r-lab"
-    | "r-research-workspace";
+    | "r-research-workspace"
+    | "r-network-access"
+    | "r-dept-shared";
   name: CatalogCategory;
   category: CatalogCategory;
   description: string;
@@ -423,6 +427,144 @@ export const RESOURCE_CATALOG: readonly ResourceCatalogEntry[] = [
     backendChecks: [
       "Verify membership in the selected project and any data-use approval.",
       "Enforce permissions against the selected project ID, not the whole research repository.",
+    ],
+  },
+  {
+    id: "r-network-access",
+    name: "Campus Network & Wi-Fi Access",
+    category: "Campus Network & Wi-Fi Access",
+    description:
+      "Managed campus network entitlements: eduroam accounts, remote VPN, and device registration for a named network zone.",
+    owner: "Network Operations",
+    sensitivity: "Medium",
+    icon: "key",
+    eligibleRoles: ["student", "faculty"],
+    permissions: [
+      {
+        id: "network:eduroam-account",
+        label: "Use campus eduroam network account",
+        description:
+          "Authenticate to the campus eduroam wireless network in the selected zone.",
+        eligibleRoles: ["student", "faculty"],
+      },
+      {
+        id: "network:vpn-remote-access",
+        label: "Use remote VPN network access",
+        description:
+          "Reach permitted campus network services remotely through the managed VPN.",
+        eligibleRoles: ["faculty"],
+      },
+      {
+        id: "network:device-registration",
+        label: "Register a device for network access",
+        description:
+          "Register a personal or issued device for network use in the selected zone.",
+        eligibleRoles: ["student", "faculty"],
+      },
+    ],
+    scopeFields: [
+      {
+        id: "networkZone",
+        label: "Network zone",
+        placeholder: "e.g. Engineering Building",
+        hint: "Choose the campus network zone the access applies to.",
+        required: true,
+      },
+    ],
+    approvers: [
+      {
+        role: "network-operations-approver",
+        responsibility:
+          "Confirm affiliation and the network zone, device, or remote-access need.",
+      },
+      {
+        role: "it-access-administrator",
+        responsibility: "Provision only the approved network zone and method.",
+      },
+    ],
+    validity: {
+      defaultDays: 90,
+      maxDays: 180,
+      expirationRequired: true,
+      renewable: true,
+      basis: "No longer than current enrollment or employment affiliation.",
+    },
+    ordinaryAccess:
+      "Standard campus Wi-Fi is normally provisioned through active enrollment or employment.",
+    requestableAccess:
+      "Use Permora for remote VPN, additional device registration, or a specific network zone not covered by default access.",
+    backendChecks: [
+      "Verify current affiliation and the applicable network-use policy.",
+      "Provision only the network zone and method recorded on the approved request.",
+    ],
+  },
+  {
+    id: "r-dept-shared",
+    name: "Department Shared Resources",
+    category: "Department Shared Resources",
+    description:
+      "Departmental shared drives and print services scoped to one named department.",
+    owner: "Department Administration",
+    sensitivity: "Medium",
+    icon: "folder",
+    eligibleRoles: ["student", "faculty"],
+    permissions: [
+      {
+        id: "dept:shared-drive-read",
+        label: "Read department shared drive",
+        description:
+          "Read files on the shared drive of the selected department.",
+        eligibleRoles: ["student", "faculty"],
+      },
+      {
+        id: "dept:shared-drive-contribute",
+        label: "Contribute to department shared drive",
+        description:
+          "Create and revise files on the selected department's shared drive.",
+        eligibleRoles: ["faculty"],
+      },
+      {
+        id: "dept:print-services",
+        label: "Use department print services",
+        description:
+          "Use managed print services belonging to the selected department.",
+        eligibleRoles: ["student", "faculty"],
+      },
+    ],
+    scopeFields: [
+      {
+        id: "department",
+        label: "Department",
+        placeholder: "e.g. Computer Science",
+        hint: "Choose the department whose shared resources are requested.",
+        required: true,
+      },
+    ],
+    approvers: [
+      {
+        role: "department-resource-owner",
+        responsibility:
+          "Confirm department affiliation and the minimum shared-resource permission needed.",
+      },
+      {
+        role: "it-access-administrator",
+        responsibility: "Provision the approved department scope only.",
+      },
+    ],
+    validity: {
+      defaultDays: 60,
+      maxDays: 180,
+      expirationRequired: true,
+      renewable: true,
+      basis: "No longer than current department affiliation.",
+    },
+    ordinaryAccess:
+      "Baseline department resources are normally available through current affiliation.",
+    requestableAccess:
+      "Use Permora for shared-drive contribution, print services, or access to another department's shared resources for approved work.",
+    backendChecks: [
+      "Verify department affiliation and the applicable resource policy.",
+      "Enforce permissions against the selected department only.",
     ],
   },
 ];

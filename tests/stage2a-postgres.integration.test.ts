@@ -98,7 +98,7 @@ async function seedUser(
   role: "student" | "approver",
   password: string,
 ) {
-  const { hashPassword } = await import("../lib/server/password");
+  const { hashPassword } = await import("../lib/password-hash");
   const id = randomUUID();
   const now = new Date();
   await pool.query(
@@ -259,7 +259,10 @@ test("real login rejects invalid credentials and creates a revocable database se
 test("email login is rate limited", async () => {
   const { auth } = await import("../lib/server/auth");
   const statuses: number[] = [];
-  for (let attempt = 0; attempt < 7; attempt++) {
+  // The custom rule allows max:10 per 60-second window. Send 11 attempts
+  // with a non-loopback x-forwarded-for address (not in trustedProxies) to
+  // trigger the rate limit on a single key.
+  for (let attempt = 0; attempt < 11; attempt++) {
     const response = await auth.handler(
       request("/sign-in/email", {
         method: "POST",

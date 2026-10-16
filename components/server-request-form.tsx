@@ -18,6 +18,7 @@ import {
   type SubmitRequestState,
 } from "@/app/actions/requests";
 import { dayOffset, dateLabel, roleLabels } from "@/lib/model";
+import { useToast } from "./toast";
 import {
   Alert,
   Badge,
@@ -44,11 +45,13 @@ export function ServerRequestForm({
   renewal?: AccessRequestDto | null;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const formRef = useRef<HTMLFormElement>(null);
   const [state, action, actionPending] = useActionState(
     submitRequestAction,
     initialState,
   );
+  const notifiedRef = useRef<string | null>(null);
   const [transitionPending, startTransition] = useTransition();
   const pending = actionPending || transitionPending;
   const [confirm, setConfirm] = useState(false);
@@ -86,10 +89,32 @@ export function ServerRequestForm({
 
   useEffect(() => {
     if (state.ok && state.requestId) {
+      // Fire the success toast once; it survives the client navigation because
+      // the ToastProvider lives in the portal layout above this route.
+      if (notifiedRef.current !== state.requestId) {
+        notifiedRef.current = state.requestId;
+        toast.success({
+          title: renewal ? "Renewal submitted" : "Request submitted",
+          description: state.displayId
+            ? `${state.displayId} is now awaiting review and routing.`
+            : "Your request is now awaiting review and routing.",
+        });
+      }
       router.replace(`/requests/${state.requestId}?submitted=1`);
       router.refresh();
+    } else if (!state.ok && state.message) {
+      // Surface submission failures as an error toast in addition to the inline
+      // field error already shown. Guard against re-firing on re-renders.
+      const key = `${state.field ?? "form"}:${state.message}`;
+      if (notifiedRef.current !== key) {
+        notifiedRef.current = key;
+        toast.error({
+          title: "Request not submitted",
+          description: state.message,
+        });
+      }
     }
-  }, [state, router]);
+  }, [state, router, toast, renewal]);
 
   function chooseResource(nextId: string) {
     const next = resources.find((resource) => resource.id === nextId);

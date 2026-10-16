@@ -12,20 +12,35 @@ export const requesterNavigation: readonly NavigationItem[] = [
   ["/requests", "My Requests", "requests"],
   ["/requests/new", "Request Access", "key"],
   ["/notifications", "Notifications", "bell"],
+  ["/account/notifications", "Notification Settings", "bell"],
+  ["/account/password", "Change Password", "key"],
 ];
 
 export const approverNavigation: readonly NavigationItem[] = [
   ["/dashboard", "Dashboard", "dashboard"],
   ["/review", "Review Requests", "requests"],
   ["/help", "Help & Support", "help"],
+  ["/account/notifications", "Notification Settings", "bell"],
+  ["/account/password", "Change Password", "key"],
 ];
 
 export const administratorNavigation: readonly NavigationItem[] = [
   ["/dashboard", "Dashboard", "dashboard"],
   ["/review", "Review Requests", "requests"],
+  ["/admin/activations", "Activations", "key"],
   ["/admin/unassigned", "Unassigned Requests", "expire"],
+  ["/admin/responsibilities", "Approver Responsibilities", "users"],
+  ["/admin/delegations", "Delegations & Absences", "clock"],
+  ["/admin/identifiers", "Institutional Identifiers", "database"],
+  ["/admin/retention", "Retention", "expire"],
+  ["/resources", "Resource Catalog", "resources"],
+  ["/permissions", "Permissions", "shield"],
+  ["/users", "User Management", "users"],
+  ["/reports", "Reports & Analytics", "reports"],
   ["/audit", "Audit Logs", "clock"],
   ["/help", "Help & Support", "help"],
+  ["/account/notifications", "Notification Settings", "bell"],
+  ["/account/password", "Change Password", "key"],
 ];
 
 export function primaryRole(identity: TrustedIdentity): Role {
@@ -34,9 +49,16 @@ export function primaryRole(identity: TrustedIdentity): Role {
   return identity.requesterRole ?? "student";
 }
 
-export function navigationForIdentity(identity: TrustedIdentity) {
+export function navigationForIdentity(
+  identity: TrustedIdentity,
+  canReview: boolean,
+) {
   const role = primaryRole(identity);
-  if (role === "admin") return administratorNavigation;
-  if (role === "approver") return approverNavigation;
-  return requesterNavigation;
+  const navigation =
+    role === "admin"
+      ? administratorNavigation
+      : role === "approver"
+        ? approverNavigation
+        : requesterNavigation;
+  return canReview ? navigation : navigation.filter(([href]) => href !== "/review");
 }

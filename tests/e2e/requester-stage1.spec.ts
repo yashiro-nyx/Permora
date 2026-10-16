@@ -133,6 +133,22 @@ test("student request form retains server-derived eligibility and validation", a
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
+test("notification bell renders in the header and opens an accessible inbox", async () => {
+  await page.goto("/dashboard");
+  const bell = page.getByRole("button", { name: /Notifications/ });
+  await expect(bell).toBeVisible();
+  await bell.click();
+  const popover = page.getByRole("dialog", { name: "Notifications" });
+  await expect(popover).toBeVisible();
+  // The inbox links to the full notifications page and never fabricates items.
+  await expect(
+    popover.getByRole("link", { name: /View all notifications/ }),
+  ).toBeVisible();
+  // Escape closes the popover (keyboard accessible).
+  await page.keyboard.press("Escape");
+  await expect(popover).toHaveCount(0);
+});
+
 test("requester pages and login imagery fit desktop and mobile viewports", async ({
   browser,
 }) => {

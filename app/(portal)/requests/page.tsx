@@ -1,4 +1,5 @@
 import { ServerRequestsList } from "@/components/server-requests-list";
+import { parsePageParams } from "@/lib/pagination";
 import { requireRequester } from "@/lib/server/identity";
 import {
   getOwnedRequestCounts,
@@ -18,21 +19,31 @@ export default async function Page({
     resource?: string;
     from?: string;
     to?: string;
+    page?: string;
+    pageSize?: string;
   }>;
 }) {
   const params = await searchParams;
   const identity = await requireRequester();
-  const [rows, counts, resources] = await Promise.all([
-    listOwnedRequests(identity.id, params),
+  const pageParams = parsePageParams(
+    new URLSearchParams(
+      Object.entries(params).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      ),
+    ),
+  );
+  const [list, counts, resources] = await Promise.all([
+    listOwnedRequests(identity.id, { ...params, ...pageParams }),
     getOwnedRequestCounts(identity.id),
     listOwnedRequestResources(identity.id),
   ]);
   return (
     <ServerRequestsList
-      rows={rows}
+      rows={list.items}
       counts={counts}
       filters={params}
       resources={resources}
+      pagination={list.pagination}
     />
   );
 }

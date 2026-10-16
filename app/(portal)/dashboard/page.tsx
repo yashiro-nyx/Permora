@@ -78,13 +78,13 @@ export default async function Page() {
   }
   const [counts, recent] = await Promise.all([
     getOwnedRequestCounts(identity.id),
-    listOwnedRequests(identity.id),
+    listOwnedRequests(identity.id, { page: 1, pageSize: 10 }),
   ]);
   return (
     <ServerDashboard
       identity={identity}
       counts={counts}
-      recent={recent.slice(0, 4)}
+      recent={recent.items.slice(0, 4)}
     />
   );
 }

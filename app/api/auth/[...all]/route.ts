@@ -19,7 +19,8 @@ function unavailableAccountFlow(request: Request) {
   return (
     path.includes("/sign-up/") ||
     path.includes("/request-password-reset") ||
-    path.includes("/reset-password")
+    path.includes("/reset-password") ||
+    path.endsWith("/change-password")
   );
 }
 

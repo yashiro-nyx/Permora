@@ -32,25 +32,46 @@ export const E2E = {
     id: "e2000000-0000-4000-8000-000000000003",
     email: testEmail("administrator"),
   },
+  activationAdministrator: {
+    id: "e2000000-0000-4000-8000-000000000006",
+    email: testEmail("activation-administrator"),
+  },
+  assignmentRequester: {
+    id: "e2000000-0000-4000-8000-000000000007",
+    email: testEmail("assignment-requester"),
+  },
   requester: {
     id: "e2000000-0000-4000-8000-000000000004",
     email: testEmail("requester"),
   },
-  workflowRequester: {
-    id: "e2000000-0000-4000-8000-000000000005",
-    email: testEmail("workflow-requester"),
-  },
+  workflowRequesters: [
+    {
+      id: "e2000000-0000-4000-8000-000000000005",
+      email: testEmail("workflow-requester-1"),
+    },
+    {
+      id: "e2000000-0000-4000-8000-000000000008",
+      email: testEmail("workflow-requester-2"),
+    },
+    {
+      id: "e2000000-0000-4000-8000-000000000009",
+      email: testEmail("workflow-requester-3"),
+    },
+  ],
   requests: {
     approve: "e2000000-0000-4000-8000-000000000101",
     retry: "e2000000-0000-4000-8000-000000000102",
     stale: "e2000000-0000-4000-8000-000000000103",
     anotherApprover: "e2000000-0000-4000-8000-000000000104",
     unassigned: "e2000000-0000-4000-8000-000000000105",
+    assignment: "e2000000-0000-4000-8000-000000000108",
     notificationApproved: "e2000000-0000-4000-8000-000000000106",
     notificationDenied: "e2000000-0000-4000-8000-000000000107",
   },
   notifications: {
     approved: "e2000000-0000-4000-8000-000000000301",
     denied: "e2000000-0000-4000-8000-000000000302",
+    activationFailed: "e2000000-0000-4000-8000-000000000303",
+    activationSucceeded: "e2000000-0000-4000-8000-000000000304",
   },
 } as const;

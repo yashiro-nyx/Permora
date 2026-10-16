@@ -8,27 +8,19 @@ import type {
   UnassignedRequestDto,
 } from "@/lib/server/approval-read-types";
 import { reviewQueueActionLabel } from "@/lib/review-ui";
-import { Badge, Card, Empty, LinkButton, PageHeading } from "./ui";
+import {
+  Alert,
+  Badge,
+  Card,
+  Empty,
+  LinkButton,
+  PageHeading,
+  TablePagination,
+} from "./ui";
 
 type QueueData =
   | PaginatedDto<ReviewQueueItemDto>
   | PaginatedDto<UnassignedRequestDto>;
-
-function hrefFor(
-  pathname: string,
-  filters: ApprovalListFilters,
-  page: number,
-) {
-  const params = new URLSearchParams();
-  if (filters.search) params.set("search", filters.search);
-  if (filters.status) params.set("status", filters.status);
-  if (filters.resource) params.set("resource", filters.resource);
-  if (filters.from) params.set("from", filters.from);
-  if (filters.to) params.set("to", filters.to);
-  params.set("page", String(page));
-  params.set("pageSize", String(filters.pageSize));
-  return `${pathname}?${params}`;
-}
 
 function assignmentAge(value: string) {
   const milliseconds = Math.max(0, Date.now() - Date.parse(value));
@@ -54,7 +46,7 @@ export function StaffReviewQueue({
   const pathname = unassigned ? "/admin/unassigned" : "/review";
   const title = unassigned ? "Unassigned requests" : "Review requests";
   const description = unassigned
-    ? "Requests awaiting valid approval routing. These records cannot be decided until an eligible approver is assigned."
+    ? "Requests awaiting valid approval routing. Assignment is allowed only for currently eligible approvers; routing rules are not bypassed."
     : "Review requests assigned to you and make decisions within your configured responsibilities.";
   return (
     <>
@@ -64,24 +56,16 @@ export function StaffReviewQueue({
         description={description}
       />
       {invalidMessage && (
-        <div className="alert tone-danger" role="alert">
-          <div>
-            <strong>Filters could not be applied</strong>
-            <p>{invalidMessage}</p>
-          </div>
-        </div>
+        <Alert title="Filters could not be applied" tone="danger">
+          {invalidMessage}
+        </Alert>
       )}
       {unassigned && (
-        <div className="alert tone-warning">
-          <div>
-            <strong>Routing must succeed before review</strong>
-            <p>
-              Manual approval and responsibility bypasses are unavailable. An
-              administrator must correct the underlying responsibility or scope
-              configuration, then run the controlled routing reconciliation.
-            </p>
-          </div>
-        </div>
+        <Alert title="Routing must succeed before review" tone="warning">
+          Manual approval and responsibility bypasses are unavailable. An
+          administrator must correct the underlying responsibility or scope
+          configuration, then run the controlled routing reconciliation.
+        </Alert>
       )}
       <Card className="staff-queue-card">
         <form className="filters" method="get" action={pathname}>
@@ -153,7 +137,7 @@ export function StaffReviewQueue({
               defaultValue={filters.to}
             />
           </div>
-          <button className="button button-primary" type="submit">
+          <button className="button button-outline" type="submit">
             Apply filters
           </button>
           <LinkButton href={pathname} variant="ghost">
@@ -191,7 +175,8 @@ export function StaffReviewQueue({
                   <th scope="col">
                     {unassigned ? "Routing state" : "Assignment age"}
                   </th>
-                  {!unassigned && <th scope="col">Action</th>}
+                  {unassigned && <th scope="col">Routing reason</th>}
+                  <th scope="col">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -226,6 +211,13 @@ export function StaffReviewQueue({
                           ? assignmentAge(assigned.assignedAt)
                           : "Awaiting eligible approver"}
                       </td>
+                      {unassigned && (
+                        <td className="table-secondary">
+                          {"routingReason" in item && item.routingReason
+                            ? item.routingReason
+                            : "No fully eligible approver was available."}
+                        </td>
+                      )}
                       {assigned && (
                         <td>
                           <Link
@@ -240,6 +232,17 @@ export function StaffReviewQueue({
                           </Link>
                         </td>
                       )}
+                      {unassigned && (
+                        <td>
+                          <Link
+                            href={`/admin/unassigned/${encodeURIComponent(item.requestId)}`}
+                            className="table-link"
+                          >
+                            Assign eligible approver
+                            <span className="sr-only"> {item.displayId}</span>
+                          </Link>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -247,43 +250,16 @@ export function StaffReviewQueue({
             </table>
           </div>
         )}
-        <div className="pagination staff-pagination">
-          <span>
-            Showing <strong>{data.items.length}</strong> of{" "}
-            <strong>{data.pagination.total}</strong> results
-          </span>
-          <nav aria-label="Pagination">
-            <Link
-              className={`button button-outline ${data.pagination.page <= 1 ? "disabled-link" : ""}`}
-              aria-disabled={data.pagination.page <= 1}
-              tabIndex={data.pagination.page <= 1 ? -1 : undefined}
-              href={hrefFor(pathname, filters, Math.max(1, data.pagination.page - 1))}
-            >
-              Previous
-            </Link>
-            <span>
-              Page {data.pagination.page} of{" "}
-              {Math.max(1, data.pagination.pageCount)}
-            </span>
-            <Link
-              className={`button button-outline ${data.pagination.page >= data.pagination.pageCount ? "disabled-link" : ""}`}
-              aria-disabled={data.pagination.page >= data.pagination.pageCount}
-              tabIndex={
-                data.pagination.page >= data.pagination.pageCount ? -1 : undefined
-              }
-              href={hrefFor(
-                pathname,
-                filters,
-                Math.min(
-                  Math.max(1, data.pagination.pageCount),
-                  data.pagination.page + 1,
-                ),
-              )}
-            >
-              Next
-            </Link>
-          </nav>
-        </div>
+        {data.items.length > 0 && (
+          <TablePagination
+            page={data.pagination.page}
+            pageSize={data.pagination.pageSize}
+            total={data.pagination.total}
+            pageCount={data.pagination.pageCount}
+            itemCount={data.items.length}
+            label={`${title} pagination`}
+          />
+        )}
       </Card>
     </>
   );

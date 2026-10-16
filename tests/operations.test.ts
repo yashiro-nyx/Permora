@@ -11,7 +11,11 @@ test("notification filters parse unread state and bound pagination", () => {
   const filters = parseNotificationFilters(
     new URLSearchParams("view=unread&page=2&pageSize=999"),
   );
-  assert.deepEqual(filters, { unreadOnly: true, page: 2, pageSize: 100 });
+  // pageSize=999 clamps to max 50 then snaps → 50 (allowed).
+  assert.deepEqual(filters, { unreadOnly: true, page: 2, pageSize: 50 });
+  // Whitelisted values are honored.
+  assert.equal(parseNotificationFilters(new URLSearchParams("pageSize=25")).pageSize, 25);
+  assert.equal(parseNotificationFilters(new URLSearchParams("pageSize=50")).pageSize, 50);
   assert.throws(
     () => parseNotificationFilters(new URLSearchParams("view=someone-else")),
     OperationsQueryError,

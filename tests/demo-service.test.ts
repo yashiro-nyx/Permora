@@ -213,7 +213,7 @@ test("catalog filters requester roles and validates resource-specific scope", ()
   const state = createSeed();
   const student = state.users.find((user) => user.id === "u-student")!;
   const faculty = state.users.find((user) => user.id === "u-faculty")!;
-  assert.equal(RESOURCE_CATALOG.length, 6);
+  assert.equal(RESOURCE_CATALOG.length, 8);
   assert(
     !eligibleCatalogResources(state.resources, student).some(
       (resource) => resource.id === "r-faculty-grading",

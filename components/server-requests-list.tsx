@@ -2,6 +2,7 @@ import type {
   AccessRequestDto,
   RequestCountsDto,
 } from "@/lib/server/request-types";
+import type { PaginationMeta } from "@/lib/pagination";
 import { statusLabels } from "@/lib/model";
 import { Card, Icon, LinkButton, PageHeading } from "./ui";
 import { ServerRequestTable } from "./server-request-table";
@@ -11,11 +12,13 @@ export function ServerRequestsList({
   counts,
   filters,
   resources,
+  pagination,
 }: {
   rows: AccessRequestDto[];
   counts: RequestCountsDto;
   filters: Record<string, string | undefined>;
   resources: { id: string; name: string }[];
+  pagination: PaginationMeta;
 }) {
   return (
     <>
@@ -77,6 +80,8 @@ export function ServerRequestsList({
       </section>
       <Card className="requester-list-card">
         <form className="filters" method="get" action="/requests">
+          {/* Applying filters resets to the first page. */}
+          <input type="hidden" name="page" value="1" />
           <div className="filter-field filter-search">
             <label htmlFor="request-search">Search requests</label>
             <input
@@ -143,9 +148,9 @@ export function ServerRequestsList({
           </LinkButton>
         </form>
         <p className="sr-only" role="status">
-          {rows.length} matching requests
+          {pagination.total} matching requests
         </p>
-        <ServerRequestTable rows={rows} />
+        <ServerRequestTable rows={rows} serverPagination={pagination} />
       </Card>
     </>
   );

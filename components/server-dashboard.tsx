@@ -41,7 +41,7 @@ export function ServerDashboard({
     },
     {
       label: "Active access",
-      value: 0,
+      value: counts?.active ?? 0,
       icon: "check",
       tone: "success",
       href: "/requests",
@@ -76,7 +76,7 @@ export function ServerDashboard({
             <div>
               <div className="metric-label">{metric.label}</div>
               <div className="metric-value">
-                {String(metric.value).padStart(2, "0")}
+                {metric.value}
               </div>
             </div>
           </Link>

@@ -17,6 +17,8 @@ export function ServerTimeline({
     review_approved: "Request approved — awaiting activation",
     review_denied: "Request denied",
     review_returned_for_revision: "Revision requested",
+    activation_succeeded: "Access activated",
+    activation_failed: "Activation failed",
   };
   return (
     <section className="timeline-section">

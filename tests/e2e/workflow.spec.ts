@@ -5,6 +5,7 @@ test.describe.configure({ mode: "serial" });
 
 let requesterPage: Page;
 let adminPage: Page;
+let activationAdminPage: Page;
 
 async function signIn(target: Page, email: string) {
   await target.goto("/login");
@@ -29,16 +30,33 @@ test.beforeAll(async ({ browser }) => {
     viewport: { width: 1440, height: 1000 },
     extraHTTPHeaders: e2eClientHeaders(41),
   });
-  await signIn(requesterPage, E2E.workflowRequester.email);
+  activationAdminPage = await browser.newPage({
+    viewport: { width: 1440, height: 1000 },
+    extraHTTPHeaders: e2eClientHeaders(42),
+  });
   await signIn(adminPage, E2E.administrator.email);
+  await signIn(activationAdminPage, E2E.activationAdministrator.email);
 });
 
 test.afterAll(async () => {
   await requesterPage.close();
   await adminPage.close();
+  await activationAdminPage.close();
 });
 
-test("request submission, deterministic routing, approval, and requester status stay connected", async () => {
+test("request submission, deterministic routing, approval, and requester status stay connected", async ({ browser }, testInfo) => {
+  await requesterPage.close();
+  requesterPage = await browser.newPage({
+    viewport: { width: 1440, height: 1000 },
+    extraHTTPHeaders: e2eClientHeaders(40),
+  });
+  const workflowRequester =
+    E2E.workflowRequesters[testInfo.repeatEachIndex];
+  if (!workflowRequester)
+    throw new Error(
+      `No workflow requester fixture for repeat ${testInfo.repeatEachIndex + 1}.`,
+    );
+  await signIn(requesterPage, workflowRequester.email);
   await requesterPage.goto("/requests/new");
   await requesterPage
     .getByLabel("Select resource")
@@ -111,7 +129,7 @@ test("request submission, deterministic routing, approval, and requester status 
     requesterPage.getByText("Request approved — awaiting activation"),
   ).toBeVisible();
   await expect(
-    requesterPage.getByText(/active entitlement/i),
+    requesterPage.getByText(/lifecycle status above reflects/i),
   ).toBeVisible();
 
   await requesterPage.goto("/requests");
@@ -131,6 +149,42 @@ test("request submission, deterministic routing, approval, and requester status 
   await expect(
     requesterPage.getByRole("region", { name: "Request summary" }),
   ).toContainText("Approved requests awaiting activation");
+
+  await activationAdminPage.goto("/admin/activations");
+  const activationTable = activationAdminPage.getByRole("region", {
+    name: "Activation lifecycle table",
+  });
+  const activationRow = activationTable.getByRole("row", {
+    name: new RegExp(displayId!),
+  });
+  await expect(activationRow).toContainText("Awaiting activation");
+  await activationRow.getByText("Start activation", { exact: true }).click();
+  await activationRow
+    .getByLabel("I confirm the requested access was provisioned.")
+    .check();
+  await activationRow.getByLabel("External reference").fill("E2E-MANUAL-WORKFLOW");
+  await activationRow.getByRole("button", { name: "Record activation" }).click();
+  // The confirmation is surfaced at the queue level (the "Activation outcome"
+  // banner) so it survives the refresh that transitions this row to a terminal
+  // "Active" state. Scope to that banner specifically: the same confirmation
+  // text can also appear in the in-row status, so a page-wide text match would
+  // be ambiguous under strict mode.
+  await expect(
+    activationAdminPage
+      .getByRole("status")
+      .filter({ hasText: "Activation outcome" }),
+  ).toContainText("Access activation recorded.");
+  await expect(
+    activationAdminPage.getByRole("row", { name: new RegExp(displayId!) }),
+  ).toContainText("Active");
+
+  await requesterPage.goto(`/requests/${requestId}`);
+  await expect(requesterPage.getByText("Active", { exact: true })).toBeVisible();
+  await expect(requesterPage.getByText("approved pending activation")).toBeVisible();
+  await requesterPage.goto("/notifications");
+  await expect(
+    requesterPage.getByRole("heading", { name: "Access activated" }),
+  ).toBeVisible();
 });
 
 test("server role boundaries keep requester and administrator routes separate", async () => {
@@ -142,18 +196,25 @@ test("server role boundaries keep requester and administrator routes separate", 
   await expect(requesterPage).toHaveURL(
     /\/dashboard\?unavailable=administrator/,
   );
+  await requesterPage.goto("/admin/activations");
+  await expect(requesterPage).toHaveURL(
+    /\/dashboard\?unavailable=administrator/,
+  );
 
   await adminPage.goto("/admin/unassigned");
   await expect(
     adminPage.getByRole("heading", { name: "Unassigned requests" }),
   ).toBeVisible();
-  await expect(adminPage.getByText("E2E-UNASSIGNED")).toBeVisible();
+  await expect(
+    adminPage.getByRole("row", { name: /E2E-UNASSIGNED/ }),
+  ).toBeVisible();
   await adminPage.goto("/users");
   await expect(
     adminPage.getByRole("heading", { name: "User management" }),
   ).toBeVisible();
+  await expect(adminPage.getByLabel("Search accounts")).toBeVisible();
   await expect(
-    adminPage.getByText(/no management controls/i),
+    adminPage.getByRole("link", { name: "Create user" }),
   ).toBeVisible();
 });
 

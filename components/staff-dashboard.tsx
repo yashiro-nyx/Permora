@@ -48,7 +48,7 @@ export function StaffDashboard({
       href: "/review?status=pending_review",
     },
     {
-      label: "Approved · awaiting activation",
+      label: "Approved — awaiting activation",
       value: data?.approvedPendingActivation ?? 0,
       icon: "check",
       tone: "success",
@@ -91,6 +91,11 @@ export function StaffDashboard({
         <Alert title="No approval responsibility configured" tone="warning">
           You can inspect unassigned routing failures, but assigned review data
           remains unavailable until an active responsibility is configured.
+          <p>
+            <Link href="/admin/responsibilities">
+              Configure an approver responsibility
+            </Link>
+          </p>
         </Alert>
       )}
       <section className="metric-grid staff-metric-grid" aria-label="Review summary">
@@ -102,7 +107,7 @@ export function StaffDashboard({
             <div>
               <div className="metric-label">{metric.label}</div>
               <div className="metric-value">
-                {String(metric.value).padStart(2, "0")}
+                {metric.value}
               </div>
             </div>
           </Link>

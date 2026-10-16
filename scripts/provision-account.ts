@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { hashPassword } from "../lib/server/password";
+import { hashPassword } from "../lib/password-hash";
 import {
   extractDatabaseTargetOptions,
   resolveCliDatabase,

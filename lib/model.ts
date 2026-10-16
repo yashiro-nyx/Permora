@@ -25,7 +25,13 @@ export type Level =
   | "lab:course-software"
   | "research:view-project"
   | "research:contribute-project"
-  | "research:manage-project-files";
+  | "research:manage-project-files"
+  | "network:eduroam-account"
+  | "network:vpn-remote-access"
+  | "network:device-registration"
+  | "dept:shared-drive-read"
+  | "dept:shared-drive-contribute"
+  | "dept:print-services";
 export type Tone = "neutral" | "success" | "warning" | "danger" | "info";
 export type CatalogCategory =
   | "Learning Management System"
@@ -33,17 +39,26 @@ export type CatalogCategory =
   | "Faculty Grading System"
   | "Library E-Resources"
   | "Computer Laboratory Systems"
-  | "Research Project Workspace";
+  | "Research Project Workspace"
+  | "Campus Network & Wi-Fi Access"
+  | "Department Shared Resources";
 export type LegacyCategory =
   "Databases" | "Servers" | "Applications" | "Shared folders";
 export type Category = CatalogCategory | LegacyCategory;
 export type ScopeFieldName =
-  "courseSection" | "laboratory" | "software" | "researchProject";
+  | "courseSection"
+  | "laboratory"
+  | "software"
+  | "researchProject"
+  | "networkZone"
+  | "department";
 export interface RequestScope {
   courseSection?: string;
   laboratory?: string;
   software?: string;
   researchProject?: string;
+  networkZone?: string;
+  department?: string;
   accountUserId?: string;
 }
 export interface User {
@@ -164,6 +179,12 @@ export const levelLabels: Record<Level, string> = {
   "research:view-project": "View project files and datasets",
   "research:contribute-project": "Contribute project files and datasets",
   "research:manage-project-files": "Manage project files and membership",
+  "network:eduroam-account": "Use campus eduroam network account",
+  "network:vpn-remote-access": "Use remote VPN network access",
+  "network:device-registration": "Register a device for network access",
+  "dept:shared-drive-read": "Read department shared drive",
+  "dept:shared-drive-contribute": "Contribute to department shared drive",
+  "dept:print-services": "Use department print services",
 };
 export const statusLabels: Record<Status, string> = {
   pending: "Pending review",

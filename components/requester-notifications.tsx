@@ -3,11 +3,21 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { notificationPresentation } from "@/lib/activation-presentation";
 import type {
   NotificationFilters,
   NotificationListDto,
 } from "@/lib/server/operations-types";
-import { Alert, Badge, Button, Card, Empty, Icon, PageHeading } from "./ui";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Empty,
+  Icon,
+  PageHeading,
+  TablePagination,
+} from "./ui";
 
 function dateTimeLabel(value: string) {
   return new Intl.DateTimeFormat("en-PH", {
@@ -15,15 +25,6 @@ function dateTimeLabel(value: string) {
     timeStyle: "short",
     timeZone: "Asia/Manila",
   }).format(new Date(value));
-}
-
-function hrefFor(filters: NotificationFilters, page: number) {
-  const params = new URLSearchParams({
-    view: filters.unreadOnly ? "unread" : "all",
-    page: String(page),
-    pageSize: String(filters.pageSize),
-  });
-  return `/notifications?${params}`;
 }
 
 export function RequesterNotifications({
@@ -74,7 +75,7 @@ export function RequesterNotifications({
       <PageHeading
         eyebrow="REQUESTER › NOTIFICATIONS"
         title="Notifications"
-        description="Persisted updates about decisions on your access requests."
+        description="Persisted updates about decisions and access activation on your requests."
         action={
           <Button
             variant="outline"
@@ -131,17 +132,16 @@ export function RequesterNotifications({
           <ul className="notification-list">
             {data.items.map((item) => {
               const unread = item.readAt === null;
-              const approved =
-                item.type === "request_approved_pending_activation";
+              const presentation = notificationPresentation(item.type);
               return (
                 <li
                   key={item.notificationId}
                   className={unread ? "unread" : ""}
                 >
                   <span
-                    className={`icon-tile tone-${approved ? "success" : "warning"}`}
+                    className={`icon-tile tone-${presentation.tone}`}
                   >
-                    <Icon name={approved ? "check" : "bell"} />
+                    <Icon name={presentation.icon} />
                   </span>
                   <div className="notification-content">
                     <div className="spread">
@@ -152,7 +152,7 @@ export function RequesterNotifications({
                     </div>
                     <p>{item.message}</p>
                     <div className="notification-meta">
-                      <span>{item.type.replaceAll("_", " ")}</span>
+                      <span>{presentation.label}</span>
                       {item.request && <span>{item.request.displayId}</span>}
                     </div>
                     <div className="row wrap">
@@ -184,49 +184,16 @@ export function RequesterNotifications({
             })}
           </ul>
         )}
-        <div className="pagination staff-pagination">
-          <span>
-            Showing <strong>{data.items.length}</strong> of{" "}
-            <strong>{data.pagination.total}</strong> notifications
-          </span>
-          <nav aria-label="Notification pagination">
-            <Link
-              className={`button button-outline ${data.pagination.page <= 1 ? "disabled-link" : ""}`}
-              aria-disabled={data.pagination.page <= 1}
-              tabIndex={data.pagination.page <= 1 ? -1 : undefined}
-              href={hrefFor(
-                filters,
-                Math.max(1, data.pagination.page - 1),
-              )}
-            >
-              Previous
-            </Link>
-            <span>
-              Page {data.pagination.page} of{" "}
-              {Math.max(1, data.pagination.pageCount)}
-            </span>
-            <Link
-              className={`button button-outline ${data.pagination.page >= data.pagination.pageCount ? "disabled-link" : ""}`}
-              aria-disabled={
-                data.pagination.page >= data.pagination.pageCount
-              }
-              tabIndex={
-                data.pagination.page >= data.pagination.pageCount
-                  ? -1
-                  : undefined
-              }
-              href={hrefFor(
-                filters,
-                Math.min(
-                  Math.max(1, data.pagination.pageCount),
-                  data.pagination.page + 1,
-                ),
-              )}
-            >
-              Next
-            </Link>
-          </nav>
-        </div>
+        {data.items.length > 0 && (
+          <TablePagination
+            page={data.pagination.page}
+            pageSize={data.pagination.pageSize}
+            total={data.pagination.total}
+            pageCount={data.pagination.pageCount}
+            itemCount={data.items.length}
+            label="Notification pagination"
+          />
+        )}
       </Card>
       <Alert title="In-app records only" tone="warning">
         Permora does not send these notifications by email, SMS, or push

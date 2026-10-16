@@ -44,7 +44,9 @@ test("requester notification center filters and marks persisted records read", a
     await expect(requester.getByRole("heading", { name: "Notifications" })).toBeVisible();
     await expect(requester.getByRole("heading", { name: "Request approved — awaiting activation" })).toBeVisible();
     await expect(requester.getByRole("heading", { name: "Access request denied" })).toBeVisible();
-    await expect(requester.getByText("E2E-NOTIFY-APPROVED")).toBeVisible();
+    await expect(requester.getByRole("heading", { name: "Access activation failed" })).toBeVisible();
+    await expect(requester.getByRole("heading", { name: "Access activated" })).toBeVisible();
+    await expect(requester.getByText("E2E-NOTIFY-APPROVED").first()).toBeVisible();
     await expect(requester.getByText("In-app records only")).toBeVisible();
     const mark = requester.getByRole("button", {
       name: /Mark as read.*Access request denied/,
@@ -54,6 +56,8 @@ test("requester notification center filters and marks persisted records read", a
     await requester.getByRole("link", { name: /Unread/ }).click();
     await expect(requester.getByRole("heading", { name: "Access request denied" })).toHaveCount(0);
     await expect(requester.getByRole("heading", { name: "Request approved — awaiting activation" })).toBeVisible();
+    await expect(requester.getByRole("heading", { name: "Access activation failed" })).toBeVisible();
+    await expect(requester.getByRole("heading", { name: "Access activated" })).toBeVisible();
 });
 
 test("administrator audit log is read-only, filtered, and role protected", async () => {

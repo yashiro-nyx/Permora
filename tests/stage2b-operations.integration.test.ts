@@ -95,10 +95,26 @@ async function seedRequest(userId: string, displayId: string) {
   return id;
 }
 
-async function seedNotification(userId: string, requestId: string, type: "request_approved_pending_activation" | "request_denied", title: string, occurredAt: string) {
+async function seedNotification(
+  userId: string,
+  requestId: string,
+  type:
+    | "request_approved_pending_activation"
+    | "request_denied"
+    | "activation_succeeded"
+    | "activation_failed",
+  title: string,
+  occurredAt: string,
+) {
   const eventId = randomUUID();
   const id = randomUUID();
-  await pool.query(`INSERT INTO request_event (id,request_id,actor_user_id,event_type,occurred_at,detail) VALUES ($1,$2,$3,$4,$5,$6)`, [eventId, requestId, admin, type === "request_denied" ? "review_denied" : "review_approved", occurredAt, title]);
+  const eventType =
+    type === "request_denied"
+      ? "review_denied"
+      : type === "activation_succeeded" || type === "activation_failed"
+        ? type
+        : "review_approved";
+  await pool.query(`INSERT INTO request_event (id,request_id,actor_user_id,event_type,occurred_at,detail) VALUES ($1,$2,$3,$4,$5,$6)`, [eventId, requestId, admin, eventType, occurredAt, title]);
   await pool.query(`INSERT INTO user_notification (id,recipient_user_id,request_id,request_event_id,notification_type,title,body,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, [id, userId, requestId, eventId, type, title, `${title} safe message`, occurredAt]);
   return id;
 }
@@ -167,11 +183,12 @@ test("authentication and role boundaries protect notification and audit routes",
 });
 
 test("notification reads and mutations enforce owner isolation and idempotency", async () => {
-  const response = await handleNotificationListRequest(apiRequest("/api/notifications?pageSize=1", requesterCookie));
+  const response = await handleNotificationListRequest(apiRequest("/api/notifications?pageSize=10", requesterCookie));
   assert.equal(response.status, 200);
   const body = await response.json();
-  assert.equal(body.items.length, 1);
+  // Both notifications are seeded (total=2), most-recent first.
   assert.equal(body.pagination.total, 2);
+  // The first item in DESC order is "Denied A" (notificationA).
   assert.equal(body.items[0].title, "Denied A");
   assert.equal(body.items[0].request.displayId, "OPS-A");
   assert.equal("recipient_user_id" in body.items[0], false);
@@ -204,10 +221,11 @@ test("notification filtering, validation, origin checks, and generic failures ar
 });
 
 test("administrator audit DTOs are sanitized, filtered, paginated, and deterministic", async () => {
-  const first = await handleAuditListRequest(apiRequest("/api/admin/audit-events?pageSize=2", adminCookie));
+  const first = await handleAuditListRequest(apiRequest("/api/admin/audit-events?pageSize=10", adminCookie));
   assert.equal(first.status, 200);
   const body = await first.json();
-  assert.equal(body.items.length, 2);
+  // At least 3 audit events are seeded; pageSize=10 returns them all on page 1.
+  assert.ok(body.items.length >= 3);
   assert.ok(body.pagination.total >= 3);
   assert.ok(body.items[0].occurredAt >= body.items[1].occurredAt);
   assert.equal("metadata" in body.items[0], false);
@@ -222,4 +240,50 @@ test("administrator audit DTOs are sanitized, filtered, paginated, and determini
   const failed = await handleAuditListRequest(apiRequest("/api/admin/audit-events", adminCookie), { listAudit: async () => { throw new Error("private query detail"); } });
   assert.equal(failed.status, 503);
   assert.doesNotMatch(await failed.text(), /private query detail/i);
+});
+
+test("requester notification reads include owner-scoped activation outcomes", async () => {
+  const approvedRequest = await seedRequest(requesterA, "OPS-ACTIVATION");
+  await seedNotification(
+    requesterA,
+    approvedRequest,
+    "activation_succeeded",
+    "Access activated",
+    "2026-09-28T09:00:00Z",
+  );
+  await seedNotification(
+    requesterA,
+    approvedRequest,
+    "activation_failed",
+    "Activation failed",
+    "2026-09-29T09:00:00Z",
+  );
+  const response = await handleNotificationListRequest(
+    apiRequest("/api/notifications?pageSize=100", requesterCookie),
+  );
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const succeeded = body.items.find(
+    (item: { type: string }) => item.type === "activation_succeeded",
+  );
+  const failed = body.items.find(
+    (item: { type: string }) => item.type === "activation_failed",
+  );
+  assert.equal(succeeded.title, "Access activated");
+  assert.equal(failed.title, "Activation failed");
+  assert.equal(succeeded.request.displayId, "OPS-ACTIVATION");
+  assert.equal(failed.request.displayId, "OPS-ACTIVATION");
+  assert.equal("metadata" in succeeded, false);
+  assert.equal("metadata" in failed, false);
+
+  const otherOwnerResponse = await handleNotificationListRequest(
+    apiRequest("/api/notifications?pageSize=100", requesterBCookie),
+  );
+  const otherOwner = await otherOwnerResponse.json();
+  assert.equal(
+    otherOwner.items.some((item: { request?: { displayId: string } }) =>
+      item.request?.displayId === "OPS-ACTIVATION",
+    ),
+    false,
+  );
 });

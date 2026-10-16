@@ -2,6 +2,14 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { routePendingRequest } from "../approval-domain";
+import {
+  DEFAULT_PAGE_SIZE,
+  limitOffset,
+  PAGE_SIZE_OPTIONS,
+  paginationMeta,
+  type Paginated,
+  type PageParams,
+} from "../pagination";
 import { query, transaction } from "./db";
 import type { TrustedIdentity } from "./identity";
 import type {
@@ -111,7 +119,17 @@ export async function getRequestableResources(
           label: row.label,
           options: [],
         };
-        if (row.id && row.display_name && row.institutional_code)
+        // A requester may hold more than one active assignment pointing at the
+        // same scope option (for example a permission-specific assignment and a
+        // permission-agnostic one). The eligibility join then emits that option
+        // once per assignment, so de-duplicate by option id before building the
+        // dropdown to keep each value — and its React key — unique.
+        if (
+          row.id &&
+          row.display_name &&
+          row.institutional_code &&
+          !field.options.some((option) => option.id === row.id)
+        )
           field.options.push({
             id: row.id,
             fieldName: row.field_name,
@@ -181,7 +199,7 @@ async function hydrateRequests(
 ): Promise<AccessRequestDto[]> {
   return Promise.all(
     rows.map(async (row) => {
-      const [scopes, events] = await Promise.all([
+      const [scopes, events, activation] = await Promise.all([
         query<{
           field_name: string;
           label: string;
@@ -203,7 +221,9 @@ async function hydrateRequests(
             | "request_routing_unavailable"
             | "review_approved"
             | "review_denied"
-            | "review_returned_for_revision";
+            | "review_returned_for_revision"
+            | "activation_succeeded"
+            | "activation_failed";
           occurred_at: Date;
           actor_name: string;
           detail: string;
@@ -222,6 +242,25 @@ async function hydrateRequests(
             ORDER BY event.occurred_at, event.id`,
           [row.id],
         ),
+        query<{
+          status: "activating" | "activated" | "failed" | "expired" | "revoked";
+          started_at: Date;
+          activated_at: Date | null;
+          expires_at: Date;
+          retryable: string | null;
+        }>(
+          `SELECT activation.status, activation.started_at,
+                  activation.activated_at, activation.expires_at,
+                  (SELECT event.metadata ->> 'retryable'
+                     FROM activation_event event
+                    WHERE event.activation_id = activation.id
+                      AND event.event_type = 'activation_failed'
+                    ORDER BY event.occurred_at DESC, event.id DESC
+                    LIMIT 1) AS retryable
+             FROM request_activation activation
+            WHERE activation.request_id = $1`,
+          [row.id],
+        ),
       ]);
       return {
         id: row.id,
@@ -237,6 +276,20 @@ async function hydrateRequests(
         expiresAt: toIso(row.expires_at),
         submittedAt: toIso(row.submitted_at),
         status: row.status,
+        activation: activation.rows[0]
+          ? {
+              status: activation.rows[0].status,
+              startedAt: toIso(activation.rows[0].started_at),
+              activatedAt: activation.rows[0].activated_at
+                ? toIso(activation.rows[0].activated_at)
+                : null,
+              expiresAt: toIso(activation.rows[0].expires_at),
+              retryable:
+                activation.rows[0].retryable === null
+                  ? null
+                  : activation.rows[0].retryable === "true",
+            }
+          : null,
         renewable: row.renewable,
         renewalOf: row.renewal_of,
         scopes: scopes.rows.map((scope) => ({
@@ -274,8 +327,18 @@ export async function listOwnedRequests(
     resource?: string;
     from?: string;
     to?: string;
+    page?: number;
+    pageSize?: number;
   } = {},
-) {
+): Promise<Paginated<AccessRequestDto>> {
+  const params: PageParams = {
+    page: filters.page && filters.page >= 1 ? Math.floor(filters.page) : 1,
+    pageSize:
+      filters.pageSize &&
+      (PAGE_SIZE_OPTIONS as readonly number[]).includes(filters.pageSize)
+        ? filters.pageSize
+        : DEFAULT_PAGE_SIZE,
+  };
   const values: unknown[] = [userId];
   const where = ["ar.requester_user_id = $1"];
   const add = (condition: string, value: unknown) => {
@@ -308,11 +371,22 @@ export async function listOwnedRequests(
       "(ar.display_id ILIKE '%' || ? || '%' OR r.name ILIKE '%' || ? || '%' OR cp.label ILIKE '%' || ? || '%')",
       filters.query.trim(),
     );
-  const result = await query<RawRequest>(
-    `${baseRequestSql} WHERE ${where.join(" AND ")} ORDER BY ar.submitted_at DESC`,
+  const { limit, offset } = limitOffset(params);
+  values.push(limit, offset);
+  // Stable, deterministic ordering (submitted_at then id) so rows never shift
+  // between pages. count(*) OVER() returns the pre-pagination total.
+  const result = await query<RawRequest & { total_count: number }>(
+    `${baseRequestSql.replace(
+      "SELECT ar.id,",
+      "SELECT count(*) OVER()::int AS total_count, ar.id,",
+    )} WHERE ${where.join(" AND ")}
+      ORDER BY ar.submitted_at DESC, ar.id DESC
+      LIMIT $${values.length - 1} OFFSET $${values.length}`,
     values,
   );
-  return hydrateRequests(result.rows);
+  const items = await hydrateRequests(result.rows);
+  const total = Number(result.rows[0]?.total_count ?? 0);
+  return { items, pagination: paginationMeta(total, params) };
 }
 
 export async function getOwnedRequest(userId: string, id: string) {
@@ -332,13 +406,19 @@ export async function getOwnedRequestCounts(
     denied: number;
     expired: number;
     approved: number;
+    active: number;
   }>(
     `SELECT count(*)::int AS total,
-      count(*) FILTER (WHERE status IN ('pending_routing', 'pending_review'))::int AS pending,
-      count(*) FILTER (WHERE status = 'denied')::int AS denied,
-      count(*) FILTER (WHERE status = 'expired')::int AS expired,
-      count(*) FILTER (WHERE status = 'approved_pending_activation')::int AS approved
-      FROM access_request WHERE requester_user_id = $1`,
+      count(*) FILTER (WHERE ar.status IN ('pending_routing', 'pending_review'))::int AS pending,
+      count(*) FILTER (WHERE ar.status = 'denied')::int AS denied,
+      count(*) FILTER (WHERE ar.status = 'expired')::int AS expired,
+      count(*) FILTER (WHERE ar.status = 'approved_pending_activation')::int AS approved,
+      count(*) FILTER (
+        WHERE ra.status = 'activated' AND ra.expires_at > now()
+      )::int AS active
+      FROM access_request ar
+      LEFT JOIN request_activation ra ON ra.request_id = ar.id
+      WHERE ar.requester_user_id = $1`,
     [userId],
   );
   const row = result.rows[0] ?? {
@@ -347,8 +427,9 @@ export async function getOwnedRequestCounts(
     denied: 0,
     expired: 0,
     approved: 0,
+    active: 0,
   };
-  return { ...row, active: 0 };
+  return { ...row };
 }
 
 export async function listOwnedRequestResources(userId: string) {
@@ -491,8 +572,15 @@ async function validateAndInsert(
       permission_id: string;
       scope_fingerprint: string;
       status: string;
+      activation_status: string | null;
     }>(
-      "SELECT resource_id, permission_id, scope_fingerprint, status FROM access_request WHERE id::text = $1 AND requester_user_id = $2 FOR UPDATE",
+      `SELECT request.resource_id, request.permission_id,
+              request.scope_fingerprint, request.status,
+              activation.status AS activation_status
+         FROM access_request request
+         LEFT JOIN request_activation activation ON activation.request_id = request.id
+        WHERE request.id::text = $1 AND request.requester_user_id = $2
+        FOR UPDATE OF request`,
       [input.renewalOf, identity.id],
     );
     const old = previous.rows[0];
@@ -504,7 +592,13 @@ async function validateAndInsert(
       throw new RequestPolicyError(
         "This resource policy does not allow renewal.",
       );
-    if (old.status !== "expired")
+    if (
+      old.status !== "expired" &&
+      !(
+        old.status === "approved_pending_activation" &&
+        old.activation_status === "expired"
+      )
+    )
       throw new RequestPolicyError("Only an expired request can be renewed.");
     if (
       old.resource_id !== input.resourceId ||

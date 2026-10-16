@@ -1,5 +1,7 @@
 import type { AuditFilters, NotificationFilters } from "./server/operations-types";
 
+import { snapPageSize } from "./pagination";
+
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const EVENT_TYPE = /^[a-z0-9][a-z0-9._-]{0,99}$/;
 
@@ -33,7 +35,7 @@ export function parseNotificationFilters(searchParams: URLSearchParams) {
   return {
     unreadOnly: view === "unread",
     page: positiveInteger(searchParams.get("page"), 1, 10_000),
-    pageSize: positiveInteger(searchParams.get("pageSize"), 20, 100),
+    pageSize: snapPageSize(positiveInteger(searchParams.get("pageSize"), 10, 50)),
   } satisfies NotificationFilters;
 }
 
@@ -58,7 +60,7 @@ export function parseAuditFilters(searchParams: URLSearchParams) {
     from,
     to,
     page: positiveInteger(searchParams.get("page"), 1, 10_000),
-    pageSize: positiveInteger(searchParams.get("pageSize"), 20, 100),
+    pageSize: snapPageSize(positiveInteger(searchParams.get("pageSize"), 10, 50)),
   } satisfies AuditFilters;
 }
 

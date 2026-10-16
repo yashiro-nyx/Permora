@@ -124,6 +124,8 @@ for (const scriptName of [
   "provision-account.ts",
   "configure-access.ts",
   "reconcile-approval-routing.ts",
+  "reconcile-activations.ts",
+  "expire-activations.ts",
 ]) {
   test(`${scriptName} help succeeds without database configuration`, () => {
     const environment = { ...process.env };

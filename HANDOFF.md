@@ -8,7 +8,7 @@ Permora is an access-request and approval application for a proposed Philippine 
 
 The stack is Next.js 15 App Router, React 19, TypeScript 5, Tailwind CSS 4, Better Auth 1.7 email/password authentication, Argon2id, PostgreSQL through `pg`, and Neon. The design source is [University Access Request in Figma](https://www.figma.com/design/eP1FKbWJWPSCL3f34tM0Wt/University-Access-Request?node-id=0-1); code uses the Permora name and no invented logo.
 
-The project has completed **Stage 2B Milestones 1–5**. Real accounts, sessions, owner-scoped requests, routing, approval reads and decisions, the protected staff interface, requester in-app notifications, and administrator read-only audit history exist. Activation and most administrator maintenance operations are deferred.
+The project has completed **Stage 2B Milestones 1–5 and Stage 2C activation/lifecycle implementation slices 1–7**. Real accounts, owner-scoped requests, approval reads/decisions, requester notifications, administrator audit, manual activation, lifecycle status, retry/reconciliation, expiry/revocation boundaries, and an operator runbook exist. Administrator pages include user management at `/users`, responsibility management at `/admin/responsibilities`, eligible assignment of `pending_routing` requests at `/admin/unassigned`, resource/permission catalog administration at `/resources` and `/permissions`, delegation/absence management at `/admin/delegations`, institutional-identifier maintenance at `/admin/identifiers`, analytics/operational reports at `/reports`, and retention management (list + non-destructive dry-run preview) at `/admin/retention`. Every authenticated account can also manage its own notification preferences at `/account/notifications` (in-app only; external delivery is unavailable). Real university-system integration and automatic job scheduling remain deferred.
 
 Security goals are server-trusted identity and roles, owner isolation, least privilege, full-scope fail-closed routing, revocable sessions, CSRF/origin protection, database rate limiting, transactional immutable evidence, optimistic concurrency, idempotency, and strict separation of approval from activation.
 
@@ -21,7 +21,7 @@ One shared `/login` page verifies email/password credentials. The server loads a
 | Student | Own dashboard, eligible request form, own list/details | Other users' requests, grading, staff/admin routes, another student's portal record |
 | Faculty | Owner-scoped requester workflow and eligible faculty resources/scopes | Unassigned sections/projects and staff/admin operations unless separately trusted |
 | Approver | Own assigned queue/details and decisions within current full-scope responsibility | Other assignments, unassigned failures, self/partial-scope approval, activation |
-| Administrator | Admin dashboard and unassigned failures; decisions only with explicit responsibility | Automatic access to all reviews, responsibility bypass, activation, deferred management operations |
+| Administrator | Admin dashboard, user management, responsibility management, eligible assignment of unassigned requests, resource/permission catalog availability and scope administration, absence delegation management, institutional-identifier maintenance, read-only analytics/operational reports, activation queue/status, manual activation/retry, audit; review decisions only with explicit responsibility | Automatic access to all reviews, responsibility bypass, activation of own request or a request they originally approved, external provisioning integration, policy-version/duration editing, preferences/retention UI, report export |
 
 Navigation is presentation. Server layouts, services, and handlers enforce authorization.
 
@@ -40,11 +40,16 @@ Start
 → persisted assignee reviews the current version
 → approve | deny with reason | return for revision with reason
 → approved_pending_activation | denied | returned_for_revision
-→ requester sees the result; notification and immutable events are recorded
-→ End (current Stage 2B boundary)
+→ requester sees decision; notification and immutable events are recorded
+→ approved request enters separate activation lifecycle
+→ active administrator revalidates and commits `activating`
+→ manual adapter receives explicit confirmation outside the transaction
+→ outcome transaction records entitlement + success, or failure event/notification
+→ expiry reconciliation or deliberate revocation closes activated access
+→ End (no live university adapter or automatic job scheduler)
 ```
 
-`approved_pending_activation` is authorization to proceed. It is not active access, an entitlement, successful provisioning, or confirmed delivery. No current route activates access. Unassigned requests cannot be decided. Revision/resubmission is not yet complete.
+`access_request.status = approved_pending_activation` remains the immutable approval outcome. Activation state lives in `request_activation`; screens join both. Approval alone is not active access. The prototype manual adapter succeeds only after an active administrator explicitly confirms external provisioning and supplies a reference or evidence. Unassigned requests cannot be decided. Revision/resubmission is not yet complete.
 
 ## D. Architecture
 
@@ -54,16 +59,37 @@ Start
 - `app/api/auth/[...all]/route.ts`: Better Auth endpoint.
 - `app/api/review/requests/*`: sanitized queue/detail reads and transactional decisions.
 - `app/api/admin/unassigned-requests/route.ts`: administrator-only routing failures.
+- `app/api/admin/unassigned-requests/[id]/assign/route.ts`: administrator assignment of eligible approvers to pending-routing requests.
+- `app/api/admin/activations/[id]/activate/route.ts`: same-origin active-admin manual activation entrypoint.
+- `app/(portal)/admin/responsibilities/`: responsibility list/add/end UI with explicit confirmation for resource-wide scope.
+- `app/(portal)/admin/unassigned/`: pending-routing queue and eligible-assignee controls.
+- `app/(portal)/resources/` and `app/(portal)/permissions/`: administrator catalog UI for resource/permission availability toggles and scope-option creation, backed by the existing `/api/admin/catalog` and `/api/admin/catalog/scopes` handlers.
+- `app/(portal)/admin/delegations/`: administrator absence-delegation UI (list/create/cancel) backed by the existing `/api/admin/delegations` and `/api/admin/delegations/[id]/cancel` handlers; it grants forward substitute eligibility only and never reassigns existing assignments.
+- `app/(portal)/admin/identifiers/`: administrator institutional-identifier maintenance UI (account search, per-account list, add/update) backed by the existing `GET`/`PUT /api/admin/users/[id]/identifiers` handlers; it preserves issuer-scoped uniqueness and offers no delete operation.
+- `app/(portal)/reports/`: administrator read-only analytics dashboard rendered server-side from `getAnalyticsSummary` (also exposed at `GET /api/admin/analytics`); it shows sanitized request/activation/entitlement aggregates with date/resource/status filters and no export. The demo-only `components/reports.tsx` and `components/charts.tsx` remain unmounted and are not used by this page.
+- `app/(portal)/account/notifications/`: per-account notification-preference page (any authenticated user) backed by `GET`/`PATCH /api/notifications/preferences`; it edits the in-app channel only and marks external channels unavailable. The update service returns the committed DTO (a prior stale-read-before-commit bug was fixed).
+- `app/(portal)/admin/retention/`: administrator retention-management page backed by `GET`/`POST /api/admin/retention`; it lists provisional retention classes and runs non-destructive dry-run previews only. Destructive archival apply is refused server-side (`409`), and the UI exposes no apply/edit/delete controls.
+- `app/(portal)/account/password/` + `components/password-change-form.tsx` + `lib/password-strength.ts`: enhanced change-password UI with show/hide, a live four-level strength indicator (local documented heuristic, no third-party calls, guidance-only), and a mandatory-requirements checklist. The server contract (`POST /api/account/password`) is unchanged.
+- `app/api/maintenance/expire-activations/route.ts` + `lib/server/maintenance-handlers.ts` + `lib/server/scheduled-maintenance.ts` + `lib/scheduler-auth.ts`: a bearer-secret-protected `POST` endpoint that runs automatic access expiration by invoking the existing `expireActivatedEntitlement` service per candidate transaction. It is disabled (`503`) unless `MAINTENANCE_SCHEDULER_SECRET` is set. No production cron is configured.
+- `components/admin-activation-queue.tsx`: the manual-activation confirmation ("Access activation recorded.") is surfaced at the queue level, not inside the per-row control, so it survives the `router.refresh()` that transitions the row to a terminal state (this fixed an intermittent E2E failure).
+- `app/(portal)/users/`: account directory and account creation/profile/role management; invitations are separate from profile editing.
 - `components/`: shared UI, requester screens, staff queue/detail/decision UI.
 - `lib/server/auth.ts`: Better Auth, Argon2id, sessions, rate limits, admission.
+- `lib/password-hash.ts`: standalone Argon2 hash/verify helpers shared with server password flows; it does not import the server-only database module.
+- `lib/server/invitation-service.ts` and `lib/server/password.ts`: invitation acceptance and password/session/audit updates with transactional atomicity.
+- `lib/server/admin-governance-service.ts`: responsibility management, unassigned assignment, delegation, identifiers, analytics, notification preferences, and retention dry-run services; UI and integration coverage vary by capability.
 - `lib/server/identity*.ts`: identity and role/responsibility guards.
 - `lib/server/request-service.ts`: owner-scoped request reads/writes and policy.
 - `lib/server/approval-read-service.ts`: explicit sanitized DTOs.
 - `lib/server/approval-service.ts` and `lib/approval-domain.ts`: routing/state/decisions.
+- `lib/server/activation-service.ts`, `lib/activation-lifecycle.ts`, and `lib/activation-maintenance.ts`: separated activation transactions, lifecycle outcome/maintenance logic.
+- `lib/activation-adapter.ts`: manual adapter contract; no live university integration.
 - `lib/server/db.ts`: server-only pool and transaction wrapper.
 - `lib/resource-catalog.ts`: typed product catalog; database policy is runtime authority.
 - `scripts/`: migrations, provisioning, access configuration, reconciliation, test runner.
-- `db/migrations/`: ordered, append-only SQL migrations `0001`–`0006`.
+- `db/migrations/`: ordered, append-only SQL migrations `0001`–`0009` (`0008` account management; `0009` administrator governance).
+- `scripts/reconcile-activations.ts`, `scripts/expire-activations.ts`: dry-run-by-default lifecycle commands.
+- `docs/activation-operations.md`: manual activation, recovery, expiry, and escalation runbook.
 - `tests/`: unit, isolated PostgreSQL integration, route authorization, Playwright.
 - `docs/`: design system, access matrix, implementation audit, backend plans.
 
@@ -71,15 +97,15 @@ The app requires Node runtime APIs (`pg`, native Argon2). Do not move database/a
 
 ## E. Current implementation status
 
-**Completed:** no-public-registration email/password accounts; Argon2id; revocable HttpOnly sessions; database rate limiting; active-account admission; server roles; owner-scoped request create/list/filter/count/detail; catalog/scope policy; deterministic full-scope non-self routing; assigned review read model; protected staff UI; transactional approve/deny/return with reasons, optimistic versions, idempotency, events, and notification records; responsive role shells; guarded migrations and isolated tests.
+**Completed:** no-public-registration email/password accounts; Argon2id; revocable HttpOnly sessions; database rate limiting; active-account admission; server roles; owner-scoped request workflow; deterministic full-scope non-self routing; transactional approval; admin/requester activation status UI; server-checked active-admin activation with requester/original-approver exclusion; separate transaction 1 / adapter / transaction 2; successful `ordinary_entitlement` creation; immutable outcome events and notifications; dry-run retry reconciliation and expiry commands; terminal revocation/expiry boundaries; linked new-request renewals; guarded migrations and isolated lifecycle tests.
 
-**Partial:** in-app notification presentation/read state and read-only audit presentation are implemented, while external delivery, notification preferences, audit export/retention/redaction and external monitoring are deferred; renewal revalidation exists but revision/resubmission policy is incomplete; assignments are administrator-maintained until integrations exist.
+**Partial:** in-app notification presentation/read state and read-only audit presentation are implemented; external delivery is absent. Per-account notification-preference management now has a verified UI at `/account/notifications` (in-app toggle only; external channels are shown unavailable and the backend rejects enabling them). Retention management now has a verified administrator UI at `/admin/retention` for listing provisional classes and non-destructive dry-run previews; destructive archival remains disabled and retention-period editing is not exposed. Delegation/absence management now has an administrator UI at `/admin/delegations`, and institutional-identifier maintenance now has an administrator UI at `/admin/identifiers`. Analytics now has a verified administrator reports UI at `/reports` backed by the analytics service and a new integration test. Renewal revalidation exists but revision/resubmission policy is incomplete.
 
-**Deferred:** activation/provisioning/revocation/expiry jobs; password recovery, MFA and SSO; multi-stage approval, delegation and reassignment; external notifications, audit exports/retention, analytics and monitoring; most administrator CRUD; institutional integrations.
+**Deferred:** live university provisioning adapters; wiring the protected automatic-expiration endpoint to an actual schedule and monitoring (the endpoint and the idempotent expiry service exist; a bearer-secret-protected `POST /api/maintenance/expire-activations` performs it, but no production cron is enabled) plus automatic reconciliation scheduling; revocation UI/CLI (the guarded server service exists); password recovery, MFA and SSO (recovery needs an email-delivery service + reset-token migration + policy; MFA needs the two-factor plugin + migration + enrollment/backup-code flow; SSO needs an institutional identity provider); multi-stage approval; external notification delivery (email/SMS/push), destructive retention archival execution and retention-period editing, catalog policy-version/duration editing, and report export (resource and permission availability and scope-option administration now have an admin UI at `/resources` and `/permissions`, absence delegation management at `/admin/delegations`, institutional-identifier maintenance at `/admin/identifiers`, read-only analytics/operational reports at `/reports`, per-account notification preferences at `/account/notifications`, and retention listing/dry-run preview at `/admin/retention`); external notifications, audit exports/redaction, and monitoring; institutional integrations.
 
 **Demo/test-only:** historical `lib/demo-service.ts` and older demo components are not mounted in the real flow. Playwright recreates only a guarded `_test` database and seeds synthetic accounts. Its configuration generates a cryptographically random run namespace, password, and auth secret in memory for each invocation; optional dedicated `PERMORA_E2E_*` inputs are validated and never fall back to development/production credentials. Browser/localStorage records are never trusted or imported.
 
-**Known boundary:** this is suitable for a clearly labeled, access-controlled prototype/pilot after deliberate configuration. It is not a complete production access-control service. A bounded `GET /api/health` probe is implemented, but broader monitoring is not. Recommended next milestone: define the activation/entitlement state machine and adapter/outbox, then add administrator assignment/responsibility maintenance and operational observability.
+**Known boundary:** this is suitable only as a clearly labeled, access-controlled prototype/pilot after deliberate configuration. It is not a complete production access-control service. Manual activation, retry/expiry commands, and lifecycle status are implemented, but no university provisioning adapter, automatic job schedule, revocation UI/CLI, or broad monitoring exists. Review Requests redirects administrators without an approval responsibility to `/dashboard?unavailable=approver`; this is intentional, though the UX could be clearer. Repeating a request assignment returns `409` instead of replaying the original success.
 
 ## F. Local setup
 
@@ -162,6 +188,7 @@ Never use `NEXT_PUBLIC_` for secrets.
 | `PERMORA_E2E_PASSWORD` | Optional ephemeral CI override; otherwise generated securely for each Playwright run. Never use a development/production password. |
 | `PERMORA_E2E_AUTH_SECRET` | Optional ephemeral CI override; otherwise generated securely for each Playwright run and mapped to the test server's `AUTH_SECRET`. |
 | `PERMORA_E2E_RUN_ID` | Optional validated run namespace; otherwise randomly generated so synthetic account emails are unique per run. |
+| `MAINTENANCE_SCHEDULER_SECRET` | Optional shared bearer secret (≥16 chars) for `POST /api/maintenance/expire-activations`. When unset the endpoint is disabled (`503`) and never open. Set only where the automatic expiration job runs and send it as `Authorization: Bearer <secret>` (e.g. a Vercel Cron job). Not enabled in production as part of this change. |
 | `NODE_ENV` | Managed by Next.js/test runners/Vercel. Production mode enforces HTTPS `APP_URL`. |
 
 Commented SIS/LMS/research names in `.env.example` are future placeholders and are not currently read.
@@ -214,10 +241,16 @@ All package scripts and their intended use:
 | `npm run account:provision -- --database-target <target> <flags>` | Transactionally provision one account with hidden password input |
 | `npm run access:configure -- <command> --database-target <target> <flags>` | Administrator-controlled scope, assignment, responsibility, or entitlement record |
 | `npm run approvals:reconcile -- --database-target <target> <flags>` | Dry-run-by-default pending-routing reconciliation; `--apply` is explicit |
+| `npm run activations:reconcile -- --database-target <target> <flags>` | Dry-run-by-default 15-minute stuck activation reconciliation; `--apply` is explicit |
+| `npm run activations:expire -- --database-target <target> <flags>` | Dry-run-by-default activated entitlement expiry; `--apply` is explicit |
 
-Integration tests load `.env.local`, require only `TEST_DATABASE_URL`, delete inherited development/migration variables, validate PostgreSQL plus `_test`, recreate only the test schema, and run sequentially. Playwright has the same guard, uses port 3200, and one worker. Both are destructive to the configured test database.
+Integration tests load local configuration, require only `TEST_DATABASE_URL`, delete inherited development/migration variables, validate PostgreSQL plus `_test`, recreate only the test schema, and run sequentially. Playwright has the same guard, uses port 3200, and one worker. Both are destructive to the configured test database.
 
-Latest Node 22 verification on 2026-09-28 passed 43 unit tests, 43 isolated PostgreSQL integration tests, and 20 Playwright tests. Lint, typecheck, optimized build, and `git diff --check` also passed. The integration and browser runners derive a pooled Neon endpoint only after validating the configured test URL; the branch and `_test` database do not change.
+Latest verified full run (2026-10-11, Node 22.23.2): `npm test` 98 passed, `npm run test:integration` 89 passed across the eight guarded files, `npm run test:e2e` 47 passed on Chromium, plus lint, typecheck, build, and `git diff --check`. The `test` script previously referenced a non-existent `tests/resource-catalog.test.ts`; that stale entry was removed, and unit suites were added for the catalog, delegation, identifier, reports, and notification-preference UIs. The governance integration suite was extended with authorization/aggregation/persistence cases for each.
+
+**Browser-test connection pool:** `lib/server/db.ts` now gives the Playwright web server (`PERMORA_E2E_DATABASE=isolated-test`) a pool `max` of 4; the sequential integration runner keeps `max` 1 and production keeps 10. The former single-connection test pool self-contended (a mutation's transaction overlapping a concurrent page render timed out acquiring the one connection), producing intermittent `503`s.
+
+**Manual-activation flake — root cause found and fixed (2026-10-11):** `tests/e2e/workflow.spec.ts` intermittently failed at the manual-activation assertion ("Access activation recorded." not visible). Playwright traces showed the activate `POST` returning `200` while the status text was absent, which ruled out a backend failure. The cause was a **client render race**: the success message was local state inside the per-row `ActivationControls`, and the post-activation `router.refresh()` transitioned the row to a terminal state and unmounted that component before the message reliably painted. The fix lifts the confirmation to the persistent `AdminActivationQueue` parent (`role="status"` alert) that survives the refresh; the test now asserts the queue-level message plus the row's `Active` state. After the fix it passed 10 consecutive isolated runs and in two full-suite runs. The earlier browser-test pool `max 1 -> 4` change also reduced a contributing connection-contention timeout. **Residual caveat (honest):** the first request after a code change triggers a Next dev recompile that can be slow, so 100% elimination under a cold dev server is not proven; this is a dev-harness warm-up effect rather than an activation-logic defect. Neon connects in ~1.2s standalone. The latest Node 22 Playwright result reported was 24 passed, 1 failed, and 0 skipped, before the workflow repeat-fixture isolation change; rerun before release. Targeted ESLint and `npm run typecheck` passed after the latest workflow fixture change; full lint and production build need rerunning before release. Integration and browser runners use only the guarded `_test` database and remove development/migration URLs from child processes.
 
 `db:migrate` validates the selected target before using its migration connection, takes an advisory transaction lock, applies files lexically, and tracks `schema_migration`. Development and production require a matching runtime/migration pair; test uses only its guarded test URL. Inspect status safely with:
 
@@ -238,7 +271,7 @@ psql "$DATABASE_MIGRATION_URL" -c \
 
 ## K. GitHub publication checklist
 
-Security audit recorded on 2026-09-21: `.env.local` and `.kiro/` were ignored; no live database URL, password, private key, session token, or production secret was found in the tracked-file scan. The full-history category scan found only superseded synthetic E2E literals. History was not rewritten. Re-run the publication checks on the exact commit to be published; the current 2026-09-28 working branch is `feature/stage-2b-milestone-5` with intentional uncommitted implementation and documentation changes.
+Security audit recorded on 2026-09-21: `.env.local` and `.kiro/` were ignored; no live database URL, password, private key, session token, or production secret was found in the tracked-file scan. The full-history category scan found only superseded synthetic E2E literals. History was not rewritten. Re-run the publication checks on the exact commit to be published.
 
 - [x] Current source contains no fixed E2E username, password, or auth secret; each guarded run generates ephemeral values or accepts explicitly test-only overrides.
 - [x] Full-history filename/category audit completed without printing values. Earlier commits contain the superseded deterministic synthetic E2E credential category in `playwright.config.ts` and `tests/e2e/staff-fixture.ts`; no live-system credential was identified. History was not rewritten.
@@ -268,11 +301,11 @@ Use public visibility only after approval. Do not rewrite history. The repositor
 
 | Check | Current result |
 | --- | --- |
-| Git | Existing repository; publication must use a reviewed clean commit. The documentation audit was performed on `feature/stage-2b-milestone-5` with intentional uncommitted changes. |
+| Git | Existing repository; publication must use a reviewed clean commit. Confirm the active branch and worktree state at release time. |
 | Sensitive local files | `.env.local` and `.kiro/` are present locally and ignored. Recheck ignored/tracked status and the complete working tree immediately before publication. |
 | Tracked-secret scan | No likely live secret found; placeholder URLs exist in `.env.example`, an unreachable fallback exists in `lib/server/db.ts`, and historical synthetic test literals are categorized above. Current E2E credentials are ephemeral |
 | Node/package configuration | npm with lockfile; Node 22 pinned in `.nvmrc` and `engines`; Next 15.5.25, React 19.3, TypeScript 5.9, Tailwind 4.3, Better Auth 1.7.5 |
-| Build configuration | Standard Next.js defaults; no `next.config.*` or `vercel.json`; production build succeeds locally |
+| Build configuration | Standard Next.js defaults; no `next.config.*` or `vercel.json`; rerun the production build before release |
 | Vercel compatibility | App Router and Node runtime are compatible; native Argon2 and `pg` require Node functions. Preview origin/database isolation and serverless connection sizing need deliberate configuration |
 | Build-time variables | The build does not intentionally connect to PostgreSQL. Current fallbacks allow compilation without live credentials, but deployment environments should still define runtime variables before release validation |
 | Runtime variables | `DATABASE_URL`, `AUTH_SECRET`, and exact `APP_URL`; production/preview values must be isolated. Migration and test variables are operational, not browser/runtime configuration |
@@ -296,7 +329,7 @@ Use public visibility only after approval. Do not rewrite history. The repositor
 11. Verify `/api/health`, login errors, logout revocation, ownership, assignee isolation, admin-only unassigned access, routing, decisions, audit history, `approved_pending_activation`, rate limiting, and absence of an active entitlement after approval.
 12. Roll back application code through the Vercel dashboard or `vercel rollback <deployment-id>`/`vercel promote <previous-url>`. Migrations are forward-only: deploy a corrective migration or use authorized Neon PITR/restore, and keep application/schema versions compatible.
 
-The health route is an availability probe, not a disclosure endpoint or substitute for monitoring. Deferred activation, recovery, notification delivery, admin maintenance, and full observability block a complete production service. Do not deploy until variables and databases are deliberately configured.
+The health route is an availability probe, not a disclosure endpoint or substitute for monitoring. Deferred recovery, notification delivery, catalog-policy and governance UIs, and full observability block a complete production service. Production currently has migrations `0001`–`0006`; `0007`–`0009` remain pending there. Migrations `0008` and `0009` were applied manually to development. Apply all pending production migrations through the controlled operator procedure before releasing this branch. Do not deploy until variables and databases are deliberately configured.
 
 ## M. Operational and security rules
 
@@ -308,6 +341,10 @@ The health route is an availability probe, not a disclosure endpoint or substitu
 - Preserve the Better Auth 1.7.5 `rateLimit.id` schema.
 - Commit decision, request version/status, assignment completion, immutable events, and notification atomically.
 - Preserve optimistic versions and UUID idempotency; reject stale, duplicate, unauthorized, self, partial, and unassigned decisions.
+- Activation is separate from approval: leave `access_request.status` at `approved_pending_activation`; use `request_activation` for lifecycle state.
+- Activation must be initiated by a server-derived active administrator, never by the requester or the original approver (even if that approver is also an administrator).
+- Keep the manual adapter call outside database transactions. Never treat `activating` as proof of downstream success; inspect external state before retrying.
+- Use the dry-run-first lifecycle commands and the [activation operations runbook](docs/activation-operations.md). Do not directly mutate lifecycle/event tables to recover an attempt.
 - Redact database URLs, secrets, passwords/hashes, cookies, tokens, institutional IDs, and unnecessary personal data from logs.
 - Require an explicit database target for every database CLI. Production requires both process-level URLs plus `--confirm-production`; development still rejects mixed endpoints.
 - Define backup retention, RPO/RTO, restore authority, and periodic isolated restore tests.
@@ -323,6 +360,9 @@ The health route is an availability probe, not a disclosure endpoint or substitu
 | Migration failure | Confirm intended direct URL and schema-owner rights; inspect sanitized error and tracking table; fix with a new migration. |
 | Database endpoints do not match | Supply runtime and migration URLs for the same protocol, database, and Neon branch. Different database roles are allowed; values are never echoed. |
 | `pending_routing` | Configure a non-self full-scope responsibility; run reconciliation dry-run first, then explicitly add `--apply` after review. |
+| Activation stuck in `activating` | Follow [activation-operations.md](docs/activation-operations.md); preview `activations:reconcile`, verify the target system, and apply only after review. Never blindly repeat provisioning. |
+| Activation failed | Check whether the failure is retryable and current policy still permits access. Verify downstream state before the UI retry; definitive failures require a new eligibility review/request. |
+| Activated access is past validity | Preview `activations:expire`, review candidates, then explicitly apply. The CLI is not automatically scheduled yet. |
 | Port 3000 occupied | Pick another port and update `APP_URL` to the exact origin. |
 | Admin/approver navigation limited | Confirm active profile, trusted role, and current responsibility. Admin alone does not grant review scope. |
 | Vercel origin mismatch | Set exact HTTPS `APP_URL` for that deployment and redeploy. Ensure preview isolation. |
