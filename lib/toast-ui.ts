@@ -6,6 +6,9 @@
 
 export type ToastVariant = "success" | "error" | "warning" | "info";
 
+/** Maximum simultaneous toasts. Oldest non-sticky toasts are evicted first. */
+export const MAX_TOASTS = 3;
+
 export interface ToastInput {
   title: string;
   description?: string;
@@ -62,10 +65,15 @@ export function resolveToastDuration(
 }
 
 /**
- * Pure state transition for adding a toast with de-duplication: if an identical
- * toast (same fingerprint) is still visible, its timestamp is refreshed instead
- * of adding a duplicate. Returns the next list and the id that should be
- * (re)scheduled for dismissal.
+ * Pure state transition for adding a toast with de-duplication and a MAX_TOASTS
+ * cap. If an identical toast (same fingerprint) is still visible its timestamp
+ * is refreshed rather than adding a duplicate. When the cap would be exceeded,
+ * the oldest dismissible (non-sticky error) toast is evicted first; if no
+ * dismissible toast exists, the oldest toast of any kind is removed.
+ *
+ * Returns the next list, the id that should be (re)scheduled for dismissal,
+ * and an optional evictedId that the provider should cancel any pending timer
+ * for.
  */
 export function upsertToast(
   current: ToastRecord[],
@@ -73,7 +81,7 @@ export function upsertToast(
   input: ToastInput,
   makeId: () => string,
   now: number = Date.now(),
-): { next: ToastRecord[]; id: string } {
+): { next: ToastRecord[]; id: string; evictedId?: string } {
   const key = toastFingerprint(variant, input);
   const existing = current.find(
     (toast) => toastFingerprint(toast.variant, toast) === key,
@@ -86,9 +94,26 @@ export function upsertToast(
       ),
     };
   }
+
+  // Need to add a new toast. If at cap, evict the oldest dismissible one first.
+  let list = current;
+  let evictedId: string | undefined;
+  if (list.length >= MAX_TOASTS) {
+    // Prefer evicting auto-dismissible toasts (non-null effective duration).
+    const dismissible = list.filter(
+      (t) => resolveToastDuration(t.variant, t.durationMs) !== null,
+    );
+    const evictPool = dismissible.length > 0 ? dismissible : list;
+    // Oldest = smallest createdAt.
+    const oldest = evictPool.reduce((a, b) => (a.createdAt <= b.createdAt ? a : b));
+    evictedId = oldest.id;
+    list = list.filter((t) => t.id !== oldest.id);
+  }
+
   const id = makeId();
   return {
     id,
-    next: [...current, { ...input, id, variant, createdAt: now }],
+    evictedId,
+    next: [...list, { ...input, id, variant, createdAt: now }],
   };
 }

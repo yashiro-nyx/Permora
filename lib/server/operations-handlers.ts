@@ -5,8 +5,11 @@ import { getTrustedIdentityFromHeaders } from "./identity-data";
 import {
   listAdministratorAuditEvents,
   listRequesterNotifications,
+  listStaffNotifications,
   markAllRequesterNotificationsRead,
+  markAllStaffNotificationsRead,
   markRequesterNotificationRead,
+  markStaffNotificationRead,
   OperationsQueryError,
   parseAuditFilters,
   parseNotificationFilters,
@@ -28,6 +31,20 @@ const defaults: OperationsDependencies = {
   markNotificationRead: markRequesterNotificationRead,
   markAllNotificationsRead: markAllRequesterNotificationsRead,
   listAudit: listAdministratorAuditEvents,
+};
+
+export interface StaffNotificationDependencies {
+  getIdentity: IdentityResolver;
+  listStaffNotifications: typeof listStaffNotifications;
+  markStaffNotificationRead: typeof markStaffNotificationRead;
+  markAllStaffNotificationsRead: typeof markAllStaffNotificationsRead;
+}
+
+const staffDefaults: StaffNotificationDependencies = {
+  getIdentity: getTrustedIdentityFromHeaders,
+  listStaffNotifications,
+  markStaffNotificationRead,
+  markAllStaffNotificationsRead,
 };
 
 const responseHeaders = {
@@ -197,5 +214,93 @@ export async function handleAuditListRequest(
     return json(await deps.listAudit(filters));
   } catch (caught) {
     return mappedError(caught, "audit");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Staff notification handlers (approvers + administrators)
+// ---------------------------------------------------------------------------
+
+async function staffIdentity(request: Request, deps: StaffNotificationDependencies) {
+  const identity = await deps.getIdentity(request.headers);
+  if (!identity)
+    throw new OperationsAuthorizationError(
+      401,
+      "unauthenticated",
+      "Authentication is required.",
+    );
+  if (!identity.roles.includes("admin") && !identity.roles.includes("approver"))
+    throw new OperationsAuthorizationError(
+      403,
+      "forbidden",
+      "Staff notification access is not available for this account.",
+    );
+  return identity;
+}
+
+function staffMappedError(caught: unknown) {
+  if (caught instanceof OperationsAuthorizationError)
+    return error(caught.status, caught.code, caught.message);
+  if (caught instanceof OperationsQueryError)
+    return error(400, "invalid_query", caught.message);
+  console.error("Staff notification operation failed", {
+    error: caught instanceof Error ? caught.name : "UnknownError",
+  });
+  return error(
+    503,
+    "service_unavailable",
+    "Staff notifications are temporarily unavailable.",
+  );
+}
+
+export async function handleStaffNotificationListRequest(
+  request: Request,
+  dependencies: Partial<StaffNotificationDependencies> = {},
+) {
+  const deps = { ...staffDefaults, ...dependencies };
+  try {
+    const identity = await staffIdentity(request, deps);
+    const filters = parseNotificationFilters(new URL(request.url).searchParams);
+    return json(await deps.listStaffNotifications(identity.id, filters));
+  } catch (caught) {
+    return staffMappedError(caught);
+  }
+}
+
+export async function handleStaffNotificationReadRequest(
+  request: Request,
+  notificationId: string,
+  dependencies: Partial<StaffNotificationDependencies> = {},
+) {
+  const deps = { ...staffDefaults, ...dependencies };
+  try {
+    if (!hasTrustedOrigin(request))
+      return error(403, "forbidden", "The request origin is not allowed.");
+    const identity = await staffIdentity(request, deps);
+    if (!UUID.test(notificationId))
+      return error(400, "invalid_input", "The notification identifier is invalid.");
+    await requireJsonObject(request);
+    if (!(await deps.markStaffNotificationRead(identity.id, notificationId)))
+      return error(404, "not_found", "The notification was not found.");
+    return json({ notificationId, read: true });
+  } catch (caught) {
+    return staffMappedError(caught);
+  }
+}
+
+export async function handleStaffAllNotificationsReadRequest(
+  request: Request,
+  dependencies: Partial<StaffNotificationDependencies> = {},
+) {
+  const deps = { ...staffDefaults, ...dependencies };
+  try {
+    if (!hasTrustedOrigin(request))
+      return error(403, "forbidden", "The request origin is not allowed.");
+    const identity = await staffIdentity(request, deps);
+    await requireJsonObject(request);
+    const updated = await deps.markAllStaffNotificationsRead(identity.id);
+    return json({ read: true, updated });
+  } catch (caught) {
+    return staffMappedError(caught);
   }
 }

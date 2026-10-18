@@ -44,3 +44,10 @@ export async function requireApprover() {
     redirect("/dashboard?unavailable=approver");
   return identity;
 }
+
+export async function requireStaff() {
+  const identity = await requireIdentity();
+  if (!identity.roles.includes("admin") && !identity.roles.includes("approver"))
+    redirect("/dashboard?unavailable=staff");
+  return identity;
+}

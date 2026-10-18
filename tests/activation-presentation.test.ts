@@ -73,3 +73,31 @@ test("notification rendering metadata distinguishes activation success and failu
     label: "Activation failed",
   });
 });
+
+test("staff notification types map to correct presentation", () => {
+  const assignment = notificationPresentation("request_assigned_for_review");
+  assert.equal(assignment.tone, "info");
+  assert.equal(assignment.label, "New assignment");
+
+  const routing = notificationPresentation("routing_unavailable");
+  assert.equal(routing.tone, "warning");
+  assert.equal(routing.label, "Routing failed");
+});
+
+test("all notification types have a presentation entry", () => {
+  const allTypes = [
+    "request_approved_pending_activation",
+    "request_denied",
+    "request_returned_for_revision",
+    "activation_succeeded",
+    "activation_failed",
+    "request_assigned_for_review",
+    "routing_unavailable",
+  ] as const;
+  for (const type of allTypes) {
+    const p = notificationPresentation(type);
+    assert.ok(p.icon, `${type} must have an icon`);
+    assert.ok(p.tone, `${type} must have a tone`);
+    assert.ok(p.label, `${type} must have a label`);
+  }
+});

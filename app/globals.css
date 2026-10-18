@@ -1990,6 +1990,26 @@ textarea {
   background: var(--subtle);
   color: var(--foreground);
 }
+.toast-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  border-radius: 0 0 0 var(--radius-card);
+  background: currentColor;
+  opacity: 0.35;
+  animation: toast-countdown linear forwards;
+  animation-duration: var(--toast-duration, 5s);
+}
+.toast-success .toast-progress { color: var(--success); }
+.toast-error .toast-progress { color: var(--danger); }
+.toast-warning .toast-progress { color: var(--warning); }
+.toast-info .toast-progress { color: var(--info); }
+@keyframes toast-countdown {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+.toast { position: relative; overflow: hidden; }
 @keyframes toast-in {
   from {
     opacity: 0;
@@ -2003,6 +2023,10 @@ textarea {
 @media (prefers-reduced-motion: reduce) {
   .toast {
     animation: none;
+  }
+  .toast-progress {
+    animation: none;
+    display: none;
   }
 }
 @media (max-width: 560px) {

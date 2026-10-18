@@ -194,12 +194,13 @@ export async function routePendingRequest(
       [requestId],
     );
     if (!alreadyRecorded.rows[0]) {
+      const routingEventId = randomUUID();
       await client.query(
         `INSERT INTO request_event
           (id, request_id, actor_user_id, event_type, detail, metadata)
          VALUES ($1,$2,$3,'request_routing_unavailable',$4,$5::jsonb)`,
         [
-          randomUUID(),
+          routingEventId,
           requestId,
           actorUserId,
           "No fully eligible approver was available; the request remains unassigned.",
@@ -229,6 +230,30 @@ export async function routePendingRequest(
           }),
         ],
       );
+      // Notify all active administrators that routing failed.
+      const admins = await client.query<{ user_id: string }>(
+        `SELECT ur.user_id
+           FROM user_role ur
+           JOIN user_profile up ON up.user_id = ur.user_id AND up.active
+          WHERE ur.role = 'admin'`,
+      );
+      for (const { user_id } of admins.rows) {
+        await client.query(
+          `INSERT INTO user_notification
+            (id, recipient_user_id, request_id, request_event_id,
+             notification_type, title, body)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [
+            randomUUID(),
+            user_id,
+            requestId,
+            routingEventId,
+            "routing_unavailable",
+            "Request needs manual assignment",
+            `Request ${request.display_id} could not be routed automatically. An administrator must assign it manually.`,
+          ],
+        );
+      }
     }
     return { routed: false as const, reason: "no_eligible_approver" as const };
   }
@@ -260,12 +285,13 @@ export async function routePendingRequest(
     previousState: "pending_routing",
     newState: "pending_review",
   };
+  const routedEventId = randomUUID();
   await client.query(
     `INSERT INTO request_event
       (id, request_id, actor_user_id, event_type, detail, metadata)
      VALUES ($1,$2,$3,'request_routed',$4,$5::jsonb)`,
     [
-      randomUUID(),
+      routedEventId,
       requestId,
       actorUserId,
       "Request assigned to an eligible approver.",
@@ -282,6 +308,22 @@ export async function routePendingRequest(
       request.requester_user_id,
       requestId,
       JSON.stringify(metadata),
+    ],
+  );
+  // Notify the assigned approver that a request is ready for review.
+  await client.query(
+    `INSERT INTO user_notification
+      (id, recipient_user_id, request_id, request_event_id,
+       notification_type, title, body)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+    [
+      randomUUID(),
+      candidate.approver_user_id,
+      requestId,
+      routedEventId,
+      "request_assigned_for_review",
+      "New request assigned for review",
+      `Request ${request.display_id} has been assigned to you for review.`,
     ],
   );
   return {
@@ -512,12 +554,13 @@ export async function administratorAssignPendingRequest(
     viaDelegation: selected.viaDelegation,
     delegatorName: selected.delegatorName,
   };
+  const adminAssignedEventId = randomUUID();
   await client.query(
     `INSERT INTO request_event
       (id, request_id, actor_user_id, event_type, detail, metadata)
      VALUES ($1,$2,$3,'request_administrator_assigned',$4,$5::jsonb)`,
     [
-      randomUUID(),
+      adminAssignedEventId,
       input.requestId,
       input.actorUserId,
       "Administrator assigned an eligible approver for review.",
@@ -534,6 +577,22 @@ export async function administratorAssignPendingRequest(
       request.requester_user_id,
       input.requestId,
       JSON.stringify(metadata),
+    ],
+  );
+  // Notify the assigned approver that a request has been manually assigned.
+  await client.query(
+    `INSERT INTO user_notification
+      (id, recipient_user_id, request_id, request_event_id,
+       notification_type, title, body)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+    [
+      randomUUID(),
+      selected.approverUserId,
+      input.requestId,
+      adminAssignedEventId,
+      "request_assigned_for_review",
+      "New request assigned for review",
+      `Request ${request.display_id} has been assigned to you for review by an administrator.`,
     ],
   );
   return {

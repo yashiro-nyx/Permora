@@ -29,7 +29,7 @@ import { notificationPresentation } from "@/lib/activation-presentation";
 import type { NotificationListDto } from "@/lib/server/operations-types";
 import { Icon, Spinner } from "./ui";
 
-const POLL_INTERVAL_MS = 60_000;
+const POLL_INTERVAL_MS = 15_000;
 const PREVIEW_PAGE_SIZE = 6;
 
 function relativeTime(value: string) {
@@ -77,12 +77,38 @@ export function NotificationBell({ canReceive }: { canReceive: boolean }) {
     }
   }, [canReceive]);
 
-  // Initial fetch + slow poll (only when the user can receive notifications).
+  // Initial fetch + poll (only when the user can receive notifications).
+  // Pauses polling when the tab is hidden; resumes immediately on focus.
   useEffect(() => {
     if (!canReceive) return;
     void load();
-    const timer = setInterval(() => void load(), POLL_INTERVAL_MS);
-    return () => clearInterval(timer);
+    let timer: ReturnType<typeof setInterval> | undefined;
+    function startPolling() {
+      if (timer) return;
+      timer = setInterval(() => void load(), POLL_INTERVAL_MS);
+    }
+    function stopPolling() {
+      if (timer) { clearInterval(timer); timer = undefined; }
+    }
+    function onVisibility() {
+      if (document.visibilityState === "visible") {
+        void load();
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    }
+    startPolling();
+    document.addEventListener("visibilitychange", onVisibility);
+    // Allow other components (e.g. request submission form) to trigger an
+    // immediate bell refresh without coupling to the bell directly.
+    function onRefreshEvent() { void load(); }
+    window.addEventListener("permora-notification-refresh", onRefreshEvent);
+    return () => {
+      stopPolling();
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("permora-notification-refresh", onRefreshEvent);
+    };
   }, [canReceive, load]);
 
   // Refresh immediately when the panel is opened so counts are current.

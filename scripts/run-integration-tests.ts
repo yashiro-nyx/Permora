@@ -51,6 +51,7 @@ async function main() {
     "tests/account-management.integration.test.ts",
     "tests/integration/admin-governance.integration.test.ts",
     "tests/integration/scheduled-expiration.integration.test.ts",
+    "tests/integration/staff-notifications.integration.test.ts",
   ]) {
     const child: ChildProcess = spawn(
       process.execPath,

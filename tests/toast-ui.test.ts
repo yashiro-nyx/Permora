@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DEFAULT_TOAST_DURATION,
+  MAX_TOASTS,
   TOAST_ICON,
   TOAST_ROLE,
   resolveToastDuration,
@@ -66,6 +67,8 @@ test("upsertToast does not stack a duplicate; it refreshes the existing one", ()
   assert.equal(dup.next.length, 1);
   assert.equal(dup.id, "id-1");
   assert.equal(dup.next[0].createdAt, 2000);
+  // No eviction when de-duping.
+  assert.equal(dup.evictedId, undefined);
 });
 
 test("upsertToast adds distinct toasts for different content", () => {
@@ -76,4 +79,63 @@ test("upsertToast adds distinct toasts for different content", () => {
   const b = upsertToast(a.next, "error", { title: "Failed" }, makeId, 2);
   assert.equal(b.next.length, 2);
   assert.equal(b.id, "id-2");
+  assert.equal(b.evictedId, undefined);
+});
+
+test("MAX_TOASTS cap is enforced — oldest dismissible toast is evicted", () => {
+  let counter = 0;
+  const makeId = () => `id-${++counter}`;
+  // Fill to MAX_TOASTS with auto-dismiss success toasts.
+  let list: ToastRecord[] = [];
+  for (let i = 0; i < MAX_TOASTS; i++) {
+    const result = upsertToast(list, "success", { title: `Toast ${i}` }, makeId, i);
+    list = result.next;
+  }
+  assert.equal(list.length, MAX_TOASTS);
+
+  // Adding one more evicts the oldest.
+  const overflow = upsertToast(list, "success", { title: "New toast" }, makeId, MAX_TOASTS);
+  assert.equal(overflow.next.length, MAX_TOASTS);
+  // The oldest (createdAt=0, id-1) should be evicted.
+  assert.equal(overflow.evictedId, "id-1");
+  assert.ok(!overflow.next.some((t) => t.id === "id-1"));
+  assert.ok(overflow.next.some((t) => t.title === "New toast"));
+});
+
+test("MAX_TOASTS eviction prefers dismissible toasts over sticky errors", () => {
+  let counter = 0;
+  const makeId = () => `id-${++counter}`;
+
+  // Start with one sticky error, then fill remaining slots with success toasts.
+  let result = upsertToast([], "error", { title: "Sticky error" }, makeId, 0);
+  let list = result.next;
+  for (let i = 0; i < MAX_TOASTS - 1; i++) {
+    const r = upsertToast(list, "success", { title: `Success ${i}` }, makeId, i + 1);
+    list = r.next;
+  }
+  assert.equal(list.length, MAX_TOASTS);
+
+  // Adding a new toast should evict the oldest success, not the sticky error.
+  const overflow = upsertToast(list, "info", { title: "Info" }, makeId, 100);
+  assert.equal(overflow.next.length, MAX_TOASTS);
+  assert.ok(overflow.next.some((t) => t.title === "Sticky error"), "sticky error must survive");
+  assert.ok(!overflow.next.some((t) => t.title === "Success 0"), "oldest success should be evicted");
+  assert.equal(overflow.evictedId, "id-2"); // id-1 is the error, id-2 is the first success
+});
+
+test("MAX_TOASTS evicts any oldest toast when all are sticky", () => {
+  let counter = 0;
+  const makeId = () => `id-${++counter}`;
+
+  // All errors (sticky).
+  let list: ToastRecord[] = [];
+  for (let i = 0; i < MAX_TOASTS; i++) {
+    const r = upsertToast(list, "error", { title: `Error ${i}` }, makeId, i);
+    list = r.next;
+  }
+  const overflow = upsertToast(list, "error", { title: "Another error" }, makeId, 100);
+  assert.equal(overflow.next.length, MAX_TOASTS);
+  // Evicts the absolute oldest.
+  assert.equal(overflow.evictedId, "id-1");
+  assert.ok(!overflow.next.some((t) => t.id === "id-1"));
 });

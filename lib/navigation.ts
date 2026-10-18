@@ -19,6 +19,7 @@ export const requesterNavigation: readonly NavigationItem[] = [
 export const approverNavigation: readonly NavigationItem[] = [
   ["/dashboard", "Dashboard", "dashboard"],
   ["/review", "Review Requests", "requests"],
+  ["/notifications/staff", "Notifications", "bell"],
   ["/help", "Help & Support", "help"],
   ["/account/notifications", "Notification Settings", "bell"],
   ["/account/password", "Change Password", "key"],
@@ -38,6 +39,7 @@ export const administratorNavigation: readonly NavigationItem[] = [
   ["/users", "User Management", "users"],
   ["/reports", "Reports & Analytics", "reports"],
   ["/audit", "Audit Logs", "clock"],
+  ["/notifications/staff", "Notifications", "bell"],
   ["/help", "Help & Support", "help"],
   ["/account/notifications", "Notification Settings", "bell"],
   ["/account/password", "Change Password", "key"],

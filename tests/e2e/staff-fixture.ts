@@ -73,5 +73,6 @@ export const E2E = {
     denied: "e2000000-0000-4000-8000-000000000302",
     activationFailed: "e2000000-0000-4000-8000-000000000303",
     activationSucceeded: "e2000000-0000-4000-8000-000000000304",
+    staffAssigned: "e2000000-0000-4000-8000-000000000305",
   },
 } as const;

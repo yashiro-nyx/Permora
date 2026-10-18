@@ -93,18 +93,21 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const show = useCallback(
     (variant: ToastVariant, input: ToastInput) => {
       let resultId = "";
+      let evictedId: string | undefined;
       setToasts((current) => {
-        const { next, id } = upsertToast(current, variant, input, makeId);
+        const { next, id, evictedId: ev } = upsertToast(current, variant, input, makeId);
         resultId = id;
+        evictedId = ev;
         return next;
       });
-      // Schedule outside the state updater so it runs once per show call.
-      queueMicrotask(() =>
-        scheduleDismiss(resultId, variant, input.durationMs),
-      );
+      // Cancel the timer for any evicted toast and schedule the new/refreshed one.
+      queueMicrotask(() => {
+        if (evictedId) clearTimer(evictedId);
+        scheduleDismiss(resultId, variant, input.durationMs);
+      });
       return resultId;
     },
-    [scheduleDismiss],
+    [clearTimer, scheduleDismiss],
   );
 
   useEffect(() => {
@@ -160,6 +163,7 @@ function ToastItem({
   toast: ToastRecord;
   onDismiss: (id: string) => void;
 }) {
+  const duration = resolveToastDuration(toast.variant, toast.durationMs);
   return (
     <div className={`toast toast-${toast.variant}`}>
       <span className="toast-icon" aria-hidden="true">
@@ -177,6 +181,13 @@ function ToastItem({
       >
         <span aria-hidden="true">×</span>
       </button>
+      {duration !== null && (
+        <span
+          className="toast-progress"
+          aria-hidden="true"
+          style={{ animationDuration: `${duration}ms` }}
+        />
+      )}
     </div>
   );
 }

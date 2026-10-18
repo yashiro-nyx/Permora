@@ -94,5 +94,9 @@ export function notificationPresentation(type: NotificationType) {
       return { icon: "bell", tone: "warning", label: "Request denied" } as const;
     case "request_returned_for_revision":
       return { icon: "bell", tone: "warning", label: "Revision requested" } as const;
+    case "request_assigned_for_review":
+      return { icon: "requests", tone: "info", label: "New assignment" } as const;
+    case "routing_unavailable":
+      return { icon: "expire", tone: "warning", label: "Routing failed" } as const;
   }
 }

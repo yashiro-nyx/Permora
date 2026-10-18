@@ -174,6 +174,20 @@ Status: **Completed and merged into `develop`**
 - [x] Do not expose another requester's notifications.
 - [x] Add notification bell in header with unread count, popover, and mark-as-read controls. (`d1f260f` — not yet in `develop`.)
 
+### Staff (approver/administrator) notifications — `feature/notification-system`
+
+- [x] Migration `0011`: drop `UNIQUE(request_event_id)` → composite `UNIQUE(request_event_id, recipient_user_id)`; widen `notification_type` CHECK to include `request_assigned_for_review` and `routing_unavailable`.
+- [x] Approver receives `request_assigned_for_review` notification on automatic routing (`routePendingRequest`) and administrator manual assignment (`administratorAssignPendingRequest`).
+- [x] All active administrators receive `routing_unavailable` notification when routing fails and no approver can be found.
+- [x] Staff notification API: `GET /api/notifications/staff`, `POST /api/notifications/staff/:id/read`, `POST /api/notifications/staff/read-all` — enforces approver/admin role; requesters receive 403.
+- [x] Staff notification bell (`StaffNotificationBell`) in the portal header for approver and administrator roles; requester bell unchanged.
+- [x] Staff notification center at `/notifications/staff`: all/unread filter, paginated list, mark-as-read, deep links to `/review/:id` or `/admin/unassigned`, in-app-only disclaimer.
+- [x] Requester notification queries exclude staff notification types via `NOT ALL` filter; staff unread counts are separate.
+- [x] Bell polls every 15 s (reduced from 60 s), pauses when tab is hidden, resumes on tab focus, and refreshes immediately when the panel is opened.
+- [x] Request submission form dispatches `permora-notification-refresh` custom event to trigger immediate bell refresh without component coupling.
+- [x] `requireStaff()` server guard added to `lib/server/identity.ts`; `/notifications/staff` redirects non-staff to `/dashboard?unavailable=staff`.
+- [x] Toast stack cap: `MAX_TOASTS = 3` enforced in `upsertToast`; oldest dismissible toast evicted first; sticky errors survive; progress/countdown bar added to `ToastItem`.
+
 ### Administrator audit-log viewer
 
 - [x] Create an administrator-only audit read service.
@@ -313,7 +327,7 @@ git diff --check
 ### Near-term (required before production use with real users)
 
 3. **Wire the automatic expiration endpoint** to a schedule (e.g. Vercel Cron) with monitoring and alerting.
-4. **Propose and implement migration `0011`** for persistent approver/admin staff notifications (schema reviewed, pending approval). Requester notifications already work; approver/admin bell currently shows "no notifications."
+4. **~~Propose and implement migration `0011`~~** — **completed** on `feature/notification-system`. Staff notifications (approver assignment, routing failure) now use the `user_notification` table via a composite uniqueness constraint. Apply migration `0011` to the development database after `feature/notification-system` is reviewed and merged into `develop`.
 5. **Active-access filter:** the metric links to `/requests` (all). Add a dedicated active-access view or filter once the `request_activation` JOIN is established in the list service.
 6. **Production environment verification:** confirm `AUTH_SECRET` isolation between Preview and Production, `APP_URL` correctness, `TEST_DATABASE_URL` exclusion from Vercel deployments.
 
@@ -332,7 +346,9 @@ git diff --check
 - Request records are owner-scoped and persisted in PostgreSQL.
 - Approval routing and decisions are server-authorized and auditable.
 - Requesters can view PostgreSQL-backed in-app notifications and mark them as read.
-- The notification bell in the header shows unread count and recent items for requesters; approver/admin bell shows an empty state (pending migration 0011).
+- Approvers receive a `request_assigned_for_review` notification when a request is routed or manually assigned to them; the staff bell and `/notifications/staff` page show the unread count and full history.
+- Administrators receive `routing_unavailable` notifications when automatic routing fails; the same staff bell and page surface all staff notifications.
+- The notification bell polls every 15 s while the tab is visible; pauses when hidden; refreshes on tab focus and immediately after local mutations.
 - Administrators can view sanitized read-only audit records and the activation lifecycle queue.
 - Request approval does **not by itself** provision or activate access; manual admin confirmation is a separate lifecycle step.
 - The requester dashboard active-access metric is now backed by real `request_activation` data (activated + not expired), not a hardcoded `0`.
@@ -363,3 +379,15 @@ Before starting work, every teammate should read:
 - `docs/resource-access-matrix.md`
 
 Never place credentials in source code, Git history, screenshots, issue comments, or pull-request descriptions. Never run fixtures against development or production. When the database target is uncertain, stop and verify before running the command.
+
+**Verified October 18, 2026** — `feature/notification-system` branched from `feature/ui-ux-modernization` HEAD `2dbbcc0`, Node.js 22.23.2, isolated `permora_test` database:
+
+- [x] `npm test`: **125 passed / 0 failed** (up from 120; +5 toast MAX\_TOASTS eviction tests, +2 staff notification presentation tests).
+- [x] `npm run test:integration`: **106 passed / 0 failed** (10 files; +10 staff notification integration tests).
+- [x] `npm run test:e2e`: **59 passed / 0 failed** (+4 staff notification bell, page, redirect, and overflow Playwright tests).
+- [x] `npm run lint`: **passed, 0 warnings**.
+- [x] `npm run typecheck`: **passed**.
+- [x] `git diff --check`: **clean**.
+- [ ] `npm run build`: pending (run before merging).
+- [ ] Run in CI against the final reviewed commit before merging.
+- [ ] A teammate reviews authorization, ownership, and database-target boundaries before merge.

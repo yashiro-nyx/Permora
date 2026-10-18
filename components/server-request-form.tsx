@@ -99,6 +99,8 @@ export function ServerRequestForm({
             ? `${state.displayId} is now awaiting review and routing.`
             : "Your request is now awaiting review and routing.",
         });
+        // Signal the notification bell to refresh its unread count.
+        window.dispatchEvent(new Event("permora-notification-refresh"));
       }
       router.replace(`/requests/${state.requestId}?submitted=1`);
       router.refresh();

@@ -13,6 +13,8 @@ import type {
   NotificationListDto,
   NotificationType,
   RequesterNotificationDto,
+  StaffNotificationDto,
+  StaffNotificationListDto,
 } from "./operations-types";
 
 export {
@@ -36,12 +38,25 @@ type NotificationRow = QueryResultRow & {
 
 const iso = (value: Date | string) => new Date(value).toISOString();
 
+/**
+ * Notification types shown to staff (approvers/admins).  These are distinct
+ * from requester notifications so the staff bell does not show decision
+ * confirmations meant for the requester.
+ */
+const STAFF_NOTIFICATION_TYPES = [
+  "request_assigned_for_review",
+  "routing_unavailable",
+] as const;
+
 export async function listRequesterNotifications(
   userId: string,
   filters: NotificationFilters,
 ): Promise<NotificationListDto> {
-  const values: unknown[] = [userId];
-  const where = ["notification.recipient_user_id = $1"];
+  const values: unknown[] = [userId, STAFF_NOTIFICATION_TYPES];
+  const where = [
+    "notification.recipient_user_id = $1",
+    "notification.notification_type <> ALL($2::text[])",
+  ];
   if (filters.unreadOnly) where.push("notification.read_at IS NULL");
   values.push(filters.pageSize, (filters.page - 1) * filters.pageSize);
   const limit = `$${values.length - 1}`;
@@ -53,7 +68,8 @@ export async function listRequesterNotifications(
             owned_request.display_id,
             count(*) OVER()::int AS total_count,
             (SELECT count(*)::int FROM user_notification unread
-              WHERE unread.recipient_user_id = $1 AND unread.read_at IS NULL)
+              WHERE unread.recipient_user_id = $1 AND unread.read_at IS NULL
+                AND unread.notification_type <> ALL($2::text[]))
               AS unread_total
        FROM user_notification notification
        LEFT JOIN access_request owned_request
@@ -89,13 +105,128 @@ export async function listRequesterNotifications(
   };
 }
 
-export async function markRequesterNotificationRead(userId: string, id: string) {
+// ---------------------------------------------------------------------------
+// Staff notifications (approvers + administrators)
+// ---------------------------------------------------------------------------
+
+type StaffNotificationRow = QueryResultRow & {
+  id: string;
+  notification_type: NotificationType;
+  title: string;
+  body: string;
+  created_at: Date | string;
+  read_at: Date | string | null;
+  request_id: string | null;
+  display_id: string | null;
+  total_count: number;
+  unread_total: number;
+};
+
+/**
+ * Build a deep link for a staff notification.  Approver assignment
+ * notifications link to the review detail page; routing-unavailable
+ * notifications link to the admin unassigned queue.
+ */
+function staffReviewHref(
+  type: NotificationType,
+  requestId: string | null,
+): string | null {
+  if (!requestId) return null;
+  switch (type) {
+    case "request_assigned_for_review":
+      return `/review/${requestId}`;
+    case "routing_unavailable":
+      return `/admin/unassigned`;
+    default:
+      return null;
+  }
+}
+
+export async function listStaffNotifications(
+  userId: string,
+  filters: NotificationFilters,
+): Promise<StaffNotificationListDto> {
+  const values: unknown[] = [userId, STAFF_NOTIFICATION_TYPES];
+  const where = [
+    "notification.recipient_user_id = $1",
+    "notification.notification_type = ANY($2::text[])",
+  ];
+  if (filters.unreadOnly) where.push("notification.read_at IS NULL");
+  values.push(filters.pageSize, (filters.page - 1) * filters.pageSize);
+  const limit = `$${values.length - 1}`;
+  const offset = `$${values.length}`;
+  const result = await query<StaffNotificationRow>(
+    `SELECT notification.id, notification.notification_type,
+            notification.title, notification.body, notification.created_at,
+            notification.read_at, notification.request_id,
+            owned_request.display_id,
+            count(*) OVER()::int AS total_count,
+            (SELECT count(*)::int FROM user_notification unread
+              WHERE unread.recipient_user_id = $1 AND unread.read_at IS NULL
+                AND unread.notification_type = ANY($2::text[]))
+              AS unread_total
+       FROM user_notification notification
+       LEFT JOIN access_request owned_request
+         ON owned_request.id = notification.request_id
+      WHERE ${where.join(" AND ")}
+      ORDER BY notification.created_at DESC, notification.id DESC
+      LIMIT ${limit} OFFSET ${offset}`,
+    values,
+  );
+  const total = Number(result.rows[0]?.total_count ?? 0);
+  const items: StaffNotificationDto[] = result.rows.map((row) => ({
+    notificationId: row.id,
+    type: row.notification_type,
+    title: row.title,
+    message: row.body,
+    createdAt: iso(row.created_at),
+    readAt: row.read_at ? iso(row.read_at) : null,
+    request:
+      row.request_id && row.display_id
+        ? { requestId: row.request_id, displayId: row.display_id }
+        : null,
+    reviewHref: staffReviewHref(row.notification_type, row.request_id),
+  }));
+  return {
+    items,
+    unreadTotal: Number(result.rows[0]?.unread_total ?? 0),
+    pagination: {
+      page: filters.page,
+      pageSize: filters.pageSize,
+      total,
+      pageCount: Math.ceil(total / filters.pageSize),
+    },
+  };
+}
+
+export async function markStaffNotificationRead(userId: string, id: string) {
   const result = await query<{ id: string }>(
     `UPDATE user_notification
         SET read_at = coalesce(read_at, now())
       WHERE id = $1 AND recipient_user_id = $2
+        AND notification_type = ANY($3::text[])
       RETURNING id`,
-    [id, userId],
+    [id, userId, STAFF_NOTIFICATION_TYPES],
+  );
+  return Boolean(result.rows[0]);
+}
+
+export async function markAllStaffNotificationsRead(userId: string) {
+  const result = await query(
+    `UPDATE user_notification SET read_at = now()
+      WHERE recipient_user_id = $1 AND read_at IS NULL
+        AND notification_type = ANY($2::text[])`,
+    [userId, STAFF_NOTIFICATION_TYPES],
+  );
+  return result.rowCount ?? 0;
+}export async function markRequesterNotificationRead(userId: string, id: string) {
+  const result = await query<{ id: string }>(
+    `UPDATE user_notification
+        SET read_at = coalesce(read_at, now())
+      WHERE id = $1 AND recipient_user_id = $2
+        AND notification_type <> ALL($3::text[])
+      RETURNING id`,
+    [id, userId, STAFF_NOTIFICATION_TYPES],
   );
   return Boolean(result.rows[0]);
 }
@@ -103,8 +234,9 @@ export async function markRequesterNotificationRead(userId: string, id: string) 
 export async function markAllRequesterNotificationsRead(userId: string) {
   const result = await query(
     `UPDATE user_notification SET read_at = now()
-      WHERE recipient_user_id = $1 AND read_at IS NULL`,
-    [userId],
+      WHERE recipient_user_id = $1 AND read_at IS NULL
+        AND notification_type <> ALL($2::text[])`,
+    [userId, STAFF_NOTIFICATION_TYPES],
   );
   return result.rowCount ?? 0;
 }

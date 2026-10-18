@@ -420,6 +420,30 @@ export default async function globalSetup() {
         E2E.requests.notificationApproved,
       ],
     );
+    // Seed a staff notification for the approver (request_assigned_for_review)
+    // so the staff bell and /notifications/staff page have a testable record.
+    const staffRoutedEvent = "e2000000-0000-4000-8000-000000000405";
+    await client.query(
+      `INSERT INTO request_event
+        (id,request_id,actor_user_id,event_type,occurred_at,detail)
+       VALUES ($1,$2,$3,'request_routed',now()-interval '25 minutes',
+               'E2E fixture: assigned for staff notification test.')`,
+      [staffRoutedEvent, E2E.requests.notificationApproved, E2E.administrator.id],
+    );
+    await client.query(
+      `INSERT INTO user_notification
+        (id,recipient_user_id,request_id,request_event_id,notification_type,title,body,created_at)
+       VALUES ($1,$2,$3,$4,'request_assigned_for_review',
+               'New request assigned for review',
+               'Request E2E-NOTIFY-APPROVED has been assigned to you for review.',
+               now()-interval '25 minutes')`,
+      [
+        E2E.notifications.staffAssigned,
+        E2E.approver.id,
+        E2E.requests.notificationApproved,
+        staffRoutedEvent,
+      ],
+    );
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
