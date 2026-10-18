@@ -25,7 +25,6 @@ import {
   Button,
   Card,
   Confirm,
-  ErrorSummary,
   Field,
   PageHeading,
 } from "./ui";
@@ -76,9 +75,10 @@ export function ServerRequestForm({
       renewal?.scopes.map((scope) => [scope.fieldName, scope.optionId]) ?? [],
     ),
   );
-  const errors = state.message
-    ? { [state.field ?? "form"]: state.message }
-    : {};
+  // Controlled value for the purpose textarea so it can be reset on resource
+  // change. Renewals pre-fill the previous justification.
+  const [purpose, setPurpose] = useState(renewal?.purpose ?? "");
+
   const blocked = selected?.blockedReasons ?? [];
   const available = resources.filter(
     (resource) => !renewal || resource.id === renewal.resourceId,
@@ -89,8 +89,8 @@ export function ServerRequestForm({
 
   useEffect(() => {
     if (state.ok && state.requestId) {
-      // Fire the success toast once; it survives the client navigation because
-      // the ToastProvider lives in the portal layout above this route.
+      // Fire the success toast once. The ToastProvider lives in the portal
+      // layout above this route segment so it survives the navigation.
       if (notifiedRef.current !== state.requestId) {
         notifiedRef.current = state.requestId;
         toast.success({
@@ -102,11 +102,15 @@ export function ServerRequestForm({
         // Signal the notification bell to refresh its unread count.
         window.dispatchEvent(new Event("permora-notification-refresh"));
       }
+      // router.replace navigates to the submitted request's detail page.
+      // router.refresh() is intentionally omitted here: it would cause a
+      // scroll-to-top on the incoming detail page before the replace completes.
       router.replace(`/requests/${state.requestId}?submitted=1`);
-      router.refresh();
     } else if (!state.ok && state.message) {
-      // Surface submission failures as an error toast in addition to the inline
-      // field error already shown. Guard against re-firing on re-renders.
+      // Emit one error toast per unique error. The inline field errors in the
+      // form remain visible after the toast auto-dismisses (8 s). The toast
+      // fires at most once per unique field+message key, even if the effect
+      // re-runs due to an unrelated re-render.
       const key = `${state.field ?? "form"}:${state.message}`;
       if (notifiedRef.current !== key) {
         notifiedRef.current = key;
@@ -123,15 +127,24 @@ export function ServerRequestForm({
     setResourceId(nextId);
     setPermissionId(next?.permissions[0]?.id ?? "");
     setScopes({});
+    setPurpose("");
+    // Reset expiry to the new resource's default duration; keep startsAt as-is
+    // (the start date is user-specific, not resource-specific).
     setExpiresAt(
       dayOffset(`${startsAt}T00:00:00.000Z`, next?.defaultDays ?? 7).slice(
         0,
         10,
       ),
     );
+    // Clear the notifiedRef so switching resources resets the error toast guard.
+    notifiedRef.current = null;
   }
 
   function prepare() {
+    // Use constraint-validation API to highlight the first invalid field.
+    // reportValidity() focuses the invalid element; the browser scrolls to it,
+    // which is intentional and accessible. The page should not scroll
+    // unexpectedly when the form is valid.
     if (!formRef.current?.reportValidity()) return;
     setConfirm(true);
   }
@@ -142,6 +155,10 @@ export function ServerRequestForm({
     startTransition(() => action(new FormData(formRef.current!)));
   }
 
+  // Field-level error from the last server action response.
+  const fieldError = (fieldName: string) =>
+    state.field === fieldName ? state.message : undefined;
+
   return (
     <>
       <PageHeading
@@ -150,11 +167,6 @@ export function ServerRequestForm({
         }
         description="Tell us what you need. Eligibility, current assignments, conflicts, dates, and routing are verified again on the server."
       />
-      {state.message && (
-        <Alert title="Request not submitted" tone="danger">
-          {state.message}
-        </Alert>
-      )}
       <Card className="request-form-card">
         <div className="identity-summary">
           <div className="spread">
@@ -189,11 +201,20 @@ export function ServerRequestForm({
             prepare();
           }}
         >
-          <ErrorSummary errors={errors} />
           {renewal && (
             <Alert title={`Renewing ${renewal.displayId}`} tone="info">
               This creates a new pending request. Locked values are revalidated
               against current assignments and policy.
+            </Alert>
+          )}
+          {/* Show a form-level alert only when the server returns a generic
+              error with no specific field (field="form"). Field-specific errors
+              appear inline next to their respective inputs; only the toast fires
+              for those. This avoids redundant triple-display of the same
+              message. */}
+          {!state.ok && state.field === "form" && state.message && (
+            <Alert title="Request not submitted" tone="danger">
+              {state.message}
             </Alert>
           )}
           {!resources.length && (
@@ -209,7 +230,7 @@ export function ServerRequestForm({
             id="resourceId"
             label="Select resource"
             required
-            error={state.field === "resourceId" ? state.message : undefined}
+            error={fieldError("resourceId")}
             hint={
               renewal
                 ? "Renewals keep the prior resource, permission, and scope."
@@ -282,6 +303,11 @@ export function ServerRequestForm({
                     </label>
                   ))}
                 </div>
+                {state.field === "permissionId" && state.message && (
+                  <p id="permissionId-error" className="field-error">
+                    {state.message}
+                  </p>
+                )}
                 {renewal && (
                   <input
                     type="hidden"
@@ -293,7 +319,7 @@ export function ServerRequestForm({
               {selected.fixedOwnAccount && (
                 <Alert title="Own account only" tone="warning">
                   The server derives Student Portal ownership from{" "}
-                  {identity.name}’s authenticated internal account. Another
+                  {identity.name}&apos;s authenticated internal account. Another
                   student identifier cannot be submitted.
                 </Alert>
               )}
@@ -305,12 +331,8 @@ export function ServerRequestForm({
                       id={field.fieldName}
                       label={field.label}
                       required
-                      error={
-                        state.field === field.fieldName
-                          ? state.message
-                          : undefined
-                      }
-                      hint="Only current assignments recorded by an administrator are available."
+                      error={fieldError(field.fieldName)}
+                      hint="Only assignments recorded by an administrator for your account are shown. Contact an administrator if the expected option is missing."
                     >
                       <select
                         id={field.fieldName}
@@ -354,17 +376,18 @@ export function ServerRequestForm({
             id="purpose"
             label="Justification / purpose"
             required
-            error={state.field === "purpose" ? state.message : undefined}
+            error={fieldError("purpose")}
             hint="20–2,000 characters. Explain the additional or temporary access need."
           >
             <textarea
               id="purpose"
               name="purpose"
-              defaultValue={renewal?.purpose ?? ""}
+              value={purpose}
               minLength={20}
               maxLength={2000}
               required
               placeholder="I need access for…"
+              onChange={(event) => setPurpose(event.target.value)}
             />
           </Field>
           <div className="form-grid">
@@ -372,7 +395,7 @@ export function ServerRequestForm({
               id="startsAt"
               label="Access starts"
               required
-              error={state.field === "startsAt" ? state.message : undefined}
+              error={fieldError("startsAt")}
             >
               <input
                 id="startsAt"
@@ -388,7 +411,7 @@ export function ServerRequestForm({
               id="expiresAt"
               label="Expiration date"
               required
-              error={state.field === "expiresAt" ? state.message : undefined}
+              error={fieldError("expiresAt")}
               hint={
                 selected
                   ? `Maximum ${selected.maxDays} days under the current policy.`

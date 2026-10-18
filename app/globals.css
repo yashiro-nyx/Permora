@@ -1998,8 +1998,15 @@ textarea {
   border-radius: 0 0 0 var(--radius-card);
   background: currentColor;
   opacity: 0.35;
-  animation: toast-countdown linear forwards;
-  animation-duration: var(--toast-duration, 5s);
+  /* animation-name, timing, and fill-mode are fixed; duration comes from the
+     inline style set by ToastItem so the React-controlled value always wins
+     without any CSS-variable indirection. */
+  animation-name: toast-countdown;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+  /* animation-duration is intentionally absent here — ToastItem injects it
+     via style={{ animationDuration: `${duration}ms` }} which takes precedence
+     over any stylesheet value. */
 }
 .toast-success .toast-progress { color: var(--success); }
 .toast-error .toast-progress { color: var(--danger); }

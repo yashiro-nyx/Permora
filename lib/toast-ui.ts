@@ -23,14 +23,19 @@ export interface ToastRecord extends ToastInput {
 }
 
 /**
- * Default auto-dismiss durations. Routine success/info dismiss quickly; warnings
- * linger; errors stay until the user dismisses them so failures are not missed.
+ * Default auto-dismiss durations.
+ * - success/info: 5 s (transient confirmations)
+ * - warning: 7 s (slightly longer so the user can read context)
+ * - error: 8 s (longest; inline field errors remain after the toast clears)
+ *
+ * All variants auto-dismiss. Pass `durationMs: null` explicitly to make a
+ * toast persistent (sticky until the user closes it).
  */
 export const DEFAULT_TOAST_DURATION: Record<ToastVariant, number | null> = {
   success: 5000,
   info: 5000,
-  warning: 8000,
-  error: null,
+  warning: 7000,
+  error: 8000,
 };
 
 export const TOAST_ICON: Record<ToastVariant, string> = {

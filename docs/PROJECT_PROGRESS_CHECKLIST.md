@@ -391,3 +391,20 @@ Never place credentials in source code, Git history, screenshots, issue comments
 - [ ] `npm run build`: pending (run before merging).
 - [ ] Run in CI against the final reviewed commit before merging.
 - [ ] A teammate reviews authorization, ownership, and database-target boundaries before merge.
+
+**Verified October 18, 2026** — `feature/notification-system`, Node.js 22.23.2, isolated `permora_test` database:
+
+- [x] `npm test`: **129 passed / 0 failed** (up from 125; +4 toast auto-dismiss duration tests).
+- [x] `npm run test:integration`: **113 passed / 0 failed** (11 files; +7 request-form duplicate overlap tests including the new `approved_pending_activation` gap fix).
+- [x] `npm run test:e2e`: **68 passed / 0 failed** (up from 59; +9 request-form UX tests: field reset, scroll, toast, validation, responsive layout).
+- [x] `npm run lint`: **passed, 0 warnings**.
+- [x] `npm run typecheck`: **passed**.
+- [x] `npm run build`: **passed**.
+
+### Form and toast fixes verified in this run
+
+- Toast auto-dismiss: all variants dismiss (success/info 5 s, warning 7 s, error 8 s); `prefers-reduced-motion` hides bar but JS timer still fires.
+- Scroll: `router.refresh()` removed from success path; `ErrorSummary` (which called `focus()`) removed from form.
+- Field reset: purpose textarea now controlled; resets on resource change.
+- Duplicate message: includes conflicting request display\_id; `approved_pending_activation` now checked.
+- Validation UX: one toast per error, inline field errors persist after toast dismisses.

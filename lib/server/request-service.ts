@@ -627,11 +627,12 @@ async function validateAndInsert(
     throw new RequestPolicyError(
       "This access is already supplied through an existing assignment or entitlement.",
     );
-  const duplicate = await client.query(
-    `SELECT 1 FROM access_request WHERE requester_user_id = $1 AND resource_id = $2
+  const duplicate = await client.query<{ display_id: string }>(
+    `SELECT display_id FROM access_request WHERE requester_user_id = $1 AND resource_id = $2
       AND permission_id = $3 AND scope_fingerprint = $4
-      AND status IN ('pending_routing', 'pending_review')
-      AND starts_at < $6 AND expires_at > $5 LIMIT 1`,
+      AND status IN ('pending_routing', 'pending_review', 'approved_pending_activation')
+      AND starts_at < $6 AND expires_at > $5
+      ORDER BY submitted_at DESC LIMIT 1`,
     [
       identity.id,
       input.resourceId,
@@ -643,7 +644,7 @@ async function validateAndInsert(
   );
   if (duplicate.rows[0])
     throw new RequestPolicyError(
-      "A pending request already covers this permission, scope, and date range.",
+      `A pending or approved request (${duplicate.rows[0].display_id}) already covers this permission, scope, and date range. Choose different dates that do not overlap with the existing request.`,
     );
 
   const id = randomUUID();
