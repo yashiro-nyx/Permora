@@ -6,6 +6,8 @@ Audited against the working tree on 2026-10-03; resource/permission catalog, del
 
 **October 18, 2026 (second entry):** Request form and toast UX fixes on `feature/notification-system`. Toast durations corrected (error 8 s, warning 7 s, all variants now auto-dismiss). CSS `animation` shorthand conflict in `.toast-progress` resolved. `ErrorSummary` focus-management scroll-to-top eliminated from the request form. Purpose textarea made controlled; resets on resource change. Duplicate overlap check widened to include `approved_pending_activation`. Conflict error message now includes conflicting request display\_id. Redundant triple-error display reduced to one toast + inline field error. Tests now: unit 129/129 · integration 113/113 · e2e 68/68 · lint clean · typecheck clean · build clean.
 
+**October 18, 2026 (third entry):** Final request form acceptance fixes on `feature/notification-system`. Resource switch now resets *all* resource-specific fields including `startsAt`; shows a discard-confirmation dialog before clearing entered data (purpose, dates, scopes). Tests now: unit 129/129 · integration 113/113 · e2e 70/70 · lint clean · typecheck clean · build clean.
+
 This status distinguishes verified UI, backend-only services, and deferred work.
 
 Status key: **Completed**, **In progress**, **Planned**, **Blocked**.

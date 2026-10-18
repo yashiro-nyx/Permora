@@ -408,3 +408,20 @@ Never place credentials in source code, Git history, screenshots, issue comments
 - Field reset: purpose textarea now controlled; resets on resource change.
 - Duplicate message: includes conflicting request display\_id; `approved_pending_activation` now checked.
 - Validation UX: one toast per error, inline field errors persist after toast dismisses.
+
+**Verified October 18, 2026 (final form fixes)** — `feature/notification-system`, Node.js 22.23.2:
+
+- [x] `npm test`: **129 passed / 0 failed**.
+- [x] `npm run test:integration`: **113 passed / 0 failed** (11 files).
+- [x] `npm run test:e2e`: **70 passed / 0 failed** (+2 from discard-confirmation dialog and start-date reset).
+- [x] `npm run lint`: **passed, 0 warnings**.
+- [x] `npm run typecheck`: **passed**.
+- [x] `npm run build`: **passed**.
+
+### Additional form fix in this run
+
+- Resource switch now resets `startsAt` (previously kept). Total reset on switch: permission, scopes, purpose, `startsAt`, `expiresAt`.
+- Discard confirmation dialog (`Confirm` component with `danger` styling) appears when the user has entered a non-empty purpose, changed the start date, or selected a scope, before overwriting those values.
+- Cancelling the dialog restores the original resource selection and preserves all entered values.
+- Confirmation (`"Switch resource"` button) clears all resource-specific fields and resets to the new resource&apos;s defaults.
+- Renewals are exempt — the resource selector is disabled on the renewal form.

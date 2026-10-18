@@ -53,7 +53,12 @@ export function ServerRequestForm({
   const notifiedRef = useRef<string | null>(null);
   const [transitionPending, startTransition] = useTransition();
   const pending = actionPending || transitionPending;
+  // confirm = submission review dialog
+  // discardTarget = resource id pending confirmation before discarding data
   const [confirm, setConfirm] = useState(false);
+  const [discardTarget, setDiscardTarget] = useState<string | null>(null);
+
+  const firstDate = today();
   const [resourceId, setResourceId] = useState(
     renewal?.resourceId ?? initialResource,
   );
@@ -62,7 +67,6 @@ export function ServerRequestForm({
   const [permissionId, setPermissionId] = useState(
     renewalPermission ?? selected?.permissions[0]?.id ?? "",
   );
-  const firstDate = today();
   const [startsAt, setStartsAt] = useState(firstDate);
   const [expiresAt, setExpiresAt] = useState(() =>
     dayOffset(`${firstDate}T00:00:00.000Z`, selected?.defaultDays ?? 7).slice(
@@ -75,8 +79,7 @@ export function ServerRequestForm({
       renewal?.scopes.map((scope) => [scope.fieldName, scope.optionId]) ?? [],
     ),
   );
-  // Controlled value for the purpose textarea so it can be reset on resource
-  // change. Renewals pre-fill the previous justification.
+  // Controlled value for the purpose textarea so it resets on resource change.
   const [purpose, setPurpose] = useState(renewal?.purpose ?? "");
 
   const blocked = selected?.blockedReasons ?? [];
@@ -89,7 +92,7 @@ export function ServerRequestForm({
 
   useEffect(() => {
     if (state.ok && state.requestId) {
-      // Fire the success toast once. The ToastProvider lives in the portal
+      // Fire the success toast once; the ToastProvider lives in the portal
       // layout above this route segment so it survives the navigation.
       if (notifiedRef.current !== state.requestId) {
         notifiedRef.current = state.requestId;
@@ -99,18 +102,14 @@ export function ServerRequestForm({
             ? `${state.displayId} is now awaiting review and routing.`
             : "Your request is now awaiting review and routing.",
         });
-        // Signal the notification bell to refresh its unread count.
         window.dispatchEvent(new Event("permora-notification-refresh"));
       }
       // router.replace navigates to the submitted request's detail page.
-      // router.refresh() is intentionally omitted here: it would cause a
-      // scroll-to-top on the incoming detail page before the replace completes.
+      // router.refresh() is intentionally omitted: it would scroll-to-top on
+      // the incoming page before the replace completes.
       router.replace(`/requests/${state.requestId}?submitted=1`);
     } else if (!state.ok && state.message) {
-      // Emit one error toast per unique error. The inline field errors in the
-      // form remain visible after the toast auto-dismisses (8 s). The toast
-      // fires at most once per unique field+message key, even if the effect
-      // re-runs due to an unrelated re-render.
+      // One error toast per unique field+message key, even across re-renders.
       const key = `${state.field ?? "form"}:${state.message}`;
       if (notifiedRef.current !== key) {
         notifiedRef.current = key;
@@ -122,29 +121,51 @@ export function ServerRequestForm({
     }
   }, [state, router, toast, renewal]);
 
-  function chooseResource(nextId: string) {
-    const next = resources.find((resource) => resource.id === nextId);
+  /** True when the user has entered data that would be lost on a resource switch. */
+  function hasUnsavedData() {
+    return (
+      purpose.trim().length > 0 ||
+      startsAt !== firstDate ||
+      Object.values(scopes).some(Boolean)
+    );
+  }
+
+  /** Apply a resource switch: reset all resource-specific fields to defaults. */
+  function applyResourceSwitch(nextId: string) {
+    const next = resources.find((r) => r.id === nextId);
     setResourceId(nextId);
     setPermissionId(next?.permissions[0]?.id ?? "");
     setScopes({});
     setPurpose("");
-    // Reset expiry to the new resource's default duration; keep startsAt as-is
-    // (the start date is user-specific, not resource-specific).
+    setStartsAt(firstDate);
     setExpiresAt(
-      dayOffset(`${startsAt}T00:00:00.000Z`, next?.defaultDays ?? 7).slice(
+      dayOffset(`${firstDate}T00:00:00.000Z`, next?.defaultDays ?? 7).slice(
         0,
         10,
       ),
     );
-    // Clear the notifiedRef so switching resources resets the error toast guard.
+    // Reset error-toast guard so new errors on the new resource fire correctly.
     notifiedRef.current = null;
   }
 
+  function chooseResource(nextId: string) {
+    if (nextId === resourceId) return;
+    // If unsaved data exists, ask before discarding (not applicable to renewals
+    // which lock the resource selection anyway).
+    if (!renewal && hasUnsavedData()) {
+      setDiscardTarget(nextId);
+    } else {
+      applyResourceSwitch(nextId);
+    }
+  }
+
+  function confirmDiscard() {
+    const target = discardTarget;
+    setDiscardTarget(null);
+    if (target) applyResourceSwitch(target);
+  }
+
   function prepare() {
-    // Use constraint-validation API to highlight the first invalid field.
-    // reportValidity() focuses the invalid element; the browser scrolls to it,
-    // which is intentional and accessible. The page should not scroll
-    // unexpectedly when the form is valid.
     if (!formRef.current?.reportValidity()) return;
     setConfirm(true);
   }
@@ -155,7 +176,7 @@ export function ServerRequestForm({
     startTransition(() => action(new FormData(formRef.current!)));
   }
 
-  // Field-level error from the last server action response.
+  // Returns the server-side field error if it belongs to the given field name.
   const fieldError = (fieldName: string) =>
     state.field === fieldName ? state.message : undefined;
 
@@ -207,11 +228,9 @@ export function ServerRequestForm({
               against current assignments and policy.
             </Alert>
           )}
-          {/* Show a form-level alert only when the server returns a generic
-              error with no specific field (field="form"). Field-specific errors
-              appear inline next to their respective inputs; only the toast fires
-              for those. This avoids redundant triple-display of the same
-              message. */}
+          {/* Form-level alert only for generic server errors (field="form").
+              Field-specific errors appear inline — showing them again here
+              would triple-display the same message. */}
           {!state.ok && state.field === "form" && state.message && (
             <Alert title="Request not submitted" tone="danger">
               {state.message}
@@ -451,6 +470,8 @@ export function ServerRequestForm({
           </div>
         </form>
       </Card>
+
+      {/* Submission review dialog */}
       {confirm && selected && (
         <Confirm
           title={
@@ -469,6 +490,24 @@ export function ServerRequestForm({
             Requested from {dateLabel(`${startsAt}T00:00:00Z`)} to{" "}
             {dateLabel(`${expiresAt}T00:00:00Z`)}. Submission creates a pending
             database record; it does not approve or activate access.
+          </p>
+        </Confirm>
+      )}
+
+      {/* Resource-switch discard confirmation — shown only when the user has
+          entered meaningful data that would be cleared by switching resources. */}
+      {discardTarget !== null && (
+        <Confirm
+          title="Switch resource and discard entries?"
+          label="Switch resource"
+          danger
+          onClose={() => setDiscardTarget(null)}
+          onConfirm={confirmDiscard}
+        >
+          <p>
+            Switching to a different resource will clear your justification,
+            dates, and any scope selections you have entered. This cannot be
+            undone.
           </p>
         </Confirm>
       )}

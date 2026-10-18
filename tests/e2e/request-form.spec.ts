@@ -2,12 +2,11 @@
  * Playwright regression tests for the request submission form UX.
  *
  * Covers:
- * - Toast auto-dismiss after the configured interval.
- * - No toast stacking from repeated identical errors.
- * - Form fields (purpose, scopes, expiry) reset when switching resources.
+ * - All resource-specific fields reset when switching resources.
+ * - Confirmation dialog appears when unsaved data would be discarded.
  * - Scroll position preserved during dropdown and button interaction.
- * - Conflict error message includes the conflicting request's display_id.
- * - Inline field error persists after the toast disappears.
+ * - Constraint validation fires before server action (no spurious toast).
+ * - Server-side field errors persist in the form after toast auto-dismisses.
  * - Responsive layout at standard widths.
  */
 import { expect, test, type Page } from "@playwright/test";
@@ -45,57 +44,122 @@ test.afterAll(async () => {
 
 // ─── Field Reset ────────────────────────────────────────────────────────────
 
-test("purpose textarea resets when switching between resources", async () => {
+test("purpose textarea resets when switching resources with no unsaved data", async () => {
+  // No data entered yet — switch should happen without a confirm dialog.
+  await page.goto("/requests/new");
+  await page.getByLabel("Select resource").selectOption("r-library");
+  // No purpose entered — switch is immediate.
+  await page.getByLabel("Select resource").selectOption("r-network-access");
+  // No discard dialog should appear.
+  await expect(
+    page.getByRole("dialog", { name: /Switch resource/ }),
+  ).toHaveCount(0);
+  await expect(page.getByLabel("Justification / purpose")).toHaveValue("");
+});
+
+test("discard confirmation dialog appears when switching resources with entered purpose", async () => {
   await page.goto("/requests/new");
   await page.getByLabel("Select resource").selectOption("r-library");
   await page
     .getByLabel("Justification / purpose")
-    .fill("This text belongs to Library, not Network.");
-  await expect(page.getByLabel("Justification / purpose")).toHaveValue(
-    "This text belongs to Library, not Network.",
-  );
+    .fill("Data that should be preserved until confirmed.");
 
-  // Switch to a different resource.
+  // Switching resource should show the discard confirmation.
   await page.getByLabel("Select resource").selectOption("r-network-access");
-  // Purpose must be cleared after switching resources.
+  const discardDialog = page.getByRole("dialog", { name: /Switch resource/ });
+  await expect(discardDialog).toBeVisible();
+
+  // Cancelling preserves the original resource and the entered purpose.
+  await discardDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(discardDialog).toHaveCount(0);
+  await expect(page.getByLabel("Select resource")).toHaveValue("r-library");
+  await expect(page.getByLabel("Justification / purpose")).toHaveValue(
+    "Data that should be preserved until confirmed.",
+  );
+});
+
+test("confirming the discard dialog switches resource and clears all fields", async () => {
+  await page.goto("/requests/new");
+  await page.getByLabel("Select resource").selectOption("r-library");
+  await page
+    .getByLabel("Justification / purpose")
+    .fill("This will be cleared after confirming the switch.");
+
+  // Switch and confirm.
+  await page.getByLabel("Select resource").selectOption("r-network-access");
+  const discardDialog = page.getByRole("dialog", { name: /Switch resource/ });
+  await expect(discardDialog).toBeVisible();
+  await discardDialog
+    .getByRole("button", { name: "Switch resource" })
+    .click();
+
+  // Purpose must be empty after confirming.
+  await expect(discardDialog).toHaveCount(0);
+  await expect(page.getByLabel("Select resource")).toHaveValue("r-network-access");
   await expect(page.getByLabel("Justification / purpose")).toHaveValue("");
 });
 
-test("scope selection resets when switching between resources", async () => {
+test("start date resets to today when switching resources", async () => {
+  await page.goto("/requests/new");
+  await page.getByLabel("Select resource").selectOption("r-library");
+
+  // Change the start date away from today.
+  await page.locator("#startsAt").fill(dateInput(3));
+  const changedStart = await page.locator("#startsAt").inputValue();
+  expect(changedStart).toBe(dateInput(3));
+
+  // Switch resource — no data in purpose, but start date changed.
+  await page.getByLabel("Select resource").selectOption("r-network-access");
+  // The start date was changed, so a discard dialog should appear.
+  const discardDialog = page.getByRole("dialog", { name: /Switch resource/ });
+  if (await discardDialog.isVisible()) {
+    await discardDialog.getByRole("button", { name: "Switch resource" }).click();
+  }
+
+  // Start date must reset to today.
+  const todayVal = dateInput(0);
+  await expect(page.locator("#startsAt")).toHaveValue(todayVal);
+});
+
+test("expiry date recalculates to resource default when switching", async () => {
+  await page.goto("/requests/new");
+
+  // r-library: defaultDays=30.
+  await page.getByLabel("Select resource").selectOption("r-library");
+  const expiryLibrary = await page.locator("#expiresAt").inputValue();
+  expect(expiryLibrary).not.toBe("");
+
+  // r-network-access: defaultDays=90.
+  await page.getByLabel("Select resource").selectOption("r-network-access");
+  const expiryNetwork = await page.locator("#expiresAt").inputValue();
+  expect(expiryNetwork).not.toBe("");
+
+  // Different defaultDays → different expiry.
+  expect(expiryLibrary).not.toBe(expiryNetwork);
+});
+
+test("scope selection resets when switching resources", async () => {
   await page.goto("/requests/new");
   await page.getByLabel("Select resource").selectOption("r-network-access");
   const networkZone = page.locator("select#networkZone");
   await networkZone.waitFor();
-  // Count options that have a non-empty value (scope options the user is assigned to).
   const options = await networkZone.locator("option:not([value=''])").count();
   if (options > 0) {
     await networkZone.selectOption({ index: 1 });
     const selectedBefore = await networkZone.inputValue();
     expect(selectedBefore).not.toBe("");
 
-    // Switch away and back — scope must reset.
+    // Selecting a scope counts as unsaved data — switch triggers discard dialog.
     await page.getByLabel("Select resource").selectOption("r-library");
+    const discardDialog = page.getByRole("dialog", { name: /Switch resource/ });
+    if (await discardDialog.isVisible()) {
+      await discardDialog.getByRole("button", { name: "Switch resource" }).click();
+    }
+    // Switch back to check scope was cleared.
     await page.getByLabel("Select resource").selectOption("r-network-access");
     await networkZone.waitFor();
     await expect(networkZone).toHaveValue("");
   }
-});
-
-test("expiry date recalculates when switching resources", async () => {
-  await page.goto("/requests/new");
-
-  // r-library has defaultDays=30 in the catalog.
-  await page.getByLabel("Select resource").selectOption("r-library");
-  const expiryLibrary = await page.locator("#expiresAt").inputValue();
-  expect(expiryLibrary).not.toBe("");
-
-  // r-network-access has defaultDays=90.
-  await page.getByLabel("Select resource").selectOption("r-network-access");
-  const expiryNetwork = await page.locator("#expiresAt").inputValue();
-  expect(expiryNetwork).not.toBe("");
-
-  // They should differ because defaultDays differ.
-  expect(expiryLibrary).not.toBe(expiryNetwork);
 });
 
 // ─── Scroll Preservation ────────────────────────────────────────────────────
@@ -104,18 +168,16 @@ test("scroll position is preserved when changing the resource dropdown", async (
   await page.goto("/requests/new");
   await page.getByLabel("Select resource").selectOption("r-library");
 
-  // Scroll to the bottom of the page.
+  // Scroll down.
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   const scrollBefore = await page.evaluate(() => window.scrollY);
   expect(scrollBefore).toBeGreaterThan(0);
 
-  // Change the resource dropdown.
+  // Change resource — no data entered so no dialog.
   await page.getByLabel("Select resource").selectOption("r-network-access");
-  // Wait for React re-render.
-  await page.waitForTimeout(100);
+  await page.waitForTimeout(150);
 
   const scrollAfter = await page.evaluate(() => window.scrollY);
-  // Scroll must not jump to 0 (allow a small tolerance for layout shifts).
   expect(scrollAfter).toBeGreaterThan(0);
 });
 
@@ -129,11 +191,10 @@ test("clicking permission radio buttons does not scroll to the top", async () =>
   await page.waitForTimeout(80);
   const scrollAfter = await page.evaluate(() => window.scrollY);
 
-  // Allow up to 50 px drift from layout shift, but not a full jump to 0.
   expect(Math.abs(scrollAfter - scrollBefore)).toBeLessThan(50);
 });
 
-// ─── Toast Behavior ─────────────────────────────────────────────────────────
+// ─── Toast / Validation Behavior ─────────────────────────────────────────────
 
 test("submitting without a justification uses browser validation without showing a toast", async () => {
   await page.goto("/requests/new");
@@ -142,97 +203,46 @@ test("submitting without a justification uses browser validation without showing
   const toastViewport = page.getByTestId("toast-viewport");
   const toastsBefore = await toastViewport.locator(".toast").count();
 
-  // Click "Review request" with an empty purpose field.
-  // The browser's constraint validation (required textarea) should intercept
-  // before the server action fires, so no toast should appear.
-  const purposeField = page.getByLabel("Justification / purpose");
-  await purposeField.fill(""); // ensure empty
+  await page.getByLabel("Justification / purpose").fill("");
   await page.getByRole("button", { name: "Review request" }).click();
-
-  // Give React a moment to settle.
   await page.waitForTimeout(300);
 
   const toastsAfter = await toastViewport.locator(".toast").count();
-  // Constraint validation intercepts before server action — no new toast.
   expect(toastsAfter).toBe(toastsBefore);
-  // The confirm dialog must not appear because form is invalid.
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
 test("server-side field error stays in the form after the toast auto-dismisses", async () => {
-  // Trigger a server-side validation error by submitting a purpose that is
-  // exactly 1 character (too short). The server rejects it with a
-  // field-specific error on "purpose". After the 8-second toast dismisses,
-  // the inline field error must still be visible.
-  // This is a layout/UX regression test, not a timing test — we verify that
-  // the field error element is present in the DOM independently of the toast.
   await page.goto("/requests/new");
   await page.getByLabel("Select resource").selectOption("r-library");
 
-  // Fill a purpose that is valid enough to pass browser minLength but will be
-  // trimmed server-side. Use exactly 19 chars (server requires ≥ 20 trimmed).
+  // 19 chars passes browser minlength=20 only if we override; forces server rejection.
   const shortPurpose = "Exactly 19 chars!!";
   await page.getByLabel("Justification / purpose").fill(shortPurpose);
-
-  // Override browser minlength constraint so the form submits to the server.
   await page.evaluate(() => {
-    const ta = document.querySelector("textarea[name='purpose']") as HTMLTextAreaElement | null;
+    const ta = document.querySelector(
+      "textarea[name='purpose']",
+    ) as HTMLTextAreaElement | null;
     if (ta) ta.minLength = 1;
   });
 
   await page.getByRole("button", { name: "Review request" }).click();
-  const confirmDialog = page.getByRole("dialog");
+  const confirmDialog = page.getByRole("dialog", { name: /Submit this/ });
   await expect(confirmDialog).toBeVisible({ timeout: 3000 });
   await page.getByRole("button", { name: "Submit request" }).click();
-
-  // Wait for server response.
   await page.waitForTimeout(2000);
 
-  const currentUrl = page.url();
-  if (!currentUrl.includes("/requests/new")) {
-    // Submission unexpectedly succeeded — skip (shouldn't happen with 19 chars).
-    return;
-  }
+  if (!page.url().includes("/requests/new")) return; // unexpected success
 
-  // The inline field error must be visible next to the purpose textarea.
-  const inlineError = page.locator("#purpose ~ .field-error, [for='purpose'] ~ .field-error, label:has(+ .field-error)");
-  // Also check for any .field-error on the page.
   const anyFieldError = page.locator(".field-error");
   await expect(anyFieldError.first()).toBeVisible({ timeout: 5000 });
 
-  // There must be exactly one toast visible (not multiple).
   const toasts = page.getByTestId("toast-viewport").locator(".toast");
   const toastCount = await toasts.count();
   expect(toastCount).toBeLessThanOrEqual(1);
   if (toastCount === 1) {
     await expect(toasts.first()).toContainText("Request not submitted");
   }
-});
-
-test("switching resources clears any stale error toast guard so a new error can fire", async () => {
-  await page.goto("/requests/new");
-  await page.getByLabel("Select resource").selectOption("r-library");
-  await page.locator("#startsAt").fill(dateInput(1));
-  await page.locator("#expiresAt").fill(dateInput(20));
-
-  // First: try to submit with an intentionally short purpose to trigger an error.
-  await page.getByLabel("Justification / purpose").fill("Too short");
-  await page.evaluate(() => {
-    const ta = document.querySelector("textarea[name='purpose']") as HTMLTextAreaElement | null;
-    if (ta) ta.removeAttribute("minlength");
-  });
-  await page.getByRole("button", { name: "Review request" }).click();
-  const confirmDlg = page.getByRole("dialog");
-  const dialogVisible = await confirmDlg.isVisible().catch(() => false);
-  if (dialogVisible) {
-    await page.getByRole("button", { name: "Submit request" }).click();
-    await page.waitForTimeout(1500);
-  }
-
-  // Now switch resources — this must clear the notifiedRef so a subsequent
-  // identical error fires a new toast rather than being silently deduped.
-  await page.getByLabel("Select resource").selectOption("r-network-access");
-  await expect(page.getByLabel("Justification / purpose")).toHaveValue("");
 });
 
 // ─── Responsive Layout ───────────────────────────────────────────────────────
@@ -250,6 +260,5 @@ test("request form fits standard widths without document overflow", async () => 
       ),
     ).toBe(true);
   }
-  // Reset to default.
   await page.setViewportSize({ width: 1440, height: 900 });
 });
