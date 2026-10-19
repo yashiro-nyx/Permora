@@ -188,6 +188,7 @@ Status: **Completed and merged into `develop`**
 - [x] `requireStaff()` server guard added to `lib/server/identity.ts`; `/notifications/staff` redirects non-staff to `/dashboard?unavailable=staff`.
 - [x] Toast stack cap: `MAX_TOASTS = 3` enforced in `upsertToast`; oldest dismissible toast evicted first; sticky errors survive; progress/countdown bar added to `ToastItem`; committed-state scheduling prevents timer restart across navigation/rerenders, and per-attempt keys preserve fresh repeated-failure feedback.
 - [x] Responsive sidebar layout: navigation scrolls independently inside a viewport-constrained flex column while Logout remains in an accessible, safe-area-aware footer on desktop and mobile drawers.
+- [x] Verified staff queue and notification recipient isolation against development records: assigned requests appear only for their selected reviewer; unassigned requests remain an administrator workflow; no historical notification backfill is performed without explicit review.
 
 ### Administrator audit-log viewer
 

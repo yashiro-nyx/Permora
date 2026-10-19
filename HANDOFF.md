@@ -12,6 +12,8 @@ The project has completed **Stage 2B Milestones 1–5 and Stage 2C activation/li
 
 The October 19, 2026 toast/sidebar reliability fix is verified on `feature/notification-system`: toast timers are scheduled from committed provider state (5/7/8 seconds by variant), repeated keyed failures receive fresh feedback, and desktop/mobile sidebars keep Logout outside the independently scrolling navigation region. The isolated development database has migrations `0001`–`0011`; production was not changed.
 
+The same-day approver visibility audit confirmed that the three inspected requests (`REQ-2026-000031`, `REQ-2026-000030`, and `REQ-2026-000016`) are correctly assigned to `admin@permora.ph`, not `approver@permora.ph`, under the responsibility-based load-balancing rules. The first two have staff assignment notifications; the oldest request predates migration `0011` and has no historical staff notification. Do not reassign or backfill these development records without explicit review.
+
 Security goals are server-trusted identity and roles, owner isolation, least privilege, full-scope fail-closed routing, revocable sessions, CSRF/origin protection, database rate limiting, transactional immutable evidence, optimistic concurrency, idempotency, and strict separation of approval from activation.
 
 ## B. User roles
