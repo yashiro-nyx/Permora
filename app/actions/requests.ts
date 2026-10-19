@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireRequester } from "@/lib/server/identity";
 import {
@@ -10,6 +11,7 @@ import { extractRequestInput } from "@/lib/request-input";
 
 export interface SubmitRequestState {
   ok: boolean;
+  attemptId?: string;
   requestId?: string;
   displayId?: string;
   message?: string;
@@ -20,16 +22,27 @@ export async function submitRequestAction(
   _previous: SubmitRequestState,
   formData: FormData,
 ): Promise<SubmitRequestState> {
+  const attemptId = randomUUID();
   const identity = await requireRequester();
   const input = extractRequestInput(formData.entries());
   try {
     const request = await createAccessRequest(identity, input);
     revalidatePath("/dashboard");
     revalidatePath("/requests");
-    return { ok: true, requestId: request.id, displayId: request.displayId };
+    return {
+      ok: true,
+      requestId: request.id,
+      displayId: request.displayId,
+      attemptId,
+    };
   } catch (error) {
     if (error instanceof RequestPolicyError)
-      return { ok: false, message: error.message, field: error.field };
+      return {
+        ok: false,
+        message: error.message,
+        field: error.field,
+        attemptId,
+      };
     console.error("Request submission failed", {
       error: error instanceof Error ? error.name : "UnknownError",
     });
@@ -38,6 +51,7 @@ export async function submitRequestAction(
       message:
         "The request could not be saved. No request was created. Try again or contact support.",
       field: "form",
+      attemptId,
     };
   }
 }

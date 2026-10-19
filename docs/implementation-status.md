@@ -8,6 +8,8 @@ Audited against the working tree on 2026-10-03; resource/permission catalog, del
 
 **October 18, 2026 (third entry):** Final request form acceptance fixes on `feature/notification-system`. Resource switch now resets *all* resource-specific fields including `startsAt`; shows a discard-confirmation dialog before clearing entered data (purpose, dates, scopes). Tests now: unit 129/129 · integration 113/113 · e2e 70/70 · lint clean · typecheck clean · build clean.
 
+**October 19, 2026 (request submission regression):** Development schema was verified at migrations `0001`–`0010`; routing notification inserts were therefore rejected by the pre-0011 notification type constraint and the request transaction rolled back. Applied `0011_staff_notifications.sql` through the guarded development migration command. Request submission now has per-attempt toast identities so repeated identical failures each receive one fresh 8-second toast; global toast deduplication remains intact for duplicate emissions within one attempt.
+
 This status distinguishes verified UI, backend-only services, and deferred work.
 
 Status key: **Completed**, **In progress**, **Planned**, **Blocked**.

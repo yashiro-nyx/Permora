@@ -92,6 +92,35 @@ test("upsertToast does not stack a duplicate; it refreshes the existing one", ()
   assert.equal(dup.evictedId, undefined);
 });
 
+test("upsertToast keeps repeated failed attempts distinct when keyed", () => {
+  let counter = 0;
+  const makeId = () => `id-${++counter}`;
+  const first = upsertToast(
+    [],
+    "error",
+    {
+      title: "Request not submitted",
+      description: "Try again.",
+      dedupeKey: "attempt-1",
+    },
+    makeId,
+    1000,
+  );
+  const second = upsertToast(
+    first.next,
+    "error",
+    {
+      title: "Request not submitted",
+      description: "Try again.",
+      dedupeKey: "attempt-2",
+    },
+    makeId,
+    2000,
+  );
+  assert.equal(second.next.length, 2);
+  assert.notEqual(second.id, first.id);
+});
+
 test("upsertToast adds distinct toasts for different content", () => {
   let counter = 0;
   const makeId = () => `id-${++counter}`;
@@ -128,7 +157,7 @@ test("MAX_TOASTS eviction prefers dismissible toasts over explicitly sticky ones
   const makeId = () => `id-${++counter}`;
 
   // One explicitly sticky toast (durationMs: null), then fill remaining with dismissible.
-  let result = upsertToast([], "error", { title: "Sticky error", durationMs: null }, makeId, 0);
+  const result = upsertToast([], "error", { title: "Sticky error", durationMs: null }, makeId, 0);
   let list = result.next;
   for (let i = 0; i < MAX_TOASTS - 1; i++) {
     const r = upsertToast(list, "success", { title: `Success ${i}` }, makeId, i + 1);

@@ -116,6 +116,9 @@ export function ServerRequestForm({
         toast.error({
           title: "Request not submitted",
           description: state.message,
+          // Each server action invocation is a distinct attempt, even when
+          // validation/database failure text is identical to the last attempt.
+          dedupeKey: state.attemptId,
         });
       }
     }

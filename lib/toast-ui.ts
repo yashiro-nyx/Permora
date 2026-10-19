@@ -12,6 +12,8 @@ export const MAX_TOASTS = 3;
 export interface ToastInput {
   title: string;
   description?: string;
+  /** Optional caller-provided identity for distinct attempts with same copy. */
+  dedupeKey?: string;
   /** Override auto-dismiss. null = sticky. undefined = variant default. */
   durationMs?: number | null;
 }
@@ -53,12 +55,12 @@ export const TOAST_ROLE: Record<ToastVariant, "status" | "alert"> = {
   error: "alert",
 };
 
-/** Identity of a toast for de-duplication (variant + title + description). */
+/** Identity of a toast for de-duplication (content plus optional caller key). */
 export function toastFingerprint(
   variant: ToastVariant,
-  input: Pick<ToastInput, "title" | "description">,
+  input: Pick<ToastInput, "title" | "description" | "dedupeKey">,
 ): string {
-  return `${variant}::${input.title}::${input.description ?? ""}`;
+  return `${variant}::${input.title}::${input.description ?? ""}::${input.dedupeKey ?? ""}`;
 }
 
 /** Resolve the effective auto-dismiss duration for a toast. */
