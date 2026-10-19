@@ -285,10 +285,12 @@ export async function recordActivationOutcome(
     status: string;
     attempt_count: number;
     actor_user_id: string;
+    original_approver_user_id: string | null;
     idempotency_key: string;
     adapter_name: string;
   }>(
     `SELECT activation.request_id, request.requester_user_id,
+            decision.actor_user_id AS original_approver_user_id,
             request.resource_id, request.permission_id,
             request.scope_fingerprint, request.starts_at, request.expires_at,
             activation.status, activation.attempt_count,
@@ -296,6 +298,10 @@ export async function recordActivationOutcome(
             activation.adapter_name
        FROM request_activation activation
        JOIN access_request request ON request.id = activation.request_id
+       LEFT JOIN request_decision decision
+         ON decision.request_id = request.id
+        AND decision.action = 'approve'
+        AND decision.resulting_status = 'approved_pending_activation'
       WHERE activation.id = $1
       FOR UPDATE OF activation`,
     [activationId],
@@ -459,6 +465,71 @@ export async function recordActivationOutcome(
           : "Your approved access could not be activated because current requirements are not satisfied. Contact an administrator.",
     ],
   );
+
+  if (succeeded && activation.original_approver_user_id) {
+    const approver = await client.query<{ id: string }>(
+      `SELECT profile.user_id AS id
+         FROM user_profile profile
+        WHERE profile.user_id = $1 AND profile.active
+          AND EXISTS (
+            SELECT 1 FROM user_role role
+             WHERE role.user_id = profile.user_id AND role.role = 'approver'
+          )
+          AND EXISTS (
+            SELECT 1
+              FROM request_review_assignment assignment
+              JOIN approver_responsibility responsibility
+                ON responsibility.id = assignment.responsibility_id
+               AND responsibility.approver_user_id = profile.user_id
+             WHERE assignment.request_id = $2
+               AND responsibility.resource_id = (
+                 SELECT resource_id FROM access_request WHERE id = $2
+               )
+               AND (responsibility.permission_id IS NULL OR responsibility.permission_id = (
+                 SELECT permission_id FROM access_request WHERE id = $2
+               ))
+               AND responsibility.valid_from <= now()
+               AND (responsibility.valid_until IS NULL OR responsibility.valid_until > now())
+               AND (
+                 NOT EXISTS (
+                   SELECT 1 FROM approver_responsibility_scope configured
+                    WHERE configured.responsibility_id = responsibility.id
+                 )
+                 OR NOT EXISTS (
+                   SELECT 1
+                     FROM access_request_scope requested
+                    WHERE requested.request_id = $2
+                      AND NOT EXISTS (
+                        SELECT 1 FROM approver_responsibility_scope configured
+                         WHERE configured.responsibility_id = responsibility.id
+                           AND configured.scope_option_id = requested.scope_option_id
+                      )
+                 )
+               )
+          )`,
+      [activation.original_approver_user_id, activation.request_id],
+    );
+    if (approver.rows[0]) {
+      const future = asDate(activation.starts_at).getTime() > Date.now();
+      await client.query(
+        `INSERT INTO user_notification
+          (id, recipient_user_id, request_id, request_event_id,
+           notification_type, title, body)
+         VALUES ($1,$2,$3,$4,'activation_succeeded_for_approver',$5,$6)
+         ON CONFLICT (request_event_id, recipient_user_id) DO NOTHING`,
+        [
+          randomUUID(),
+          approver.rows[0].id,
+          activation.request_id,
+          requestEventId,
+          future ? "Access provisioned — scheduled start" : "Access activated",
+          future
+            ? "An administrator confirmed provisioning. Access becomes usable when the approved validity period starts."
+            : "An administrator confirmed provisioning and the approved access is now within its validity period.",
+        ],
+      );
+    }
+  }
 
   return {
     activationId,

@@ -16,6 +16,8 @@ Audited against the working tree on 2026-10-03; resource/permission catalog, del
 
 **October 19, 2026 (sidebar correction):** Desktop authenticated layouts now use a two-column grid with a sticky sidebar column beneath the header. The previous absolutely positioned sidebar was tied to the document-height shell and scrolled away on long pages. Navigation remains independently scrollable with a non-scrolling Logout footer; collapsed desktop and mobile drawer behavior are preserved. Focused request-entry pages and mobile layouts retain their existing full-width behavior.
 
+**October 20, 2026 (activation lifecycle and Approver notification):** Development request `REQ-2026-000035` was verified as `approved_pending_activation` with an `activated` provisioning record and an entitlement valid from 2027-01-30, so it is correctly provisioned but not yet Active. Request timelines now include lifecycle-specific activation events without rewriting immutable history. Migration `0014_activation_approver_notifications.sql` adds the recipient-specific `activation_succeeded_for_approver` type; successful Admin provisioning sends one transactional, idempotent notification to the active assigned original Approver with an authorized `/review/{requestId}` link and future-start guidance. Production was not accessed or modified.
+
 This status distinguishes verified UI, backend-only services, and deferred work.
 
 Status key: **Completed**, **In progress**, **Planned**, **Blocked**.

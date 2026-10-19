@@ -119,6 +119,8 @@ export function notificationPresentation(type: NotificationType) {
       return { icon: "check", tone: "success", label: "Approval" } as const;
     case "activation_succeeded":
       return { icon: "check", tone: "success", label: "Activation succeeded" } as const;
+    case "activation_succeeded_for_approver":
+      return { icon: "check", tone: "success", label: "Access provisioned" } as const;
     case "activation_failed":
       return { icon: "bell", tone: "danger", label: "Activation failed" } as const;
     case "request_denied":

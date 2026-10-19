@@ -338,16 +338,17 @@ git diff --check
 
 3. **Wire the automatic expiration endpoint** to a schedule (e.g. Vercel Cron) with monitoring and alerting.
 4. **~~Propose and implement migration `0011`~~** — **completed** on `feature/notification-system` and applied to the isolated development database. Staff notifications (approver assignment, routing failure) now use the `user_notification` table via a composite uniqueness constraint. Production remains unchanged and must not receive this migration until the feature is reviewed and approved.
-5. **Active-access filter:** the metric links to `/requests` (all). Add a dedicated active-access view or filter once the `request_activation` JOIN is established in the list service.
-6. **Production environment verification:** confirm `AUTH_SECRET` isolation between Preview and Production, `APP_URL` correctness, `TEST_DATABASE_URL` exclusion from Vercel deployments.
+5. **Add original-Approver provisioning notification** — **completed** via migration `0014`, applied to development only. Successful Admin provisioning sends the active assigned Approver one recipient-isolated, idempotent notification; requester notifications and activation authorization remain unchanged.
+6. **Active-access filter:** the metric links to `/requests` (all). Add a dedicated active-access view or filter once the `request_activation` JOIN is established in the list service.
+7. **Production environment verification:** confirm `AUTH_SECRET` isolation between Preview and Production, `APP_URL` correctness, `TEST_DATABASE_URL` exclusion from Vercel deployments.
 
 ### Deferred (institutional dependency)
 
-7. Password recovery / MFA / SSO — blocked on email delivery, institutional IdP.
-8. Real university provisioning adapters — blocked on institutional systems.
-9. Catalog policy approval and canonical data integration.
-10. Audit export, redaction, legal-hold, and external notification delivery.
-11. Formal WCAG 2.2 AA audit and final Figma design comparison.
+8. Password recovery / MFA / SSO — blocked on email delivery, institutional IdP.
+9. Real university provisioning adapters — blocked on institutional systems.
+10. Catalog policy approval and canonical data integration.
+11. Audit export, redaction, legal-hold, and external notification delivery.
+12. Formal WCAG 2.2 AA audit and final Figma design comparison.
 12. Policy-version editing UI (duration/renewability).
 
 ## 16. Current system boundary

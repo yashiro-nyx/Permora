@@ -223,7 +223,11 @@ async function hydrateRequests(
             | "review_denied"
             | "review_returned_for_revision"
             | "activation_succeeded"
-            | "activation_failed";
+            | "activation_failed"
+            | "activation_started"
+            | "activation_expired"
+            | "activation_revoked"
+            | "activation_reconciled";
           occurred_at: Date;
           actor_name: string;
           detail: string;
@@ -236,6 +240,13 @@ async function hydrateRequests(
                UNION ALL
                SELECT id, request_id, actor_user_id, event_type, occurred_at, detail
                  FROM request_event
+               UNION ALL
+               SELECT event.id, activation.request_id, event.actor_user_id,
+                      event.event_type, event.occurred_at, event.detail
+                 FROM activation_event event
+                 JOIN request_activation activation
+                   ON activation.id = event.activation_id
+                WHERE event.event_type NOT IN ('activation_succeeded', 'activation_failed')
              ) event
              LEFT JOIN "user" u ON u.id = event.actor_user_id
             WHERE event.request_id = $1

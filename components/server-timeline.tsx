@@ -19,6 +19,10 @@ export function ServerTimeline({
     review_returned_for_revision: "Revision requested",
     activation_succeeded: "Access activated",
     activation_failed: "Activation failed",
+    activation_started: "Provisioning started",
+    activation_expired: "Access expired",
+    activation_revoked: "Access revoked",
+    activation_reconciled: "Activation reconciled",
   };
   return (
     <section className="timeline-section">

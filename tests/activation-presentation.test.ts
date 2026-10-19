@@ -113,6 +113,8 @@ test("all notification types have a presentation entry", () => {
     "activation_failed",
     "request_assigned_for_review",
     "routing_unavailable",
+    "activation_ready",
+    "activation_succeeded_for_approver",
   ] as const;
   for (const type of allTypes) {
     const p = notificationPresentation(type);

@@ -49,6 +49,7 @@ const STAFF_NOTIFICATION_TYPES = [
   "request_assigned_for_review",
   "routing_unavailable",
   "activation_ready",
+  "activation_succeeded_for_approver",
 ] as const;
 
 export async function listRequesterNotifications(
@@ -156,6 +157,8 @@ function staffReviewHref(
       return `/admin/unassigned`;
     case "activation_ready":
       return `/admin/activations?requestId=${encodeURIComponent(requestId)}`;
+    case "activation_succeeded_for_approver":
+      return `/review/${requestId}`;
     default:
       return null;
   }

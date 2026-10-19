@@ -52,7 +52,11 @@ export interface RequestEventDto {
     | "review_denied"
     | "review_returned_for_revision"
     | "activation_succeeded"
-    | "activation_failed";
+    | "activation_failed"
+    | "activation_started"
+    | "activation_expired"
+    | "activation_revoked"
+    | "activation_reconciled";
   at: string;
   actorName: string;
   detail: string;

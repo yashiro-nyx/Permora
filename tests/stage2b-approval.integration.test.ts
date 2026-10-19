@@ -1157,7 +1157,7 @@ test("a new idempotency key starts a fresh attempt after failure", async () => {
 });
 
 test("manual activation succeeds after transaction one commits", async () => {
-  const { requestId, actor } = await seedApprovedActivationRequest();
+  const { requestId, actor, approver } = await seedApprovedActivationRequest();
   let adapterObservedCommittedStart = false;
   const manualAdapter = new ManualAdminActivationAdapter();
   const observingAdapter: ActivationAdapter<ManualActivationContext> = {
@@ -1205,6 +1205,8 @@ test("manual activation succeeds after transaction one commits", async () => {
     request_success_events: number;
     audit_success_events: number;
     success_notifications: number;
+    approver_notifications: number;
+    approver_notification_title: string;
     recorded_evidence: string;
   }>(
     `SELECT request.status AS approval_status,
@@ -1226,6 +1228,15 @@ test("manual activation succeeds after transaction one commits", async () => {
             (SELECT count(*)::int FROM user_notification notification
               WHERE notification.request_id = request.id
                 AND notification.notification_type = 'activation_succeeded') AS success_notifications,
+            (SELECT count(*)::int FROM user_notification notification
+              WHERE notification.request_id = request.id
+                AND notification.recipient_user_id = $2
+                AND notification.notification_type = 'activation_succeeded_for_approver') AS approver_notifications,
+            (SELECT notification.title FROM user_notification notification
+              WHERE notification.request_id = request.id
+                AND notification.recipient_user_id = $2
+                AND notification.notification_type = 'activation_succeeded_for_approver'
+              LIMIT 1) AS approver_notification_title,
             (SELECT evidence FROM ordinary_entitlement entitlement
               WHERE entitlement.user_id = request.requester_user_id
                 AND entitlement.resource_id = request.resource_id
@@ -1235,7 +1246,7 @@ test("manual activation succeeds after transaction one commits", async () => {
        FROM access_request request
        JOIN request_activation activation ON activation.request_id = request.id
       WHERE request.id = $1`,
-    [requestId],
+    [requestId, approver],
   );
   assert.deepEqual(
     {
@@ -1246,6 +1257,8 @@ test("manual activation succeeds after transaction one commits", async () => {
       request_success_events: stored.rows[0].request_success_events,
       audit_success_events: stored.rows[0].audit_success_events,
       success_notifications: stored.rows[0].success_notifications,
+      approver_notifications: stored.rows[0].approver_notifications,
+      approver_notification_title: stored.rows[0].approver_notification_title,
     },
     {
       approval_status: "approved_pending_activation",
@@ -1255,6 +1268,8 @@ test("manual activation succeeds after transaction one commits", async () => {
       request_success_events: 1,
       audit_success_events: 1,
       success_notifications: 1,
+      approver_notifications: 1,
+      approver_notification_title: "Access provisioned — scheduled start",
     },
   );
   assert.match(stored.rows[0].recorded_evidence, /ITSM-REQ-7821/);
