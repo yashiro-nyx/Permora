@@ -150,11 +150,26 @@ function ActivationControls({
 
 export function AdminActivationQueue({
   items,
+  focusRequestId,
+  focusedRequestState,
 }: {
   items: AdministratorActivationItem[];
+  focusRequestId?: string;
+  focusedRequestState?: {
+    displayId: string;
+    requestStatus: string;
+    activationStatus: AdministratorActivationItem["activationStatus"];
+  } | null;
 }) {
   const router = useRouter();
   const [outcome, setOutcome] = useState("");
+
+  useEffect(() => {
+    if (!focusRequestId) return;
+    document
+      .getElementById(`activation-request-${focusRequestId}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusRequestId, items]);
 
   useEffect(() => {
     const refreshWhenVisible = () => {
@@ -179,6 +194,15 @@ export function AdminActivationQueue({
       <Alert title="Manual provisioning" tone="warning">
         Permora does not connect to university systems yet. Record success only after verifying access in the target system.
       </Alert>
+      {focusRequestId && !items.some((item) => item.requestId === focusRequestId) && focusedRequestState && (
+        <Alert title={`${focusedRequestState.displayId} is no longer awaiting activation`} tone="info">
+          The request is currently <strong>{focusedRequestState.requestStatus}</strong>
+          {focusedRequestState.activationStatus
+            ? ` with activation state ${focusedRequestState.activationStatus}.`
+            : "."}
+          The activation queue only offers actions for requests that remain approved and pending activation.
+        </Alert>
+      )}
       {outcome && (
         <div role="status">
           <Alert title="Activation outcome" tone="success">{outcome}</Alert>
@@ -212,7 +236,12 @@ export function AdminActivationQueue({
                     Date.parse(item.startsAt) > Date.now(),
                   );
                   return (
-                    <tr key={item.requestId}>
+                    <tr
+                      key={item.requestId}
+                      id={`activation-request-${item.requestId}`}
+                      className={item.requestId === focusRequestId ? "activation-row-focused" : undefined}
+                      aria-current={item.requestId === focusRequestId ? "true" : undefined}
+                    >
                       <td>
                         <strong>{item.requesterName}</strong>
                         <small className="table-secondary">{item.displayId}</small>

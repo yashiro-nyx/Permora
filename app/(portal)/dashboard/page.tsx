@@ -12,6 +12,8 @@ import {
   listAssignedReviewRequests,
   listUnassignedRoutingFailures,
 } from "@/lib/server/approval-read-service";
+import { listAdministratorActivations } from "@/lib/server/activation-read-service";
+import { listStaffNotifications } from "@/lib/server/operations-service";
 
 export const metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
@@ -22,7 +24,7 @@ export default async function Page() {
     try {
       const canReview = await hasActiveApprovalResponsibility(identity.id);
       const filters = { page: 1, pageSize: 5 };
-      const [pending, approved, denied, returned, unassigned] =
+      const [pending, approved, denied, returned, unassigned, activations, notifications] =
         await Promise.all([
           canReview
             ? listAssignedReviewRequests(identity, {
@@ -51,6 +53,16 @@ export default async function Page() {
           identity.roles.includes("admin")
             ? listUnassignedRoutingFailures(filters)
             : null,
+          identity.roles.includes("admin")
+            ? listAdministratorActivations()
+            : null,
+          identity.roles.includes("admin")
+            ? listStaffNotifications(identity.id, {
+                unreadOnly: true,
+                page: 1,
+                pageSize: 1,
+              })
+            : null,
         ]);
       return (
         <StaffDashboard
@@ -63,6 +75,11 @@ export default async function Page() {
             returnedForRevision: returned?.pagination.total ?? 0,
             unassigned: unassigned?.pagination.total,
             recent: pending?.items ?? [],
+            awaitingActivation: activations?.length,
+            activationIssues: activations?.filter(
+              (item) => item.activationStatus === "failed",
+            ).length,
+            unreadNotifications: notifications?.unreadTotal,
           }}
         />
       );

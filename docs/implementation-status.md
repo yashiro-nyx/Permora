@@ -181,6 +181,10 @@ Development request `REQ-2026-000032` (UUID `2c5a92a3-57ee-40b8-a659-c7ee9c4045e
 
 Approval now inserts one `activation_ready` notification for each active Administrator except the requester and original Approver, in the same transaction as the decision, request event, audit event, and requester notification. The existing recipient-scoped staff API and 15-second bell polling expose the alert; its authorized link is `/admin/activations`. Retries replay the decision and do not insert duplicates. No historical notifications were backfilled and no development requests or assignments were changed.
 
+### Administrator activation navigation and dashboard — October 19, 2026
+
+Activation-ready links now carry the authorized request UUID as `requestId`; the server validates the target, the queue focuses and highlights the matching row, and a completed/non-queue request displays its current request and activation state rather than an empty destination. The Admin dashboard now leads with awaiting activation, unassigned routing, activation failures, and unread staff notifications, with user/resource shortcuts. Under the default `dedicated_only` policy, Admin Review Requests navigation is hidden; explicit fallback enables the existing assignment- and responsibility-scoped review path. No activation rule or development record was changed.
+
 ## Testing and deployment readiness
 
 - [x] **Completed:** Node 22 repository requirement and guarded isolated test-runner configuration.

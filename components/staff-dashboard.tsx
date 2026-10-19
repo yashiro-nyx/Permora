@@ -11,6 +11,9 @@ export interface StaffDashboardData {
   returnedForRevision: number;
   unassigned?: number;
   recent: ReviewQueueItemDto[];
+  awaitingActivation?: number;
+  activationIssues?: number;
+  unreadNotifications?: number;
 }
 
 export function StaffDashboard({
@@ -39,47 +42,67 @@ export function StaffDashboard({
         </Alert>
       </>
     );
-  const metrics = [
-    {
-      label: "Assigned pending reviews",
-      value: data?.pending ?? 0,
-      icon: "requests",
-      tone: "warning",
-      href: "/review?status=pending_review",
-    },
-    {
-      label: "Approved — awaiting activation",
-      value: data?.approvedPendingActivation ?? 0,
-      icon: "check",
-      tone: "success",
-      href: "/review?status=approved_pending_activation",
-    },
-    {
-      label: "Denied decisions",
-      value: data?.denied ?? 0,
-      icon: "expire",
-      tone: "danger",
-      href: "/review?status=denied",
-    },
-    {
-      label: "Returned for revision",
-      value: data?.returnedForRevision ?? 0,
-      icon: "review",
-      tone: "neutral",
-      href: "/review?status=returned_for_revision",
-    },
-    ...(administrator
-      ? [
-          {
-            label: "Unassigned routing",
-            value: data?.unassigned ?? 0,
-            icon: "clock",
-            tone: "warning",
-            href: "/admin/unassigned",
-          },
-        ]
-      : []),
-  ];
+  const metrics = administrator
+    ? [
+        {
+          label: "Awaiting activation",
+          value: data?.awaitingActivation ?? 0,
+          icon: "key",
+          tone: "success",
+          href: "/admin/activations",
+        },
+        {
+          label: "Unassigned requests",
+          value: data?.unassigned ?? 0,
+          icon: "clock",
+          tone: "warning",
+          href: "/admin/unassigned",
+        },
+        {
+          label: "Activation issues",
+          value: data?.activationIssues ?? 0,
+          icon: "expire",
+          tone: "danger",
+          href: "/admin/activations",
+        },
+        {
+          label: "Unread notifications",
+          value: data?.unreadNotifications ?? 0,
+          icon: "bell",
+          tone: "info",
+          href: "/notifications/staff?view=unread",
+        },
+      ]
+    : [
+        {
+          label: "Assigned pending reviews",
+          value: data?.pending ?? 0,
+          icon: "requests",
+          tone: "warning",
+          href: "/review?status=pending_review",
+        },
+        {
+          label: "Approved — awaiting activation",
+          value: data?.approvedPendingActivation ?? 0,
+          icon: "check",
+          tone: "success",
+          href: "/review?status=approved_pending_activation",
+        },
+        {
+          label: "Denied decisions",
+          value: data?.denied ?? 0,
+          icon: "expire",
+          tone: "danger",
+          href: "/review?status=denied",
+        },
+        {
+          label: "Returned for revision",
+          value: data?.returnedForRevision ?? 0,
+          icon: "review",
+          tone: "neutral",
+          href: "/review?status=returned_for_revision",
+        },
+      ];
   return (
     <>
       <PageHeading
@@ -115,16 +138,35 @@ export function StaffDashboard({
       </section>
       <div className="dashboard-grid">
         <Card
-          title="Requests awaiting your review"
+          title={administrator ? "Operational attention" : "Requests awaiting your review"}
           action={
-            canReview ? (
+            administrator ? (
+              <Link href="/admin/activations" className="text-link">
+                Open activation queue →
+              </Link>
+            ) : canReview ? (
               <Link href="/review?status=pending_review" className="text-link">
                 View queue →
               </Link>
             ) : undefined
           }
         >
-          {!canReview || !data?.recent.length ? (
+          {administrator ? (
+            <div className="quick-actions dashboard-priority-list">
+              <LinkButton href="/admin/activations">
+                <span className="row"><Icon name="key" /> Approved requests awaiting activation</span>
+                <span aria-hidden="true">→</span>
+              </LinkButton>
+              <LinkButton href="/admin/unassigned" variant="outline">
+                <span className="row"><Icon name="clock" /> Requests needing routing intervention</span>
+                <span aria-hidden="true">→</span>
+              </LinkButton>
+              <LinkButton href="/notifications/staff" variant="outline">
+                <span className="row"><Icon name="bell" /> Administrative notifications</span>
+                <span aria-hidden="true">→</span>
+              </LinkButton>
+            </div>
+          ) : !canReview || !data?.recent.length ? (
             <div className="empty compact-empty">
               <h2>No assigned pending reviews</h2>
               <p>
@@ -172,13 +214,21 @@ export function StaffDashboard({
         <aside className="stack dashboard-aside">
           <section className="quick-actions">
             <h2>Quick actions</h2>
-            <LinkButton href="/review">
-              <span className="row"><Icon name="review" /> Review requests</span>
-              <span aria-hidden="true">→</span>
-            </LinkButton>
             {administrator && (
-              <LinkButton href="/admin/unassigned" variant="outline">
-                <span className="row"><Icon name="clock" /> Unassigned requests</span>
+              <LinkButton href="/users" variant="outline">
+                <span className="row"><Icon name="users" /> User management</span>
+                <span aria-hidden="true">→</span>
+              </LinkButton>
+            )}
+            {administrator && (
+              <LinkButton href="/resources" variant="outline">
+                <span className="row"><Icon name="resources" /> Resource catalog</span>
+                <span aria-hidden="true">→</span>
+              </LinkButton>
+            )}
+            {!administrator && (
+              <LinkButton href="/review">
+                <span className="row"><Icon name="review" /> Review requests</span>
                 <span aria-hidden="true">→</span>
               </LinkButton>
             )}

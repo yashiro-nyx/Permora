@@ -21,10 +21,12 @@ export function AppShell({
   children,
   identity,
   canReview,
+  adminReviewEnabled,
 }: {
   children: ReactNode;
   identity: TrustedIdentity;
   canReview: boolean;
+  adminReviewEnabled: boolean;
 }) {
   const path = usePathname();
   const router = useRouter();
@@ -56,7 +58,7 @@ export function AppShell({
   const role = primaryRole(identity);
   const requester = role !== "admin" && role !== "approver";
   const focused = path === "/requests/new";
-  const navigation = navigationForIdentity(identity, canReview);
+  const navigation = navigationForIdentity(identity, canReview, adminReviewEnabled);
   const active = (href: string) =>
     href === "/requests"
       ? path === href || (path.startsWith("/requests/") && !focused)

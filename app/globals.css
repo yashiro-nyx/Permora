@@ -1030,6 +1030,11 @@ a.notification-popover-item:hover {
 .staff-review-table td:last-child {
   text-align: right;
 }
+.activation-row-focused {
+  outline: 3px solid var(--info);
+  outline-offset: -3px;
+  background: color-mix(in srgb, var(--info) 8%, var(--surface));
+}
 .table-secondary {
   display: block;
   color: var(--muted);

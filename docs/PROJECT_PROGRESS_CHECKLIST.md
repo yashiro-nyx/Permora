@@ -193,6 +193,9 @@ Status: **Completed and merged into `develop`**
 - [x] Verified staff queue and notification recipient isolation against development records: assigned requests appear only for their selected reviewer; unassigned requests remain an administrator workflow; no historical notification backfill is performed without explicit review.
 - [x] Admin activation queue audit: approved-pending-activation requests are selected independently of activation-record existence and future start dates; activation and original-approver exclusion remain server-enforced.
 - [x] Activation-ready alerts use the existing staff bell/center, are idempotent by approval event/recipient, and do not create entitlements.
+- [x] Activation-ready links target `/admin/activations?requestId=<uuid>`, focus/highlight the authorized row, and show current lifecycle state when the request has left the pending-activation queue.
+- [x] Administrator dashboard prioritizes awaiting activation, unassigned routing, activation issues, and unread staff notifications; user/resource management shortcuts remain available.
+- [x] Under `dedicated_only`, Admin Review Requests navigation is hidden unless explicit Admin fallback is enabled; underlying assigned-review authorization remains unchanged.
 - [x] Desktop sidebar uses a viewport-height sticky grid column so long workspace pages cannot scroll the navigation/footer away; mobile drawer and collapsed-sidebar behavior remain intact.
 
 ### Administrator audit-log viewer

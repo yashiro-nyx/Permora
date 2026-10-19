@@ -4,6 +4,7 @@ import {
   hasActiveApprovalResponsibility,
   requireIdentity,
 } from "@/lib/server/identity";
+import { allowsAdminFallback } from "@/lib/approval-routing-policy";
 
 export const dynamic = "force-dynamic";
 export default async function PortalLayout({
@@ -28,7 +29,11 @@ export default async function PortalLayout({
   }
   return (
     <ToastProvider>
-      <AppShell identity={identity} canReview={canReview}>
+      <AppShell
+        identity={identity}
+        canReview={canReview}
+        adminReviewEnabled={allowsAdminFallback()}
+      >
         {children}
       </AppShell>
     </ToastProvider>

@@ -139,7 +139,7 @@ function staffReviewHref(
     case "routing_unavailable":
       return `/admin/unassigned`;
     case "activation_ready":
-      return `/admin/activations`;
+      return `/admin/activations?requestId=${encodeURIComponent(requestId)}`;
     default:
       return null;
   }

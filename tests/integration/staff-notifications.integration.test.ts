@@ -64,6 +64,7 @@ let adminCookie = "";
 let requesterCookie = "";
 let assignedNotificationId = "";
 let routingUnavailableNotificationId = "";
+let activationReadyNotificationId = "";
 let requestIdA = "";
 
 async function migrate() {
@@ -175,7 +176,7 @@ function apiRequest(
 async function seedStaffNotification(
   recipientId: string,
   requestId: string,
-  type: "request_assigned_for_review" | "routing_unavailable",
+  type: "request_assigned_for_review" | "routing_unavailable" | "activation_ready",
   title: string,
 ) {
   const eventId = randomUUID();
@@ -260,6 +261,12 @@ before(async () => {
     "routing_unavailable",
     "Request needs manual assignment",
   );
+  activationReadyNotificationId = await seedStaffNotification(
+    admin1.id,
+    requestIdA,
+    "activation_ready",
+    "Activation ready — STAFF-A",
+  );
 });
 
 after(closeApplicationTestPool);
@@ -325,6 +332,10 @@ test("admin sees routing-unavailable notification, not the assignment notificati
   const body = await res.json();
   const ids = body.items.map((i: { notificationId: string }) => i.notificationId);
   assert.ok(ids.includes(routingUnavailableNotificationId), "admin must see routing-unavailable");
+  const activationReady = body.items.find(
+    (item: { notificationId: string }) => item.notificationId === activationReadyNotificationId,
+  );
+  assert.equal(activationReady?.reviewHref, `/admin/activations?requestId=${requestIdA}`);
   assert.ok(!ids.includes(assignedNotificationId), "admin must NOT see approver1's assignment");
 });
 
@@ -335,7 +346,7 @@ test("requester bell does not return staff notification types", async () => {
   // requester has no notifications of any type → empty list is fine, just 200.
   assert.equal(res.status, 200);
   const body = await res.json();
-  const staffTypes = ["request_assigned_for_review", "routing_unavailable"];
+  const staffTypes = ["request_assigned_for_review", "routing_unavailable", "activation_ready"];
   const hasStaffType = body.items.some((i: { type: string }) =>
     staffTypes.includes(i.type),
   );

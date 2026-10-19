@@ -54,6 +54,7 @@ export function primaryRole(identity: TrustedIdentity): Role {
 export function navigationForIdentity(
   identity: TrustedIdentity,
   canReview: boolean,
+  adminReviewEnabled = true,
 ) {
   const role = primaryRole(identity);
   const navigation =
@@ -62,5 +63,7 @@ export function navigationForIdentity(
       : role === "approver"
         ? approverNavigation
         : requesterNavigation;
-  return canReview ? navigation : navigation.filter(([href]) => href !== "/review");
+  const mayOpenReview = canReview &&
+    (role !== "admin" || adminReviewEnabled);
+  return mayOpenReview ? navigation : navigation.filter(([href]) => href !== "/review");
 }
