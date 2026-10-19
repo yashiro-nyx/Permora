@@ -386,6 +386,7 @@ Development reconciliation example: `npm run approvals:reconcile -- --database-t
 - Development migration status is `0001`–`0012`; migration `0012_request_reassignment_event.sql` was applied transactionally to verified database `neondb` on October 19, 2026. It remains unapplied in production.
 - Activation queue clarification: `REQ-2026-000032` was present in the database and returned by the Admin activation read service after approval; the missing display was caused by an already-open stale Admin tab. The queue now refreshes on focus, visibility change, and a 15-second visible interval. Do not infer missing approval from an unchanged tab; reload or wait for the refresh before investigating data.
 - The October 19 read-only dry run found four `pending_review` requests: three already assigned to `approver@permora.ph` (no-op conflicts), and `REQ-2026-000016` assigned to `admin@permora.ph`, with `approver@permora.ph` eligible as the proposed replacement. No records changed.
+- Full E2E stabilization (October 19): the two setup failures were caused by a transient `ECONNRESET` on the first Better Auth sign-in POST while Next.js dev compilation/HMR was active. The bounded shared fixture sign-in retry preserves the real UI and auth assertion; the complete suite passed 71/71 with no skips. The isolated `_test` database was reset only by the existing browser global setup.
 
 ## O. Team handoff checklist
 

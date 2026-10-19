@@ -185,6 +185,10 @@ Approval now inserts one `activation_ready` notification for each active Adminis
 
 Activation-ready links now carry the authorized request UUID as `requestId`; the server validates the target, the queue focuses and highlights the matching row, and a completed/non-queue request displays its current request and activation state rather than an empty destination. The Admin dashboard now leads with awaiting activation, unassigned routing, activation failures, and unread staff notifications, with user/resource shortcuts. Under the default `dedicated_only` policy, Admin Review Requests navigation is hidden; explicit fallback enables the existing assignment- and responsibility-scoped review path. No activation rule or development record was changed.
 
+### Full E2E stabilization — October 19, 2026
+
+The two full-suite setup failures were reproduced in `admin-governance.spec.ts` and `admin-identifiers.spec.ts`. Their first Better Auth sign-in POST was reset by the Next development server during an HMR route compilation (`status: -1` in the Playwright trace); the page remained on `/login`, and no corresponding rate-limit rejection or database fixture error existed. A shared, bounded three-attempt UI sign-in helper now tolerates that transient transport reset while retaining the final dashboard URL assertion for real authentication failures. The complete Playwright run then passed **71/71**, with **0 failed** and **0 skipped** tests. No application authorization, fixture isolation, or production data behavior was changed.
+
 ## Testing and deployment readiness
 
 - [x] **Completed:** Node 22 repository requirement and guarded isolated test-runner configuration.
