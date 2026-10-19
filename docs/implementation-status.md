@@ -170,7 +170,7 @@ Figma contains desktop evidence only. Mobile drawers, stacked layouts, errors, e
 
 New-request routing now prefers dedicated Approver accounts and fails closed to `pending_routing` when no eligible reviewer exists. Admin fallback is opt-in through `APPROVAL_ROUTING_POLICY=dedicated_first_with_admin_fallback`. The Admin reassignment API is same-origin, active-admin-only, version-checked, transactional, audited, and limited to eligible non-terminal `pending_review` requests. No bulk reassignment was performed.
 
-Migration `0012_request_reassignment_event.sql` adds the reassignment event type and replaces global assignment uniqueness with a partial unique index, preserving completed assignment history while allowing one open replacement assignment. It is pending in development and production; isolated `_test` databases apply it during test setup. Development remains at migrations `0001`–`0011`.
+Migration `0012_request_reassignment_event.sql` adds the reassignment event type and replaces global assignment uniqueness with a partial unique index, preserving completed assignment history while allowing one open replacement assignment. It was applied transactionally to verified development database `neondb` on October 19, 2026. Production remains unchanged; isolated `_test` databases apply it during test setup. Development is now at migrations `0001`–`0012`.
 
 ## Testing and deployment readiness
 

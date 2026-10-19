@@ -438,4 +438,4 @@ Never place credentials in source code, Git history, screenshots, issue comments
 - [x] Added transactional, version-checked Admin reassignment for eligible non-terminal `pending_review` requests, with completed prior assignment history, replacement assignment, immutable request/audit events, and one replacement notification.
 - [x] Added isolated integration and Playwright workflow coverage; no bulk reassignment was performed.
 - [x] Development dry-run was read-only: three pending-review rows were already assigned to the dedicated Approver; one Admin-assigned row had the dedicated Approver as an eligible proposed replacement. No records changed.
-- [ ] Migration `0012_request_reassignment_event.sql` is prepared but not applied to development or production; isolated test databases apply it during setup.
+- [x] Migration `0012_request_reassignment_event.sql` was applied to verified development database `neondb` on 2026-10-19; production remains unchanged. Isolated test databases apply it during setup.
