@@ -5,6 +5,7 @@ test.describe.configure({ mode: "serial" });
 
 let requesterPage: Page;
 let adminPage: Page;
+let approverPage: Page;
 let activationAdminPage: Page;
 
 async function signIn(target: Page, email: string) {
@@ -30,17 +31,23 @@ test.beforeAll(async ({ browser }) => {
     viewport: { width: 1440, height: 1000 },
     extraHTTPHeaders: e2eClientHeaders(41),
   });
+  approverPage = await browser.newPage({
+    viewport: { width: 1440, height: 1000 },
+    extraHTTPHeaders: e2eClientHeaders(43),
+  });
   activationAdminPage = await browser.newPage({
     viewport: { width: 1440, height: 1000 },
     extraHTTPHeaders: e2eClientHeaders(42),
   });
   await signIn(adminPage, E2E.administrator.email);
+  await signIn(approverPage, E2E.otherApprover.email);
   await signIn(activationAdminPage, E2E.activationAdministrator.email);
 });
 
 test.afterAll(async () => {
   await requesterPage.close();
   await adminPage.close();
+  await approverPage.close();
   await activationAdminPage.close();
 });
 
@@ -101,29 +108,29 @@ test("request submission, deterministic routing, approval, and requester status 
     requesterPage.getByText("Pending review").first(),
   ).toBeVisible();
 
-  await adminPage.goto(`/review/${requestId}`);
+  await approverPage.goto(`/review/${requestId}`);
   await expect(
-    adminPage.getByRole("heading", { name: "Review access request" }),
+    approverPage.getByRole("heading", { name: "Review access request" }),
   ).toBeVisible();
   await expect(
-    adminPage.getByRole("heading", { name: "Taylor Workflow" }),
+    approverPage.getByRole("heading", { name: "Taylor Workflow" }),
   ).toBeVisible();
-  await adminPage
+  await approverPage
     .getByLabel("Decision reason")
     .fill(
       "The requested resource and validity period meet the current policy.",
     );
-  await adminPage
+  await approverPage
     .getByRole("button", { name: "Approve", exact: true })
     .click();
-  await adminPage
+  await approverPage
     .getByRole("button", { name: "Confirm decision" })
     .click();
   await expect(
-    adminPage.getByText("Approved — awaiting activation").first(),
+    approverPage.getByText("Approved — awaiting activation").first(),
   ).toBeVisible();
   await expect(
-    adminPage.getByText(/does not activate access, create an entitlement/i),
+    approverPage.getByText(/does not activate access, create an entitlement/i),
   ).toBeVisible();
 
   await requesterPage.reload();

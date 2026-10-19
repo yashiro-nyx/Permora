@@ -20,6 +20,7 @@ import {
   listScopeOptions,
   listUserIdentifiers,
   previewRetention,
+  reassignPendingReviewRequest,
   toggleCatalogAvailability,
   updateNotificationPreferences,
   upsertUserIdentifier,
@@ -246,6 +247,25 @@ export async function handleManualAssign(request: Request, requestId: string) {
     const identity = await adminFrom(request);
     return json({
       result: await assignUnassignedRequest(
+        requestId,
+        await jsonBody(request),
+        adminDeps(identity),
+      ),
+    });
+  } catch (caught) {
+    return mapped(caught);
+  }
+}
+
+export async function handlePendingReviewReassign(request: Request, requestId: string) {
+  try {
+    if (!hasTrustedOrigin(request))
+      return error(403, "invalid_origin", "The request origin is not trusted.");
+    if (!UUID.test(requestId))
+      return error(400, "invalid_input", "The request identifier is invalid.");
+    const identity = await adminFrom(request);
+    return json({
+      result: await reassignPendingReviewRequest(
         requestId,
         await jsonBody(request),
         adminDeps(identity),

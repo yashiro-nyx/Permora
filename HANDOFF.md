@@ -376,6 +376,14 @@ The health route is an availability probe, not a disclosure endpoint or substitu
 
 Development reconciliation example: `npm run approvals:reconcile -- --database-target development --confirm-database-name <development-database-name>`; add `--apply` only after inspecting the dry run. Production also requires `--confirm-production` and both URLs in the current process.
 
+## Current handoff — dedicated-first routing
+
+- Default routing policy: `dedicated_only`; do not enable Admin fallback without documented policy approval.
+- Reassignment endpoint: `POST /api/admin/review-requests/[id]/reassign`; body uses `responsibilityId` and `expectedVersion`.
+- Reassignment is intentionally not bulk-applied. Review the dry-run report before any individual development operation.
+- Development migration status is `0001`–`0011`; migration `0012_request_reassignment_event.sql` remains pending there and in production.
+- The October 19 read-only dry run found four `pending_review` requests: three already assigned to `approver@permora.ph` (no-op conflicts), and `REQ-2026-000016` assigned to `admin@permora.ph`, with `approver@permora.ph` eligible as the proposed replacement. No records changed.
+
 ## O. Team handoff checklist
 
 - [ ] GitHub access granted with least privilege.

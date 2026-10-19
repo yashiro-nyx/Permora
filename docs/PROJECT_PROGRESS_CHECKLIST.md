@@ -429,3 +429,13 @@ Never place credentials in source code, Git history, screenshots, issue comments
 - Cancelling the dialog restores the original resource selection and preserves all entered values.
 - Confirmation (`"Switch resource"` button) clears all resource-specific fields and resets to the new resource&apos;s defaults.
 - Renewals are exempt — the resource selector is disabled on the renewal form.
+
+## Current routing correction — October 19, 2026
+
+- [x] Dedicated Approver accounts are preferred for new routing; default policy is `dedicated_only`.
+- [x] Admin fallback requires explicit `APPROVAL_ROUTING_POLICY=dedicated_first_with_admin_fallback` and is not enabled by default.
+- [x] No-eligible-reviewer requests remain `pending_routing`; scope, self-approval exclusion, workload balancing, and deterministic tie-breaking remain enforced.
+- [x] Added transactional, version-checked Admin reassignment for eligible non-terminal `pending_review` requests, with completed prior assignment history, replacement assignment, immutable request/audit events, and one replacement notification.
+- [x] Added isolated integration and Playwright workflow coverage; no bulk reassignment was performed.
+- [x] Development dry-run was read-only: three pending-review rows were already assigned to the dedicated Approver; one Admin-assigned row had the dedicated Approver as an eligible proposed replacement. No records changed.
+- [ ] Migration `0012_request_reassignment_event.sql` is prepared but not applied to development or production; isolated test databases apply it during setup.

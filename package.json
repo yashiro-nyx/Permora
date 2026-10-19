@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/account-credentials.test.ts tests/account-management.test.ts tests/activation-adapter.test.ts tests/activation-presentation.test.ts tests/catalog-admin-ui.test.ts tests/database-connection.test.ts tests/delegation-admin-ui.test.ts tests/database-target.test.ts tests/demo-service.test.ts tests/health.test.ts tests/identifier-admin-ui.test.ts tests/login-error.test.ts tests/notification-preferences-ui.test.ts tests/operations.test.ts tests/password-strength.test.ts tests/provision-account-cli.test.ts tests/reports-ui.test.ts tests/retention-ui.test.ts tests/review-ui.test.ts tests/scheduler-auth.test.ts tests/stage2a-security.test.ts tests/toast-ui.test.ts tests/pagination.test.ts",
+    "test": "tsx --test tests/account-credentials.test.ts tests/account-management.test.ts tests/activation-adapter.test.ts tests/activation-presentation.test.ts tests/approval-routing-policy.test.ts tests/catalog-admin-ui.test.ts tests/database-connection.test.ts tests/delegation-admin-ui.test.ts tests/database-target.test.ts tests/demo-service.test.ts tests/health.test.ts tests/identifier-admin-ui.test.ts tests/login-error.test.ts tests/notification-preferences-ui.test.ts tests/operations.test.ts tests/password-strength.test.ts tests/provision-account-cli.test.ts tests/reports-ui.test.ts tests/retention-ui.test.ts tests/review-ui.test.ts tests/scheduler-auth.test.ts tests/stage2a-security.test.ts tests/toast-ui.test.ts tests/pagination.test.ts",
     "test:integration": "tsx scripts/run-integration-tests.ts",
     "test:e2e": "playwright test",
     "db:migrate": "tsx scripts/migrate.ts",

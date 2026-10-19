@@ -16,6 +16,8 @@ import {
 } from "@/lib/admin-governance";
 import {
   administratorAssignPendingRequest,
+  administratorReassignPendingReview,
+  AdministratorReassignmentError,
   AdministratorRoutingError,
   listEligibleResponsibilitiesForRequest,
 } from "@/lib/approval-domain";
@@ -751,6 +753,32 @@ export async function assignUnassignedRequest(
     );
   } catch (error) {
     if (error instanceof AdministratorRoutingError)
+      throw new GovernanceError(
+        error.code === "not_found" ? "not_found" : "conflict",
+        error.message,
+      );
+    throw error;
+  }
+}
+
+export async function reassignPendingReviewRequest(
+  requestId: string,
+  input: unknown,
+  dependencies: Overrides = {},
+) {
+  const identity = await requireActiveAdmin(dependencies);
+  const data = parseManualAssignInput(input);
+  try {
+    return await transaction(async (client) =>
+      administratorReassignPendingReview(client, {
+        requestId,
+        responsibilityId: data.responsibilityId,
+        expectedVersion: data.expectedVersion,
+        actorUserId: identity.id,
+      }),
+    );
+  } catch (error) {
+    if (error instanceof AdministratorReassignmentError)
       throw new GovernanceError(
         error.code === "not_found" ? "not_found" : "conflict",
         error.message,

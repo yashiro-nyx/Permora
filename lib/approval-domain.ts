@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
+import { allowsAdminFallback, approvalRoutingPolicy } from "./approval-routing-policy";
 
 export type ApprovalDecision = "approve" | "deny" | "return_for_revision";
 export type ApprovalRequestStatus =
@@ -41,6 +42,8 @@ async function routeCandidate(
     scopeOptionIds: string[];
   },
 ) {
+  const policy = approvalRoutingPolicy();
+  const staffRoles = allowsAdminFallback(policy) ? "'approver', 'admin'" : "'approver'";
   const responsibilityScopeMatch = `
           AND (
             NOT EXISTS (
@@ -61,7 +64,12 @@ async function routeCandidate(
           )`;
   const result = await client.query<RouteCandidate>(
     `WITH matching_responsibilities AS (
-       SELECT ar.id AS responsibility_id, ar.approver_user_id
+       SELECT ar.id AS responsibility_id, ar.approver_user_id,
+              EXISTS (
+                SELECT 1 FROM user_role dedicated_role
+                 WHERE dedicated_role.user_id = ar.approver_user_id
+                   AND dedicated_role.role = 'approver'
+              ) AS is_dedicated
          FROM approver_responsibility ar
          JOIN user_profile profile
            ON profile.user_id = ar.approver_user_id AND profile.active
@@ -73,11 +81,16 @@ async function routeCandidate(
           AND EXISTS (
             SELECT 1 FROM user_role role
              WHERE role.user_id = ar.approver_user_id
-               AND role.role IN ('approver', 'admin')
+               AND role.role IN (${staffRoles})
           )
           ${responsibilityScopeMatch}
        UNION ALL
-       SELECT ar.id AS responsibility_id, delegation.substitute_user_id AS approver_user_id
+       SELECT ar.id AS responsibility_id, delegation.substitute_user_id AS approver_user_id,
+              EXISTS (
+                SELECT 1 FROM user_role dedicated_role
+                 WHERE dedicated_role.user_id = delegation.substitute_user_id
+                   AND dedicated_role.role = 'approver'
+              ) AS is_dedicated
          FROM approver_responsibility ar
          JOIN approver_delegation delegation
            ON delegation.delegator_user_id = ar.approver_user_id
@@ -94,13 +107,17 @@ async function routeCandidate(
           AND EXISTS (
             SELECT 1 FROM user_role role
              WHERE role.user_id = delegation.substitute_user_id
-               AND role.role IN ('approver', 'admin')
+               AND role.role IN (${staffRoles})
           )
           ${responsibilityScopeMatch}
+     ), eligible AS (
+       SELECT matching.*, bool_or(is_dedicated) OVER () AS has_dedicated
+         FROM matching_responsibilities matching
      ), approvers AS (
        SELECT DISTINCT ON (approver_user_id)
               approver_user_id, responsibility_id
-         FROM matching_responsibilities
+         FROM eligible
+        WHERE is_dedicated OR NOT has_dedicated
         ORDER BY approver_user_id, responsibility_id
      )
      SELECT eligible.approver_user_id, eligible.responsibility_id
@@ -345,6 +362,7 @@ export type EligibleResponsibilityOption = {
 export async function listEligibleResponsibilitiesForRequest(
   client: PoolClient,
   requestId: string,
+  includePendingReview = false,
 ): Promise<EligibleResponsibilityOption[]> {
   const request = await client.query<{
     requester_user_id: string;
@@ -357,7 +375,10 @@ export async function listEligibleResponsibilitiesForRequest(
     [requestId],
   );
   const row = request.rows[0];
-  if (!row || row.status !== "pending_routing") return [];
+  const allowedStatuses = includePendingReview
+    ? ["pending_routing", "pending_review"]
+    : ["pending_routing"];
+  if (!row || !allowedStatuses.includes(row.status)) return [];
   const scopes = await client.query<{ scope_option_id: string }>(
     "SELECT scope_option_id FROM access_request_scope WHERE request_id = $1 ORDER BY field_name",
     [requestId],
@@ -458,6 +479,183 @@ export class AdministratorRoutingError extends Error {
     super(message);
     this.name = "AdministratorRoutingError";
   }
+}
+
+export class AdministratorReassignmentError extends Error {
+  constructor(
+    message: string,
+    readonly code:
+      | "not_found"
+      | "not_pending_review"
+      | "stale_request"
+      | "not_assigned"
+      | "invalid_responsibility"
+      | "same_assignee",
+  ) {
+    super(message);
+    this.name = "AdministratorReassignmentError";
+  }
+}
+
+export async function administratorReassignPendingReview(
+  client: PoolClient,
+  input: {
+    requestId: string;
+    responsibilityId: string;
+    expectedVersion: number;
+    actorUserId: string;
+  },
+) {
+  await client.query("SELECT pg_advisory_xact_lock(73020422)");
+  const locked = await client.query<{
+    requester_user_id: string;
+    resource_id: string;
+    permission_id: string;
+    policy_version_id: string;
+    display_id: string;
+    status: ApprovalRequestStatus;
+    version: number;
+  }>(
+    `SELECT requester_user_id, resource_id, permission_id, policy_version_id,
+            display_id, status, version
+       FROM access_request WHERE id = $1 FOR UPDATE`,
+    [input.requestId],
+  );
+  const request = locked.rows[0];
+  if (!request)
+    throw new AdministratorReassignmentError("The request was not found.", "not_found");
+  if (request.status !== "pending_review")
+    throw new AdministratorReassignmentError(
+      "Only pending-review requests can be reassigned.",
+      "not_pending_review",
+    );
+  if (request.version !== input.expectedVersion)
+    throw new AdministratorReassignmentError(
+      "This request changed after it was loaded.",
+      "stale_request",
+    );
+
+  const current = await client.query<{
+    id: string;
+    approver_user_id: string;
+  }>(
+    `SELECT id, approver_user_id
+       FROM request_review_assignment
+      WHERE request_id = $1 AND status = 'assigned'
+      FOR UPDATE`,
+    [input.requestId],
+  );
+  const assignment = current.rows[0];
+  if (!assignment)
+    throw new AdministratorReassignmentError(
+      "The request has no active review assignment.",
+      "not_assigned",
+    );
+
+  const eligible = await listEligibleResponsibilitiesForRequest(
+    client,
+    input.requestId,
+    true,
+  );
+  const selected = eligible.find(
+    (option) => option.responsibilityId === input.responsibilityId,
+  );
+  if (!selected)
+    throw new AdministratorReassignmentError(
+      "The selected approver responsibility is not eligible for this request.",
+      "invalid_responsibility",
+    );
+  if (selected.approverUserId === assignment.approver_user_id)
+    throw new AdministratorReassignmentError(
+      "The request is already assigned to that approver.",
+      "same_assignee",
+    );
+
+  const replacementAssignmentId = randomUUID();
+  await client.query(
+    `UPDATE request_review_assignment
+        SET status = 'completed', completed_at = now()
+      WHERE id = $1`,
+    [assignment.id],
+  );
+  await client.query(
+    `INSERT INTO request_review_assignment
+      (id, request_id, approver_user_id, responsibility_id)
+     VALUES ($1,$2,$3,$4)`,
+    [
+      replacementAssignmentId,
+      input.requestId,
+      selected.approverUserId,
+      selected.responsibilityId,
+    ],
+  );
+  await client.query(
+    `UPDATE access_request
+        SET version = version + 1, updated_at = now()
+      WHERE id = $1`,
+    [input.requestId],
+  );
+  const metadata = {
+    displayId: request.display_id,
+    resourceId: request.resource_id,
+    permissionId: request.permission_id,
+    policyVersionId: request.policy_version_id,
+    previousAssignmentId: assignment.id,
+    previousApproverUserId: assignment.approver_user_id,
+    assignmentId: replacementAssignmentId,
+    responsibilityId: selected.responsibilityId,
+    previousState: "pending_review",
+    newState: "pending_review",
+    assignmentMode: "administrator_reassignment",
+    viaDelegation: selected.viaDelegation,
+    delegatorName: selected.delegatorName,
+  };
+  const eventId = randomUUID();
+  await client.query(
+    `INSERT INTO request_event
+      (id, request_id, actor_user_id, event_type, detail, metadata)
+     VALUES ($1,$2,$3,'request_reassigned',$4,$5::jsonb)`,
+    [
+      eventId,
+      input.requestId,
+      input.actorUserId,
+      "Administrator reassigned the pending review request to another eligible approver.",
+      JSON.stringify(metadata),
+    ],
+  );
+  await client.query(
+    `INSERT INTO audit_event
+      (id, actor_user_id, subject_user_id, request_id, event_type, metadata)
+     VALUES ($1,$2,$3,$4,'request_reassigned',$5::jsonb)`,
+    [
+      randomUUID(),
+      input.actorUserId,
+      request.requester_user_id,
+      input.requestId,
+      JSON.stringify(metadata),
+    ],
+  );
+  await client.query(
+    `INSERT INTO user_notification
+      (id, recipient_user_id, request_id, request_event_id,
+       notification_type, title, body)
+     VALUES ($1,$2,$3,$4,'request_assigned_for_review',$5,$6)`,
+    [
+      randomUUID(),
+      selected.approverUserId,
+      input.requestId,
+      eventId,
+      "New request assigned for review",
+      `Request ${request.display_id} has been reassigned to you for review by an administrator.`,
+    ],
+  );
+  return {
+    assignmentId: replacementAssignmentId,
+    previousAssignmentId: assignment.id,
+    approverUserId: selected.approverUserId,
+    responsibilityId: selected.responsibilityId,
+    version: input.expectedVersion + 1,
+  };
 }
 
 export async function administratorAssignPendingRequest(

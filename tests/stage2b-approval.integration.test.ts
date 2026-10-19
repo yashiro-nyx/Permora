@@ -32,6 +32,7 @@ import {
   applyApprovalDecision as applyApprovalDecisionDomain,
   type ApprovalDecision,
   ApprovalDomainError,
+  administratorReassignPendingReview,
   previewRequestRoute,
   routePendingRequest,
 } from "../lib/approval-domain";
@@ -796,6 +797,161 @@ test("decision and audit creation are atomic", async () => {
     status: "pending_review",
     decisions: 0,
     review_events: 0,
+  });
+});
+
+test("administrator reassignment preserves history, versioning, notification idempotency, and rollback", async () => {
+  const requester = await seedUser("student");
+  const previousApprover = await seedUser("approver");
+  const replacementApprover = await seedUser("approver");
+  const previousResponsibility = await seedResponsibility(
+    previousApprover,
+    "r-library",
+    "library:subscribed-materials",
+  );
+  const replacementResponsibility = await seedResponsibility(
+    replacementApprover,
+    "r-library",
+    "library:subscribed-materials",
+  );
+  const requestId = await seedRequest(
+    requester,
+    "r-library",
+    "library:subscribed-materials",
+    [],
+    "pending_review",
+  );
+  const assignmentId = randomUUID();
+  await pool.query(
+    `INSERT INTO request_review_assignment
+      (id, request_id, approver_user_id, responsibility_id)
+     VALUES ($1,$2,$3,$4)`,
+    [assignmentId, requestId, previousApprover, previousResponsibility],
+  );
+  const actor = await seedUser("admin");
+  const initialVersion = await requestVersion(requestId);
+
+  const result = await inTransaction((client) =>
+    administratorReassignPendingReview(client, {
+      requestId,
+      responsibilityId: replacementResponsibility,
+      expectedVersion: initialVersion,
+      actorUserId: actor,
+    }),
+  );
+  assert.equal(result.approverUserId, replacementApprover);
+  assert.equal(result.version, initialVersion + 1);
+
+  const persisted = await pool.query<{
+    status: string;
+    approver_user_id: string;
+    assignment_count: number;
+    request_version: number;
+    event_count: number;
+    audit_count: number;
+    notification_count: number;
+  }>(
+    `SELECT request.version AS request_version,
+            (SELECT count(*)::int FROM request_review_assignment
+              WHERE request_id = request.id) AS assignment_count,
+            (SELECT count(*)::int FROM request_event
+              WHERE request_id = request.id AND event_type = 'request_reassigned') AS event_count,
+            (SELECT count(*)::int FROM audit_event
+              WHERE request_id = request.id AND event_type = 'request_reassigned') AS audit_count,
+            (SELECT count(*)::int FROM user_notification
+              WHERE request_id = request.id AND notification_type = 'request_assigned_for_review') AS notification_count,
+            old_assignment.status,
+            new_assignment.approver_user_id
+       FROM access_request request
+       JOIN request_review_assignment old_assignment
+         ON old_assignment.id = $2
+       JOIN request_review_assignment new_assignment
+         ON new_assignment.id = $3
+      WHERE request.id = $1`,
+    [requestId, assignmentId, result.assignmentId],
+  );
+  assert.deepEqual(persisted.rows[0], {
+    status: "completed",
+    approver_user_id: replacementApprover,
+    assignment_count: 2,
+    request_version: initialVersion + 1,
+    event_count: 1,
+    audit_count: 1,
+    notification_count: 1,
+  });
+
+  await assert.rejects(
+    () =>
+      inTransaction((client) =>
+        administratorReassignPendingReview(client, {
+          requestId,
+          responsibilityId: previousResponsibility,
+          expectedVersion: initialVersion,
+          actorUserId: actor,
+        }),
+      ),
+    /changed after it was loaded/,
+  );
+
+  const rollbackRequest = await seedRequest(
+    requester,
+    "r-library",
+    "library:subscribed-materials",
+    [],
+    "pending_review",
+  );
+  const rollbackAssignment = randomUUID();
+  await pool.query(
+    `INSERT INTO request_review_assignment
+      (id, request_id, approver_user_id, responsibility_id)
+     VALUES ($1,$2,$3,$4)`,
+    [rollbackAssignment, rollbackRequest, previousApprover, previousResponsibility],
+  );
+  await pool.query(`CREATE FUNCTION fail_reassignment_audit_insert()
+    RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW.event_type = 'request_reassigned' THEN
+        RAISE EXCEPTION 'forced reassignment audit failure';
+      END IF;
+      RETURN NEW;
+    END;
+  $$`);
+  await pool.query(`CREATE TRIGGER test_fail_reassignment_audit
+    BEFORE INSERT ON audit_event
+    FOR EACH ROW EXECUTE FUNCTION fail_reassignment_audit_insert()`);
+  const rollbackVersion = await requestVersion(rollbackRequest);
+  try {
+    await assert.rejects(() =>
+      inTransaction((client) =>
+        administratorReassignPendingReview(client, {
+          requestId: rollbackRequest,
+          responsibilityId: replacementResponsibility,
+          expectedVersion: rollbackVersion,
+          actorUserId: actor,
+        }),
+      ),
+    );
+  } finally {
+    await pool.query("DROP TRIGGER test_fail_reassignment_audit ON audit_event");
+    await pool.query("DROP FUNCTION fail_reassignment_audit_insert()");
+  }
+  const rolledBack = await pool.query<{
+    status: string;
+    assignments: number;
+    version: number;
+    events: number;
+  }>(
+    `SELECT request.status, request.version,
+            (SELECT count(*)::int FROM request_review_assignment WHERE request_id = request.id) AS assignments,
+            (SELECT count(*)::int FROM request_event WHERE request_id = request.id AND event_type = 'request_reassigned') AS events
+       FROM access_request request WHERE request.id = $1`,
+    [rollbackRequest],
+  );
+  assert.deepEqual(rolledBack.rows[0], {
+    status: "pending_review",
+    assignments: 1,
+    version: 1,
+    events: 0,
   });
 });
 
