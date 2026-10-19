@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { activationStatusSummary } from "@/lib/activation-presentation";
 import type { AdministratorActivationItem } from "@/lib/server/activation-read-service";
 import { dateLabel } from "@/lib/model";
@@ -153,7 +153,22 @@ export function AdminActivationQueue({
 }: {
   items: AdministratorActivationItem[];
 }) {
+  const router = useRouter();
   const [outcome, setOutcome] = useState("");
+
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") router.refresh();
+    };
+    const interval = window.setInterval(refreshWhenVisible, 15_000);
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [router]);
   return (
     <>
       <PageHeading
@@ -194,6 +209,7 @@ export function AdminActivationQueue({
                     item.approvalStatus,
                     item.activationStatus,
                     item.retryable,
+                    Date.parse(item.startsAt) > Date.now(),
                   );
                   return (
                     <tr key={item.requestId}>

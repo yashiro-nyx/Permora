@@ -19,6 +19,7 @@ export function activationStatusSummary(
   approvalStatus: string,
   lifecycleStatus: ActivationLifecycleStatus | null,
   retryable: boolean | null = null,
+  startsAtFuture = false,
 ): ActivationStatusSummary {
   if (approvalStatus !== "approved_pending_activation")
     return {
@@ -30,8 +31,10 @@ export function activationStatusSummary(
     };
   if (!lifecycleStatus)
     return {
-      label: "Awaiting activation",
-      description: "Approved, but access is not active yet.",
+      label: startsAtFuture ? "Scheduled — awaiting start" : "Awaiting activation",
+      description: startsAtFuture
+        ? "Approved; the requested validity period starts in the future. Record activation only after provisioning is confirmed."
+        : "Approved, but access is not active yet.",
       tone: "warning",
       canStart: true,
       actionLabel: "Start activation",

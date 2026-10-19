@@ -439,3 +439,4 @@ Never place credentials in source code, Git history, screenshots, issue comments
 - [x] Added isolated integration and Playwright workflow coverage; no bulk reassignment was performed.
 - [x] Development dry-run was read-only: three pending-review rows were already assigned to the dedicated Approver; one Admin-assigned row had the dedicated Approver as an eligible proposed replacement. No records changed.
 - [x] Migration `0012_request_reassignment_event.sql` was applied to verified development database `neondb` on 2026-10-19; production remains unchanged. Isolated test databases apply it during setup.
+- [x] Admin activation queue refresh regression fixed: an already-open Admin tab now refreshes on focus, visibility changes, and a 15-second visible-tab interval. Future-dated approved requests remain visible with scheduled-start guidance.

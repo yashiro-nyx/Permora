@@ -61,6 +61,18 @@ test("only retryable failure exposes a retry action", () => {
   );
 });
 
+test("future-dated approval remains visible with scheduled guidance", () => {
+  const summary = activationStatusSummary(
+    "approved_pending_activation",
+    null,
+    null,
+    true,
+  );
+  assert.equal(summary.label, "Scheduled — awaiting start");
+  assert.equal(summary.canStart, true);
+  assert.match(summary.description, /starts in the future/);
+});
+
 test("notification rendering metadata distinguishes activation success and failure", () => {
   assert.deepEqual(notificationPresentation("activation_succeeded"), {
     icon: "check",

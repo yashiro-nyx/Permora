@@ -172,6 +172,10 @@ New-request routing now prefers dedicated Approver accounts and fails closed to 
 
 Migration `0012_request_reassignment_event.sql` adds the reassignment event type and replaces global assignment uniqueness with a partial unique index, preserving completed assignment history while allowing one open replacement assignment. It was applied transactionally to verified development database `neondb` on October 19, 2026. Production remains unchanged; isolated `_test` databases apply it during test setup. Development is now at migrations `0001`–`0012`.
 
+### Admin activation queue visibility correction — October 19, 2026
+
+Development request `REQ-2026-000032` (UUID `2c5a92a3-57ee-40b8-a659-c7ee9c4045e8`) was submitted by `student@permora.ph`, assigned to `approver@permora.ph`, and approved at `2026-10-19T13:38:47.458Z`. Its status is `approved_pending_activation`, and the existing `listAdministratorActivations` service returned it. The defect was stale Admin browser state: the already-open client page had no refresh lifecycle after another session approved the request. The Admin queue now refreshes on focus, visibility changes, and every 15 seconds while visible. No request data was changed by the fix.
+
 ## Testing and deployment readiness
 
 - [x] **Completed:** Node 22 repository requirement and guarded isolated test-runner configuration.

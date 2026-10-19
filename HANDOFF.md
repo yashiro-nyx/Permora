@@ -382,6 +382,7 @@ Development reconciliation example: `npm run approvals:reconcile -- --database-t
 - Reassignment endpoint: `POST /api/admin/review-requests/[id]/reassign`; body uses `responsibilityId` and `expectedVersion`.
 - Reassignment is intentionally not bulk-applied. Review the dry-run report before any individual development operation.
 - Development migration status is `0001`–`0012`; migration `0012_request_reassignment_event.sql` was applied transactionally to verified database `neondb` on October 19, 2026. It remains unapplied in production.
+- Activation queue clarification: `REQ-2026-000032` was present in the database and returned by the Admin activation read service after approval; the missing display was caused by an already-open stale Admin tab. The queue now refreshes on focus, visibility change, and a 15-second visible interval. Do not infer missing approval from an unchanged tab; reload or wait for the refresh before investigating data.
 - The October 19 read-only dry run found four `pending_review` requests: three already assigned to `approver@permora.ph` (no-op conflicts), and `REQ-2026-000016` assigned to `admin@permora.ph`, with `approver@permora.ph` eligible as the proposed replacement. No records changed.
 
 ## O. Team handoff checklist

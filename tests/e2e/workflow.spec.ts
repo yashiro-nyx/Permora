@@ -64,6 +64,12 @@ test("request submission, deterministic routing, approval, and requester status 
       `No workflow requester fixture for repeat ${testInfo.repeatEachIndex + 1}.`,
     );
   await signIn(requesterPage, workflowRequester.email);
+  // Keep the Admin queue open before approval. It must refresh its
+  // server-rendered data after the separate Approver session approves.
+  await activationAdminPage.goto("/admin/activations");
+  await expect(
+    activationAdminPage.getByRole("heading", { name: "Activations" }),
+  ).toBeVisible();
   await requesterPage.goto("/requests/new");
   await requesterPage
     .getByLabel("Select resource")
@@ -162,14 +168,13 @@ test("request submission, deterministic routing, approval, and requester status 
     requesterPage.getByRole("region", { name: "Request summary" }),
   ).toContainText("Approved requests awaiting activation");
 
-  await activationAdminPage.goto("/admin/activations");
   const activationTable = activationAdminPage.getByRole("region", {
     name: "Activation lifecycle table",
   });
   const activationRow = activationTable.getByRole("row", {
     name: new RegExp(displayId!),
   });
-  await expect(activationRow).toContainText("Awaiting activation");
+  await expect(activationRow).toContainText("Scheduled — awaiting start");
   await activationRow.getByText("Start activation", { exact: true }).click();
   await activationRow
     .getByLabel("I confirm the requested access was provisioned.")
