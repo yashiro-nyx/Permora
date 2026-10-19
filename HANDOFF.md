@@ -14,6 +14,8 @@ The October 19, 2026 toast/sidebar reliability fix is verified on `feature/notif
 
 The same-day approver visibility audit confirmed that the three inspected requests (`REQ-2026-000031`, `REQ-2026-000030`, and `REQ-2026-000016`) are correctly assigned to `admin@permora.ph`, not `approver@permora.ph`, under the responsibility-based load-balancing rules. The first two have staff assignment notifications; the oldest request predates migration `0011` and has no historical staff notification. Do not reassign or backfill these development records without explicit review.
 
+The activation queue audit confirmed that `/admin/activations` reads approved decisions by request status, not by an existing activation row; future-dated approvals are included. Successful approval remains separate from activation and the original approver cannot activate the request. A desktop grid/sticky-sidebar correction was added after confirming the former absolute positioning allowed long-page scrolling to move the sidebar out of view.
+
 Security goals are server-trusted identity and roles, owner isolation, least privilege, full-scope fail-closed routing, revocable sessions, CSRF/origin protection, database rate limiting, transactional immutable evidence, optimistic concurrency, idempotency, and strict separation of approval from activation.
 
 ## B. User roles

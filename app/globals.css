@@ -941,6 +941,85 @@ a.notification-popover-item:hover {
 .admin-shell .notification-button > span:last-child:not(.icon) {
   border-color: white;
 }
+
+/* Keep desktop sidebars anchored while the workspace grows. The grid makes
+   the sidebar a real layout column; sticky positioning then follows the
+   viewport instead of the document-height shell. */
+@media (min-width: 1024px) {
+  .app-shell {
+    display: grid;
+    grid-template-columns: 256px minmax(0, 1fr);
+    grid-template-rows: 80px minmax(0, 1fr);
+    min-height: 100dvh;
+  }
+
+  .app-shell > .app-header {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .requester-shell > .sidebar {
+    position: sticky;
+    top: 0;
+    grid-column: 1;
+    grid-row: 2;
+    width: auto;
+    height: calc(100dvh - 80px);
+    max-height: calc(100dvh - 80px);
+  }
+
+  .requester-shell > .workspace {
+    grid-column: 2;
+    grid-row: 2;
+    margin-left: 0;
+    min-height: calc(100dvh - 80px);
+  }
+
+  .admin-shell {
+    grid-template-columns: 288px minmax(0, 1fr);
+  }
+
+  .admin-shell > .sidebar {
+    position: sticky;
+    top: 0;
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    width: auto;
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+
+  .admin-shell > .app-header {
+    grid-column: 2;
+    grid-row: 1;
+    margin-left: 0;
+  }
+
+  .admin-shell > .workspace {
+    grid-column: 2;
+    grid-row: 2;
+    margin-left: 0;
+    min-height: calc(100dvh - 80px);
+  }
+
+  .focused-shell {
+    display: block;
+  }
+
+  .sidebar-collapsed {
+    grid-template-columns: 68px minmax(0, 1fr);
+  }
+
+  .sidebar-collapsed.requester-shell > .sidebar,
+  .sidebar-collapsed.admin-shell > .sidebar {
+    width: 68px;
+  }
+
+  .sidebar-collapsed.requester-shell > .workspace,
+  .sidebar-collapsed.admin-shell > .workspace {
+    margin-left: 0;
+  }
+}
 .staff-metric-grid {
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
 }
