@@ -198,3 +198,27 @@ test("requester pages and login imagery fit desktop and mobile viewports", async
     await anonymous.close();
   }
 });
+
+test("sidebar navigation scrolls independently while logout stays accessible", async () => {
+  await page.setViewportSize({ width: 1440, height: 600 });
+  await page.goto("/dashboard");
+  const sidebar = page.locator(".sidebar");
+  const desktopLogout = sidebar.getByRole("button", { name: "Log out" });
+  await expect(desktopLogout).toBeVisible();
+  const desktopLogoutBox = await desktopLogout.boundingBox();
+  expect(desktopLogoutBox?.y).toBeGreaterThanOrEqual(0);
+  expect((desktopLogoutBox?.y ?? 0) + (desktopLogoutBox?.height ?? 0)).toBeLessThanOrEqual(600);
+  await expect(sidebar.locator("nav")).toHaveCSS("overflow-y", "auto");
+
+  await page.setViewportSize({ width: 390, height: 600 });
+  await page.goto("/dashboard");
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  const drawer = page.getByRole("dialog", { name: "Your workspace" });
+  await expect(drawer).toBeVisible();
+  const mobileLogout = drawer.getByRole("button", { name: "Log out" });
+  await expect(mobileLogout).toBeVisible();
+  const mobileLogoutBox = await mobileLogout.boundingBox();
+  expect((mobileLogoutBox?.y ?? 0) + (mobileLogoutBox?.height ?? 0)).toBeLessThanOrEqual(600);
+  await expect(drawer.locator("nav")).toHaveCSS("overflow-y", "auto");
+  await page.keyboard.press("Escape");
+});

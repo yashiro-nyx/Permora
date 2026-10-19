@@ -579,7 +579,8 @@ a.notification-popover-item:hover {
 .sidebar {
   position: absolute;
   top: 80px;
-  bottom: 0;
+  height: calc(100dvh - 80px);
+  max-height: calc(100dvh - 80px);
   left: 0;
   width: 256px;
   background: var(--surface);
@@ -587,6 +588,7 @@ a.notification-popover-item:hover {
   padding: 28px 16px;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
   transition: width 0.22s ease;
 }
@@ -599,6 +601,7 @@ a.notification-popover-item:hover {
 }
 .sidebar nav {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   display: flex;
@@ -857,12 +860,15 @@ a.notification-popover-item:hover {
 .admin-shell .sidebar {
   width: 288px;
   top: 0;
+  height: 100dvh;
+  max-height: 100dvh;
   background: var(--inverse);
   color: white;
   padding-top: 0;
   overflow: hidden;
 }
 .admin-shell .sidebar nav {
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
@@ -2241,9 +2247,26 @@ dd {
   max-height: 100dvh;
   width: min(340px, 90vw);
   border-radius: 0;
+  display: flex;
+  flex-direction: column;
+}
+.navigation-drawer-content {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
 }
 .navigation-drawer nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
   padding: 16px;
+}
+.navigation-drawer-footer {
+  flex-shrink: 0;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
 }
 .login-page {
   position: relative;

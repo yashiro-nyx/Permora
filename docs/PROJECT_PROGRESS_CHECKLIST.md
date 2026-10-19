@@ -186,7 +186,8 @@ Status: **Completed and merged into `develop`**
 - [x] Bell polls every 15 s (reduced from 60 s), pauses when tab is hidden, resumes on tab focus, and refreshes immediately when the panel is opened.
 - [x] Request submission form dispatches `permora-notification-refresh` custom event to trigger immediate bell refresh without component coupling.
 - [x] `requireStaff()` server guard added to `lib/server/identity.ts`; `/notifications/staff` redirects non-staff to `/dashboard?unavailable=staff`.
-- [x] Toast stack cap: `MAX_TOASTS = 3` enforced in `upsertToast`; oldest dismissible toast evicted first; sticky errors survive; progress/countdown bar added to `ToastItem`.
+- [x] Toast stack cap: `MAX_TOASTS = 3` enforced in `upsertToast`; oldest dismissible toast evicted first; sticky errors survive; progress/countdown bar added to `ToastItem`; committed-state scheduling prevents timer restart across navigation/rerenders, and per-attempt keys preserve fresh repeated-failure feedback.
+- [x] Responsive sidebar layout: navigation scrolls independently inside a viewport-constrained flex column while Logout remains in an accessible, safe-area-aware footer on desktop and mobile drawers.
 
 ### Administrator audit-log viewer
 
@@ -263,7 +264,7 @@ Status: **Implemented locally; not yet merged into `develop` or `main`**
 - [x] Create a production health endpoint.
 - [x] Create Neon production, development, and test branches.
 - [x] Apply migrations `0001`–`0006` to production.
-- [ ] **PENDING:** Apply migrations `0007`–`0010` to production from a controlled operator environment. Production currently runs with only `0001`–`0006`. Development (`neondb`) has `0001`–`0010` applied.
+- [ ] **PENDING:** Apply migrations `0007`–`0011` to production from a controlled operator environment. Production currently runs with only `0001`–`0006`. Development (`neondb`) has `0001`–`0011` applied.
 - [x] Provision production prototype accounts.
 - [x] Verify the live request-to-approval workflow.
 - [x] Add explicit database-target safety controls to operational CLI scripts.
@@ -327,7 +328,7 @@ git diff --check
 ### Near-term (required before production use with real users)
 
 3. **Wire the automatic expiration endpoint** to a schedule (e.g. Vercel Cron) with monitoring and alerting.
-4. **~~Propose and implement migration `0011`~~** — **completed** on `feature/notification-system`. Staff notifications (approver assignment, routing failure) now use the `user_notification` table via a composite uniqueness constraint. Apply migration `0011` to the development database after `feature/notification-system` is reviewed and merged into `develop`.
+4. **~~Propose and implement migration `0011`~~** — **completed** on `feature/notification-system` and applied to the isolated development database. Staff notifications (approver assignment, routing failure) now use the `user_notification` table via a composite uniqueness constraint. Production remains unchanged and must not receive this migration until the feature is reviewed and approved.
 5. **Active-access filter:** the metric links to `/requests` (all). Add a dedicated active-access view or filter once the `request_activation` JOIN is established in the list service.
 6. **Production environment verification:** confirm `AUTH_SECRET` isolation between Preview and Production, `APP_URL` correctness, `TEST_DATABASE_URL` exclusion from Vercel deployments.
 

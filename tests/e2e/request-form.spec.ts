@@ -238,11 +238,14 @@ test("server-side field error stays in the form after the toast auto-dismisses",
   await expect(anyFieldError.first()).toBeVisible({ timeout: 5000 });
 
   const toasts = page.getByTestId("toast-viewport").locator(".toast");
-  const toastCount = await toasts.count();
-  expect(toastCount).toBeLessThanOrEqual(1);
-  if (toastCount === 1) {
-    await expect(toasts.first()).toContainText("Request not submitted");
-  }
+  await expect(toasts).toHaveCount(1);
+  await expect(toasts.first()).toContainText("Request not submitted");
+  await expect(toasts.first().locator(".toast-progress")).toBeVisible();
+
+  // The transient error must clear on its own after 8 seconds while the
+  // actionable inline field error remains available to the requester.
+  await expect(toasts).toHaveCount(0, { timeout: 8500 });
+  await expect(anyFieldError.first()).toBeVisible();
 });
 
 // ─── Responsive Layout ───────────────────────────────────────────────────────

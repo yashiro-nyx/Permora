@@ -84,6 +84,11 @@ test("request submission, deterministic routing, approval, and requester status 
   await expect(requesterPage).toHaveURL(
     /\/requests\/[0-9a-f-]+\?submitted=1/,
   );
+  const submittedToast = requesterPage
+    .getByTestId("toast-viewport")
+    .getByText("Request submitted");
+  await expect(submittedToast).toBeVisible();
+  await expect(submittedToast).toHaveCount(0, { timeout: 6500 });
   const requestId = new URL(requesterPage.url()).pathname.split("/").pop();
   expect(requestId).toBeTruthy();
   const headingPath = await requesterPage.locator(".page-heading .eyebrow").textContent();

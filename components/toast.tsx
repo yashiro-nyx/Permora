@@ -60,6 +60,8 @@ function makeId() {
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastRecord[]>([]);
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const scheduledAt = useRef(new Map<string, number>());
+  const toastClock = useRef(0);
 
   const clearTimer = useCallback((id: string) => {
     const timer = timers.current.get(id);
@@ -90,31 +92,63 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [clearTimer, dismiss],
   );
 
+  // Schedule from committed toast state, not from the state updater. This
+  // keeps the timer tied to the toast's creation/refresh timestamp and makes
+  // it independent of React batching, navigation, and unrelated rerenders.
+  useEffect(() => {
+    const visibleIds = new Set(toasts.map((toast) => toast.id));
+    for (const id of timers.current.keys()) {
+      if (!visibleIds.has(id)) {
+        clearTimer(id);
+        scheduledAt.current.delete(id);
+      }
+    }
+    for (const toast of toasts) {
+      const duration = resolveToastDuration(toast.variant, toast.durationMs);
+      if (duration === null) {
+        clearTimer(toast.id);
+        scheduledAt.current.delete(toast.id);
+        continue;
+      }
+      if (scheduledAt.current.get(toast.id) === toast.createdAt) continue;
+      scheduleDismiss(toast.id, toast.variant, toast.durationMs);
+      scheduledAt.current.set(toast.id, toast.createdAt);
+    }
+  }, [clearTimer, scheduleDismiss, toasts]);
+
   const show = useCallback(
     (variant: ToastVariant, input: ToastInput) => {
+      const now = Math.max(Date.now(), toastClock.current + 1);
+      toastClock.current = now;
       let resultId = "";
       let evictedId: string | undefined;
       setToasts((current) => {
-        const { next, id, evictedId: ev } = upsertToast(current, variant, input, makeId);
+        const { next, id, evictedId: ev } = upsertToast(
+          current,
+          variant,
+          input,
+          makeId,
+          now,
+        );
         resultId = id;
         evictedId = ev;
         return next;
       });
-      // Cancel the timer for any evicted toast and schedule the new/refreshed one.
-      queueMicrotask(() => {
-        if (evictedId) clearTimer(evictedId);
-        scheduleDismiss(resultId, variant, input.durationMs);
-      });
+      // Timer creation happens after the state update commits in the effect
+      // above. Cancel an evicted toast immediately when its ID is known.
+      if (evictedId) clearTimer(evictedId);
       return resultId;
     },
-    [clearTimer, scheduleDismiss],
+    [clearTimer],
   );
 
   useEffect(() => {
     const map = timers.current;
+    const scheduled = scheduledAt.current;
     return () => {
       for (const timer of map.values()) clearTimeout(timer);
       map.clear();
+      scheduled.clear();
     };
   }, []);
 

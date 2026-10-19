@@ -203,20 +203,22 @@ export function AppShell({
           onClose={() => setDrawer(false)}
           className="navigation-drawer"
         >
-          <nav aria-label="Mobile navigation">
-            {navLinks}
-            {requester && (
-              <Link
-                href="/help"
-                className="nav-link"
-                onClick={() => setDrawer(false)}
-              >
-                <Icon name="help" />
-                Help & guidelines
-              </Link>
-            )}
-            {logout}
-          </nav>
+          <div className="navigation-drawer-content">
+            <nav aria-label="Mobile navigation">
+              {navLinks}
+              {requester && (
+                <Link
+                  href="/help"
+                  className="nav-link"
+                  onClick={() => setDrawer(false)}
+                >
+                  <Icon name="help" />
+                  Help & guidelines
+                </Link>
+              )}
+            </nav>
+            <div className="navigation-drawer-footer">{logout}</div>
+          </div>
         </Modal>
       )}
     </div>

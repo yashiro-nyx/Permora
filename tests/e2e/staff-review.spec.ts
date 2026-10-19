@@ -194,6 +194,9 @@ for (const width of [768, 390, 320]) {
     await page.getByRole("button", { name: "Open navigation" }).click();
     await expect(page.getByRole("dialog", { name: "Your workspace" })).toBeVisible();
     await expect(page.getByText("Review Requests").last()).toBeVisible();
+    await expect(
+      page.getByRole("dialog", { name: "Your workspace" }).getByRole("button", { name: "Log out" }),
+    ).toBeVisible();
     await page.screenshot({
       path: `test-results/staff-review-${width}.png`,
       fullPage: true,
