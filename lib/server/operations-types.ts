@@ -5,7 +5,8 @@ export type NotificationType =
   | "activation_succeeded"
   | "activation_failed"
   | "request_assigned_for_review"
-  | "routing_unavailable";
+  | "routing_unavailable"
+  | "activation_ready";
 
 export interface RequesterNotificationDto {
   notificationId: string;

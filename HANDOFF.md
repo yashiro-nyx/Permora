@@ -10,7 +10,7 @@ The stack is Next.js 15 App Router, React 19, TypeScript 5, Tailwind CSS 4, Bett
 
 The project has completed **Stage 2B Milestones 1–5 and Stage 2C activation/lifecycle implementation slices 1–7, plus Stage 2D staff notifications**. Real accounts, owner-scoped requests, approval reads/decisions, requester notifications, staff (approver/admin) notifications, administrator audit, manual activation, lifecycle status, retry/reconciliation, expiry/revocation boundaries, and an operator runbook exist. Administrator pages include user management at `/users`, responsibility management at `/admin/responsibilities`, eligible assignment of `pending_routing` requests at `/admin/unassigned`, resource/permission catalog administration at `/resources` and `/permissions`, delegation/absence management at `/admin/delegations`, institutional-identifier maintenance at `/admin/identifiers`, analytics/operational reports at `/reports`, and retention management (list + non-destructive dry-run preview) at `/admin/retention`. Every authenticated account can also manage its own notification preferences at `/account/notifications` (in-app only; external delivery is unavailable). Approvers and administrators have a real-time notification bell and full notification center at `/notifications/staff`. Real university-system integration and automatic job scheduling remain deferred.
 
-The October 19, 2026 toast/sidebar reliability fix is verified on `feature/notification-system`: toast timers are scheduled from committed provider state (5/7/8 seconds by variant), repeated keyed failures receive fresh feedback, and desktop/mobile sidebars keep Logout outside the independently scrolling navigation region. The isolated development database has migrations `0001`–`0011`; production was not changed.
+The October 19, 2026 toast/sidebar reliability fix is verified on `feature/notification-system`: toast timers are scheduled from committed provider state (5/7/8 seconds by variant), repeated keyed failures receive fresh feedback, and desktop/mobile sidebars keep Logout outside the independently scrolling navigation region. The development database has migrations `0001`–`0013`; migration `0013` only widens the notification type constraint and production was not changed.
 
 The same-day approver visibility audit confirmed that the three inspected requests (`REQ-2026-000031`, `REQ-2026-000030`, and `REQ-2026-000016`) are correctly assigned to `admin@permora.ph`, not `approver@permora.ph`, under the responsibility-based load-balancing rules. The first two have staff assignment notifications; the oldest request predates migration `0011` and has no historical staff notification. Do not reassign or backfill these development records without explicit review.
 
@@ -46,7 +46,7 @@ Start
 → persisted assignee reviews the current version
 → approve | deny with reason | return for revision with reason
 → approved_pending_activation | denied | returned_for_revision
-→ requester sees decision; notification and immutable events are recorded
+→ requester sees decision; immutable events, requester notification, and (on approval) eligible Admin activation-ready notifications are recorded atomically
 → approved request enters separate activation lifecycle
 → active administrator revalidates and commits `activating`
 → manual adapter receives explicit confirmation outside the transaction

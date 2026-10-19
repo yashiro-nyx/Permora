@@ -1303,6 +1303,38 @@ export async function applyApprovalDecision(
       notification.body,
     ],
   );
+  if (input.decision === "approve") {
+    // Activation is an administrator-only follow-up. Keep the recipient set
+    // inside the approval transaction so a notification failure rolls back
+    // the approval, and exclude both the requester and original approver from
+    // activation alerts (the latter may also hold the admin role).
+    const administrators = await client.query<{ user_id: string }>(
+      `SELECT DISTINCT profile.user_id
+         FROM user_profile profile
+         JOIN user_role role ON role.user_id = profile.user_id
+        WHERE profile.active
+          AND role.role = 'admin'
+          AND profile.user_id <> $1
+          AND profile.user_id <> $2`,
+      [request.requester_user_id, actorUserId],
+    );
+    for (const administrator of administrators.rows) {
+      await client.query(
+        `INSERT INTO user_notification
+          (id, recipient_user_id, request_id, request_event_id,
+           notification_type, title, body)
+         VALUES ($1,$2,$3,$4,'activation_ready',$5,$6)`,
+        [
+          randomUUID(),
+          administrator.user_id,
+          input.requestId,
+          requestEventId,
+          `Activation ready — ${request.display_id}`,
+          `Request ${request.display_id} was approved and is ready for administrator activation.`,
+        ],
+      );
+    }
+  }
   return {
     decisionId,
     status: resultingStatus,

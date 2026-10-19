@@ -101,5 +101,7 @@ export function notificationPresentation(type: NotificationType) {
       return { icon: "requests", tone: "info", label: "New assignment" } as const;
     case "routing_unavailable":
       return { icon: "expire", tone: "warning", label: "Routing failed" } as const;
+    case "activation_ready":
+      return { icon: "check", tone: "info", label: "Activation ready" } as const;
   }
 }

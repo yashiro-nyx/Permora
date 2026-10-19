@@ -5,8 +5,8 @@
  *
  * Fetches from /api/notifications/staff which enforces approver/admin role
  * authorization server-side.  Only returns notifications whose
- * notification_type is in the staff set (request_assigned_for_review,
- * routing_unavailable).  Requester notifications are never shown here.
+ * notification_type is in the staff set (assignments, routing failures, and
+ * activation-ready alerts). Requester notifications are never shown here.
  *
  * Delivery model: polling + tab-visibility refresh (same as the requester
  * bell).  Polls every 15s while the tab is visible; pauses when hidden.

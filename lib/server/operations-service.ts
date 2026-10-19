@@ -46,6 +46,7 @@ const iso = (value: Date | string) => new Date(value).toISOString();
 const STAFF_NOTIFICATION_TYPES = [
   "request_assigned_for_review",
   "routing_unavailable",
+  "activation_ready",
 ] as const;
 
 export async function listRequesterNotifications(
@@ -123,9 +124,9 @@ type StaffNotificationRow = QueryResultRow & {
 };
 
 /**
- * Build a deep link for a staff notification.  Approver assignment
- * notifications link to the review detail page; routing-unavailable
- * notifications link to the admin unassigned queue.
+ * Build a deep link for a staff notification. Links still pass through the
+ * destination's server-side authorization checks; the notification query is
+ * additionally scoped to the authenticated recipient.
  */
 function staffReviewHref(
   type: NotificationType,
@@ -137,6 +138,8 @@ function staffReviewHref(
       return `/review/${requestId}`;
     case "routing_unavailable":
       return `/admin/unassigned`;
+    case "activation_ready":
+      return `/admin/activations`;
     default:
       return null;
   }

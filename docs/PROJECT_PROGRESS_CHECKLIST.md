@@ -177,8 +177,10 @@ Status: **Completed and merged into `develop`**
 ### Staff (approver/administrator) notifications — `feature/notification-system`
 
 - [x] Migration `0011`: drop `UNIQUE(request_event_id)` → composite `UNIQUE(request_event_id, recipient_user_id)`; widen `notification_type` CHECK to include `request_assigned_for_review` and `routing_unavailable`.
+- [x] Migration `0013`: allow `activation_ready` notifications while preserving composite recipient idempotency.
 - [x] Approver receives `request_assigned_for_review` notification on automatic routing (`routePendingRequest`) and administrator manual assignment (`administratorAssignPendingRequest`).
 - [x] All active administrators receive `routing_unavailable` notification when routing fails and no approver can be found.
+- [x] On approval, active administrators other than the requester and original approver receive one recipient-scoped `activation_ready` notification linking to `/admin/activations`; approval and notification inserts commit atomically.
 - [x] Staff notification API: `GET /api/notifications/staff`, `POST /api/notifications/staff/:id/read`, `POST /api/notifications/staff/read-all` — enforces approver/admin role; requesters receive 403.
 - [x] Staff notification bell (`StaffNotificationBell`) in the portal header for approver and administrator roles; requester bell unchanged.
 - [x] Staff notification center at `/notifications/staff`: all/unread filter, paginated list, mark-as-read, deep links to `/review/:id` or `/admin/unassigned`, in-app-only disclaimer.
@@ -190,6 +192,7 @@ Status: **Completed and merged into `develop`**
 - [x] Responsive sidebar layout: navigation scrolls independently inside a viewport-constrained flex column while Logout remains in an accessible, safe-area-aware footer on desktop and mobile drawers.
 - [x] Verified staff queue and notification recipient isolation against development records: assigned requests appear only for their selected reviewer; unassigned requests remain an administrator workflow; no historical notification backfill is performed without explicit review.
 - [x] Admin activation queue audit: approved-pending-activation requests are selected independently of activation-record existence and future start dates; activation and original-approver exclusion remain server-enforced.
+- [x] Activation-ready alerts use the existing staff bell/center, are idempotent by approval event/recipient, and do not create entitlements.
 - [x] Desktop sidebar uses a viewport-height sticky grid column so long workspace pages cannot scroll the navigation/footer away; mobile drawer and collapsed-sidebar behavior remain intact.
 
 ### Administrator audit-log viewer

@@ -171,10 +171,15 @@ Figma contains desktop evidence only. Mobile drawers, stacked layouts, errors, e
 New-request routing now prefers dedicated Approver accounts and fails closed to `pending_routing` when no eligible reviewer exists. Admin fallback is opt-in through `APPROVAL_ROUTING_POLICY=dedicated_first_with_admin_fallback`. The Admin reassignment API is same-origin, active-admin-only, version-checked, transactional, audited, and limited to eligible non-terminal `pending_review` requests. No bulk reassignment was performed.
 
 Migration `0012_request_reassignment_event.sql` adds the reassignment event type and replaces global assignment uniqueness with a partial unique index, preserving completed assignment history while allowing one open replacement assignment. It was applied transactionally to verified development database `neondb` on October 19, 2026. Production remains unchanged; isolated `_test` databases apply it during test setup. Development is now at migrations `0001`–`0012`.
+Migration `0013_activation_ready_notifications.sql` widens the notification type constraint for approval-ready Admin alerts. It was applied transactionally to the same verified development database; it changed no request, assignment, or notification rows. Production remains unchanged.
 
 ### Admin activation queue visibility correction — October 19, 2026
 
 Development request `REQ-2026-000032` (UUID `2c5a92a3-57ee-40b8-a659-c7ee9c4045e8`) was submitted by `student@permora.ph`, assigned to `approver@permora.ph`, and approved at `2026-10-19T13:38:47.458Z`. Its status is `approved_pending_activation`, and the existing `listAdministratorActivations` service returned it. The defect was stale Admin browser state: the already-open client page had no refresh lifecycle after another session approved the request. The Admin queue now refreshes on focus, visibility changes, and every 15 seconds while visible. No request data was changed by the fix.
+
+### Activation-ready administrator notifications — October 19, 2026
+
+Approval now inserts one `activation_ready` notification for each active Administrator except the requester and original Approver, in the same transaction as the decision, request event, audit event, and requester notification. The existing recipient-scoped staff API and 15-second bell polling expose the alert; its authorized link is `/admin/activations`. Retries replay the decision and do not insert duplicates. No historical notifications were backfilled and no development requests or assignments were changed.
 
 ## Testing and deployment readiness
 

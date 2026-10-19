@@ -33,6 +33,7 @@ let passwordHash = "";
 let requester = "";
 let approver = "";
 let otherApprover = "";
+let observerAdmin = "";
 let inactiveApprover = "";
 let requesterCookie = "";
 let approverCookie = "";
@@ -266,7 +267,7 @@ before(async () => {
     ["approver", "Inactive Decision Approver"],
   ] as const)
     users.push(await seedUser(role, name));
-  [requester, approver, otherApprover, , inactiveApprover] =
+  [requester, approver, otherApprover, observerAdmin, inactiveApprover] =
     users.map((user) => user.id);
   const cookies: string[] = [];
   for (const [index, user] of users.entries())
@@ -397,7 +398,7 @@ test("a persisted malformed assignment cannot enable self-approval", async () =>
   assert.equal((await response.json()).error.code, "not_found");
 });
 
-test("approve commits state, immutable records, and one notification without granting access", async () => {
+test("approve commits state, immutable records, and activation-ready notification without granting access", async () => {
   const requestId = await seedReview({});
   const response = await decide(requestId, approverCookie, {
     expectedVersion: 1,
@@ -439,9 +440,36 @@ test("approve commits state, immutable records, and one notification without gra
     decisions: 1,
     events: 1,
     audits: 1,
-    notifications: 1,
+    notifications: 2,
     entitlements: 0,
   });
+  const notifications = await pool.query<{
+    recipient_user_id: string;
+    notification_type: string;
+    title: string;
+    body: string;
+  }>(
+    `SELECT recipient_user_id, notification_type, title, body
+       FROM user_notification
+      WHERE request_id = $1
+      ORDER BY notification_type, recipient_user_id`,
+    [requestId],
+  );
+  assert.equal(notifications.rows.length, 2);
+  const adminNotification = notifications.rows.find(
+    (row) => row.notification_type === "activation_ready",
+  );
+  assert.equal(adminNotification?.recipient_user_id, observerAdmin);
+  assert.match(adminNotification?.title ?? "", /^Activation ready — .+/);
+  assert.match(adminNotification?.body ?? "", /^Request .+ was approved/);
+  const requesterNotification = notifications.rows.find(
+    (row) => row.notification_type === "request_approved_pending_activation",
+  );
+  assert.equal(requesterNotification?.recipient_user_id, requester);
+  assert.equal(
+    requesterNotification?.title,
+    "Request approved — awaiting activation",
+  );
 });
 
 test("denial and return require a non-empty reason", async () => {
@@ -476,13 +504,18 @@ test("idempotent replay returns the stored outcome and rejects key reuse", async
   assert.equal(replay.status, 200);
   assert.equal((await first.json()).replayed, false);
   assert.equal((await replay.json()).replayed, true);
-  const counts = await pool.query<{ decisions: number; notifications: number }>(
+  const counts = await pool.query<{ status: string; decisions: number; notifications: number }>(
     `SELECT
+      (SELECT status FROM access_request WHERE id = $1) status,
       (SELECT count(*)::int FROM request_decision WHERE request_id = $1) decisions,
       (SELECT count(*)::int FROM user_notification WHERE request_id = $1) notifications`,
     [requestId],
   );
-  assert.deepEqual(counts.rows[0], { decisions: 1, notifications: 1 });
+  assert.equal(counts.rows[0].decisions, 1);
+  assert.equal(
+    counts.rows[0].notifications,
+    counts.rows[0].status === "approved_pending_activation" ? 2 : 1,
+  );
   const conflict = await decide(
     requestId,
     approverCookie,
@@ -510,13 +543,18 @@ test("stale and concurrent decisions cannot create duplicate effects", async () 
     responses.map((response) => response.status).sort(),
     [200, 409],
   );
-  const counts = await pool.query<{ decisions: number; notifications: number }>(
+  const counts = await pool.query<{ status: string; decisions: number; notifications: number }>(
     `SELECT
+      (SELECT status FROM access_request WHERE id = $1) status,
       (SELECT count(*)::int FROM request_decision WHERE request_id = $1) decisions,
       (SELECT count(*)::int FROM user_notification WHERE request_id = $1) notifications`,
     [requestId],
   );
-  assert.deepEqual(counts.rows[0], { decisions: 1, notifications: 1 });
+  assert.equal(counts.rows[0].decisions, 1);
+  assert.equal(
+    counts.rows[0].notifications,
+    counts.rows[0].status === "approved_pending_activation" ? 2 : 1,
+  );
 });
 
 test("approval revalidation fails closed when requester eligibility changes", async () => {
