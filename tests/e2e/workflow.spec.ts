@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { E2E, e2eClientHeaders, e2ePassword } from "./staff-fixture";
+import { E2E, e2eClientHeaders, signIn } from "./staff-fixture";
 
 test.describe.configure({ mode: "serial" });
 
@@ -7,14 +7,6 @@ let requesterPage: Page;
 let adminPage: Page;
 let approverPage: Page;
 let activationAdminPage: Page;
-
-async function signIn(target: Page, email: string) {
-  await target.goto("/login");
-  await target.getByLabel("Email address").fill(email);
-  await target.getByLabel("Password", { exact: true }).fill(e2ePassword());
-  await target.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(target).toHaveURL(/\/dashboard$/);
-}
 
 function dateInput(daysFromToday: number) {
   const value = new Date();
@@ -133,7 +125,7 @@ test("request submission, deterministic routing, approval, and requester status 
     .getByRole("button", { name: "Confirm decision" })
     .click();
   await expect(
-    approverPage.getByText("Approved — awaiting activation").first(),
+    approverPage.getByText("Scheduled — awaiting start").first(),
   ).toBeVisible();
   await expect(
     approverPage.getByText(/does not activate access, create an entitlement/i),
@@ -141,7 +133,7 @@ test("request submission, deterministic routing, approval, and requester status 
 
   await requesterPage.reload();
   await expect(
-    requesterPage.getByText("Approved — awaiting activation").first(),
+    requesterPage.getByText("Scheduled — awaiting start").first(),
   ).toBeVisible();
   await expect(
     requesterPage.getByText("Request approved — awaiting activation"),
@@ -163,7 +155,7 @@ test("request submission, deterministic routing, approval, and requester status 
     }).format(new Date(`${value}T00:00:00Z`));
   await expect(approvedRow).toContainText(formatDate(startsOn));
   await expect(approvedRow).toContainText(formatDate(expiresOn));
-  await expect(approvedRow).toContainText("Approved — awaiting activation");
+  await expect(approvedRow).toContainText("Scheduled — awaiting start");
   await expect(
     requesterPage.getByRole("region", { name: "Request summary" }),
   ).toContainText("Approved requests awaiting activation");
@@ -192,15 +184,25 @@ test("request submission, deterministic routing, approval, and requester status 
       .filter({ hasText: "Activation outcome" }),
   ).toContainText("Access activation recorded.");
   await expect(
-    activationAdminPage.getByRole("row", { name: new RegExp(displayId!) }),
-  ).toContainText("Active");
+    activationAdminPage.locator(`#activation-request-${requestId}`),
+  ).toContainText("Provisioned — scheduled start");
 
   await requesterPage.goto(`/requests/${requestId}`);
-  await expect(requesterPage.getByText("Active", { exact: true })).toBeVisible();
+  await expect(
+    requesterPage.getByText("Provisioned — scheduled start", { exact: true }),
+  ).toBeVisible();
   await expect(requesterPage.getByText("approved pending activation")).toBeVisible();
+  await requesterPage.goto("/requests");
+  await expect(
+    requesterPage.getByRole("row", { name: new RegExp(displayId!) }),
+  ).toContainText("Provisioned — scheduled start");
+  await approverPage.goto("/review");
+  await expect(
+    approverPage.getByRole("row", { name: new RegExp(displayId!) }),
+  ).toContainText("Provisioned — scheduled start");
   await requesterPage.goto("/notifications");
   await expect(
-    requesterPage.getByRole("heading", { name: "Access activated" }),
+    requesterPage.getByRole("heading", { name: "Access provisioned — scheduled start" }),
   ).toBeVisible();
 });
 

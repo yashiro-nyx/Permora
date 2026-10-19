@@ -21,14 +21,33 @@ export function activationStatusSummary(
   retryable: boolean | null = null,
   startsAtFuture = false,
 ): ActivationStatusSummary {
-  if (approvalStatus !== "approved_pending_activation")
+  if (approvalStatus !== "approved_pending_activation") {
+    const pending = approvalStatus === "pending_review";
     return {
-      label: "Not approved for activation",
-      description: "Only an approved request can be activated.",
-      tone: "neutral",
+      label:
+        approvalStatus === "pending_routing"
+          ? "Awaiting routing"
+          : pending
+            ? "Pending review"
+            : approvalStatus === "denied"
+              ? "Denied"
+              : approvalStatus === "returned_for_revision"
+                ? "Returned for revision"
+                : approvalStatus === "expired"
+                  ? "Expired"
+                  : approvalStatus === "cancelled"
+                    ? "Cancelled"
+                    : "Not approved for activation",
+      description: pending
+        ? "An eligible approver has not recorded a decision yet."
+        : approvalStatus === "pending_routing"
+          ? "An eligible approver has not been assigned yet."
+          : "This request is not eligible for activation.",
+      tone: pending || approvalStatus === "pending_routing" ? "warning" : "neutral",
       canStart: false,
       actionLabel: null,
     };
+  }
   if (!lifecycleStatus)
     return {
       label: startsAtFuture ? "Scheduled — awaiting start" : "Awaiting activation",
@@ -49,6 +68,15 @@ export function activationStatusSummary(
         actionLabel: null,
       };
     case "activated":
+      if (startsAtFuture)
+        return {
+          label: "Provisioned — scheduled start",
+          description:
+            "Provisioning is confirmed; access becomes usable when the requested validity period starts.",
+          tone: "info",
+          canStart: false,
+          actionLabel: null,
+        };
       return {
         label: "Active",
         description: "Access has been activated for the approved validity period.",

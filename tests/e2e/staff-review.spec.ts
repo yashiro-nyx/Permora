@@ -1,24 +1,16 @@
 import { expect, test, type Page } from "@playwright/test";
-import { E2E, e2eClientHeaders, e2ePassword } from "./staff-fixture";
+import { E2E, e2eClientHeaders, signIn } from "./staff-fixture";
 
 test.describe.configure({ mode: "serial" });
 
 let page: Page;
-
-async function signIn(page: Page, email: string = E2E.approver.email) {
-  await page.goto("/login");
-  await page.getByLabel("Email address").fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(e2ePassword());
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
-}
 
 test.beforeAll(async ({ browser }) => {
   page = await browser.newPage({
     viewport: { width: 1440, height: 1000 },
     extraHTTPHeaders: e2eClientHeaders(30),
   });
-  await signIn(page);
+  await signIn(page, E2E.approver.email);
 });
 
 test.afterAll(async () => {
@@ -164,7 +156,7 @@ test("confirmed approval records a decision without claiming activation", async 
   await expect(approve).toBeFocused();
   await approve.click();
   await page.getByRole("button", { name: "Confirm decision" }).click();
-  await expect(page.getByText("Approved — awaiting activation").first()).toBeVisible();
+  await expect(page.getByText("Scheduled — awaiting start").first()).toBeVisible();
   await expect(page.getByText("No decision controls available")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Immutable decision history" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
@@ -172,7 +164,7 @@ test("confirmed approval records a decision without claiming activation", async 
 
   await page.goto("/review");
   const terminalRow = page.getByRole("row", { name: /E2E-APPROVE/ });
-  await expect(terminalRow).toContainText("Approved — awaiting activation");
+  await expect(terminalRow).toContainText("Scheduled — awaiting start");
   await expect(
     terminalRow.getByRole("link", { name: "View details E2E-APPROVE" }),
   ).toBeVisible();

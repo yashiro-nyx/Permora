@@ -8,6 +8,7 @@ import type {
   UnassignedRequestDto,
 } from "@/lib/server/approval-read-types";
 import { reviewQueueActionLabel } from "@/lib/review-ui";
+import { activationStatusSummary } from "@/lib/activation-presentation";
 import {
   Alert,
   Badge,
@@ -182,6 +183,14 @@ export function StaffReviewQueue({
               <tbody>
                 {data.items.map((item) => {
                   const assigned = "assignedAt" in item ? item : null;
+                  const lifecycle = assigned
+                    ? activationStatusSummary(
+                        assigned.status,
+                        assigned.activationStatus,
+                        assigned.activationRetryable,
+                        Date.parse(assigned.requestedValidity.startsAt) > Date.now(),
+                      )
+                    : null;
                   return (
                     <tr key={item.requestId}>
                       <td>
@@ -204,7 +213,14 @@ export function StaffReviewQueue({
                         </td>
                       )}
                       <td>
-                        <Badge status={item.status} />
+                        {lifecycle ? (
+                          <>
+                            <Badge label={lifecycle.label} tone={lifecycle.tone} />
+                            <small className="table-secondary">{lifecycle.description}</small>
+                          </>
+                        ) : (
+                          <Badge status={item.status} />
+                        )}
                       </td>
                       <td className="date-cell">
                         {assigned

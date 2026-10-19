@@ -20,6 +20,7 @@ export function ServerRequestDetails({
     request.status,
     request.activation?.status ?? null,
     request.activation?.retryable ?? null,
+    Date.parse(request.startsAt) > Date.now(),
   );
   return (
     <>

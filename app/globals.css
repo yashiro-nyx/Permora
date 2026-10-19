@@ -1035,6 +1035,63 @@ a.notification-popover-item:hover {
   outline-offset: -3px;
   background: color-mix(in srgb, var(--info) 8%, var(--surface));
 }
+.activation-form-row > td {
+  padding: 0;
+  background: var(--surface-subtle, var(--surface));
+  border-top: 0;
+}
+.activation-form {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 1.5rem;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.activation-form-heading,
+.activation-form-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: start;
+}
+.activation-form-heading h3 {
+  margin: 0.2rem 0 0;
+}
+.activation-form-summary {
+  justify-content: start;
+  flex-wrap: wrap;
+}
+.activation-form-summary > div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 12rem;
+}
+.activation-form-summary span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.activation-form .button {
+  justify-self: start;
+}
+.activation-form-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+@media (max-width: 640px) {
+  .activation-form {
+    padding: 1rem;
+  }
+  .activation-form-heading {
+    display: grid;
+  }
+  .activation-form-summary > div {
+    min-width: min(100%, 14rem);
+  }
+}
 .table-secondary {
   display: block;
   color: var(--muted);

@@ -32,6 +32,8 @@ type NotificationRow = QueryResultRow & {
   read_at: Date | string | null;
   request_id: string | null;
   display_id: string | null;
+  request_starts_at: Date | string | null;
+  request_activation_status: "activating" | "activated" | "failed" | "expired" | "revoked" | null;
   total_count: number;
   unread_total: number;
 };
@@ -66,7 +68,8 @@ export async function listRequesterNotifications(
     `SELECT notification.id, notification.notification_type,
             notification.title, notification.body, notification.created_at,
             notification.read_at, owned_request.id AS request_id,
-            owned_request.display_id,
+            owned_request.display_id, owned_request.starts_at AS request_starts_at,
+            activation.status AS request_activation_status,
             count(*) OVER()::int AS total_count,
             (SELECT count(*)::int FROM user_notification unread
               WHERE unread.recipient_user_id = $1 AND unread.read_at IS NULL
@@ -76,24 +79,37 @@ export async function listRequesterNotifications(
        LEFT JOIN access_request owned_request
          ON owned_request.id = notification.request_id
         AND owned_request.requester_user_id = notification.recipient_user_id
+       LEFT JOIN request_activation activation
+         ON activation.request_id = owned_request.id
       WHERE ${where.join(" AND ")}
       ORDER BY notification.created_at DESC, notification.id DESC
       LIMIT ${limit} OFFSET ${offset}`,
     values,
   );
   const total = Number(result.rows[0]?.total_count ?? 0);
-  const items: RequesterNotificationDto[] = result.rows.map((row) => ({
-    notificationId: row.id,
-    type: row.notification_type,
-    title: row.title,
-    message: row.body,
-    createdAt: iso(row.created_at),
-    readAt: row.read_at ? iso(row.read_at) : null,
-    request:
-      row.request_id && row.display_id
-        ? { requestId: row.request_id, displayId: row.display_id }
-        : null,
-  }));
+  const items: RequesterNotificationDto[] = result.rows.map((row) => {
+    const futureProvisioning =
+      row.notification_type === "activation_succeeded" &&
+      row.request_activation_status === "activated" &&
+      row.request_starts_at !== null &&
+      new Date(row.request_starts_at).getTime() > Date.now();
+    return {
+      notificationId: row.id,
+      type: row.notification_type,
+      title: futureProvisioning
+        ? "Access provisioned — scheduled start"
+        : row.title,
+      message: futureProvisioning
+        ? "Provisioning was confirmed. Your approved access becomes usable when the requested validity period starts."
+        : row.body,
+      createdAt: iso(row.created_at),
+      readAt: row.read_at ? iso(row.read_at) : null,
+      request:
+        row.request_id && row.display_id
+          ? { requestId: row.request_id, displayId: row.display_id }
+          : null,
+    };
+  });
   return {
     items,
     unreadTotal: Number(result.rows[0]?.unread_total ?? 0),

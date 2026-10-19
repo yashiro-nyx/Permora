@@ -24,6 +24,14 @@ test("activation summary distinguishes approval from each lifecycle state", () =
     activationStatusSummary("approved_pending_activation", "activated").label,
     "Active",
   );
+  const scheduled = activationStatusSummary(
+    "approved_pending_activation",
+    "activated",
+    null,
+    true,
+  );
+  assert.equal(scheduled.label, "Provisioned — scheduled start");
+  assert.match(scheduled.description, /becomes usable/);
   assert.equal(
     activationStatusSummary("approved_pending_activation", "expired").canStart,
     false,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useState, type FormEvent } from "react";
 import { activationStatusSummary } from "@/lib/activation-presentation";
 import type { AdministratorActivationItem } from "@/lib/server/activation-read-service";
 import { dateLabel } from "@/lib/model";
@@ -11,9 +11,11 @@ import { useToast } from "./toast";
 function ActivationControls({
   item,
   onOutcome,
+  onCancel,
 }: {
   item: AdministratorActivationItem;
   onOutcome: (message: string) => void;
+  onCancel: () => void;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -98,11 +100,25 @@ function ActivationControls({
     }
 
     return (
-      <details className="activation-controls">
-        <summary>{item.activationStatus ? "Retry activation" : "Start activation"}</summary>
-        <form className="form-stack" onSubmit={submit}>
+        <form className="activation-form form-stack" onSubmit={submit}>
+          <div className="activation-form-heading">
+            <div>
+              <p className="eyebrow">Activation details</p>
+              <h3>{item.displayId}</h3>
+            </div>
+            <p className="small muted">
+              {item.requesterName} · {item.resourceName} · {item.permissionLabel}
+            </p>
+          </div>
+          <div className="activation-form-summary">
+            <div><span>Approved validity</span><strong>{dateLabel(item.startsAt)}–{dateLabel(item.expiresAt)}</strong></div>
+            <div><span>Current state</span><strong>{item.activationStatus ?? "Awaiting activation"}</strong></div>
+          </div>
+          <Alert title="Manual provisioning confirmation" tone="info">
+            Confirm only after verifying access in the target system. Permora does not contact university systems automatically.
+          </Alert>
           <p className="small muted">
-            Confirm that access was provisioned outside Permora. This action records your confirmation; it does not contact the university system.
+            Record an external ticket or concise evidence so another administrator can audit the provisioning decision.
           </p>
           <label className="checkbox-field">
             <input
@@ -138,11 +154,15 @@ function ActivationControls({
           </Field>
           {failure && <p className="field-error" role="alert">{failure}</p>}
           {message && <p className="small" role="status">{message}</p>}
-          <Button type="submit" disabled={busy}>
-            {busy ? "Recording…" : "Record activation"}
-          </Button>
+          <div className="activation-form-actions">
+            <Button type="button" variant="ghost" onClick={onCancel} disabled={busy}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={busy}>
+              {busy ? "Recording…" : "Record activation"}
+            </Button>
+          </div>
         </form>
-      </details>
     );
   }
   return <span className="small muted">No further activation action</span>;
@@ -163,6 +183,7 @@ export function AdminActivationQueue({
 }) {
   const router = useRouter();
   const [outcome, setOutcome] = useState("");
+  const [expandedRequestId, setExpandedRequestId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!focusRequestId) return;
@@ -236,12 +257,12 @@ export function AdminActivationQueue({
                     Date.parse(item.startsAt) > Date.now(),
                   );
                   return (
-                    <tr
-                      key={item.requestId}
-                      id={`activation-request-${item.requestId}`}
-                      className={item.requestId === focusRequestId ? "activation-row-focused" : undefined}
-                      aria-current={item.requestId === focusRequestId ? "true" : undefined}
-                    >
+                    <Fragment key={item.requestId}>
+                      <tr
+                        id={`activation-request-${item.requestId}`}
+                        className={item.requestId === focusRequestId ? "activation-row-focused" : undefined}
+                        aria-current={item.requestId === focusRequestId ? "true" : undefined}
+                      >
                       <td>
                         <strong>{item.requesterName}</strong>
                         <small className="table-secondary">{item.displayId}</small>
@@ -259,12 +280,39 @@ export function AdminActivationQueue({
                       </td>
                       <td>
                         {summary.canStart ? (
-                          <ActivationControls item={item} onOutcome={setOutcome} />
+                          <Button
+                            variant="outline"
+                            aria-expanded={expandedRequestId === item.requestId}
+                            aria-controls={`activation-form-${item.requestId}`}
+                            onClick={() =>
+                              setExpandedRequestId(
+                                expandedRequestId === item.requestId ? null : item.requestId,
+                              )
+                            }
+                          >
+                            {expandedRequestId === item.requestId
+                              ? "Hide activation form"
+                              : summary.actionLabel}
+                          </Button>
                         ) : (
                           <span className="small muted">No action available</span>
                         )}
                       </td>
-                    </tr>
+                      </tr>
+                      {expandedRequestId === item.requestId && summary.canStart && (
+                        <tr className="activation-form-row">
+                          <td colSpan={5}>
+                            <div id={`activation-form-${item.requestId}`}>
+                              <ActivationControls
+                                item={item}
+                                onOutcome={setOutcome}
+                                onCancel={() => setExpandedRequestId(null)}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
               </tbody>

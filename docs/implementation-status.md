@@ -191,6 +191,14 @@ The two full-suite setup failures were reproduced in `admin-governance.spec.ts` 
 
 The official `npm run test:integration` runner registers 11 files and **114 tests**. The earlier report of 95 was a counting error that omitted the 19 account-management tests from streamed output; no tests were skipped or disabled. A fresh official run passed **114/114** against the isolated `_test` database. Node.js 22 unit tests passed **133/133**.
 
+### Activation lifecycle consistency and Admin activation UI — October 19, 2026
+
+`REQ-2026-000034` was verified read-only in development as `approved_pending_activation` with an `activated` request activation, one ordinary entitlement, and successful activation events. Its requested period is February 27–28, 2027, so the correct user-facing state is **Provisioned — scheduled start**, not currently usable Active access. The defect was split presentation: requester and approver list read models showed only the approval status, while detail/Admin surfaces also read activation state. Shared lifecycle presentation now covers all role surfaces, active counts exclude future starts, and future-dated activation notifications say provisioning is confirmed but scheduled.
+
+The Admin activation form now expands into a full-width table row with activation details, validity, provisioning confirmation, evidence/reference fields, inline validation, and accessible action controls. No schema or business-rule change was required; no development request was mutated by this fix.
+
+Final verification for this change: **133 unit tests**, **114 integration tests**, **71 Playwright tests**, typecheck, lint, production build, and `git diff --check` passed. Lint retains one pre-existing unused-helper warning in the staff notification integration fixture.
+
 ## Testing and deployment readiness
 
 - [x] **Completed:** Node 22 repository requirement and guarded isolated test-runner configuration.

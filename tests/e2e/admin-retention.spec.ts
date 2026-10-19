@@ -1,18 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
-import { E2E, e2eClientHeaders, e2ePassword } from "./staff-fixture";
+import { E2E, e2eClientHeaders, signIn } from "./staff-fixture";
 
 test.describe.configure({ mode: "serial" });
 
 let admin: Page;
 let approver: Page;
-
-async function signIn(page: Page, email: string) {
-  await page.goto("/login");
-  await page.getByLabel("Email address").fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(e2ePassword());
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
-}
 
 test.beforeAll(async ({ browser }) => {
   admin = await browser.newPage({

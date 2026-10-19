@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { AccessRequestDto } from "@/lib/server/request-types";
 import type { PaginationMeta } from "@/lib/pagination";
 import { dateLabel } from "@/lib/model";
+import { activationStatusSummary } from "@/lib/activation-presentation";
 import {
   Badge,
   Button,
@@ -75,6 +76,14 @@ export function ServerRequestTable({
           <tbody>
             {shown.map((request) => (
               <Fragment key={request.id}>
+                {(() => {
+                  const lifecycle = activationStatusSummary(
+                    request.status,
+                    request.activation?.status ?? null,
+                    request.activation?.retryable ?? null,
+                    Date.parse(request.startsAt) > Date.now(),
+                  );
+                  return (
                 <tr className={expanded === request.id ? "expanded-row" : ""}>
                   <td>
                     <div className="resource-name">
@@ -106,18 +115,8 @@ export function ServerRequestTable({
                     </td>
                   )}
                   <td>
-                    <Badge status={request.status} />
-                    {request.status === "pending_review" && (
-                      <p className="small muted">Awaiting a decision</p>
-                    )}
-                    {request.status === "pending_routing" && (
-                      <p className="small muted">
-                        Awaiting approver assignment
-                      </p>
-                    )}
-                    {request.status === "approved_pending_activation" && (
-                      <p className="small muted">Approved — not yet active</p>
-                    )}
+                    <Badge label={lifecycle.label} tone={lifecycle.tone} />
+                    <p className="small muted">{lifecycle.description}</p>
                   </td>
                   <td className="request-actions-cell">
                     {compact ? (
@@ -164,6 +163,8 @@ export function ServerRequestTable({
                     )}
                   </td>
                 </tr>
+                  );
+                })()}
                 {!compact && (
                   <tr
                     hidden={expanded !== request.id}

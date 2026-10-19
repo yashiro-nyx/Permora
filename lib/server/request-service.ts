@@ -414,7 +414,9 @@ export async function getOwnedRequestCounts(
       count(*) FILTER (WHERE ar.status = 'expired')::int AS expired,
       count(*) FILTER (WHERE ar.status = 'approved_pending_activation')::int AS approved,
       count(*) FILTER (
-        WHERE ra.status = 'activated' AND ra.expires_at > now()
+        WHERE ra.status = 'activated'
+          AND ar.starts_at <= now()
+          AND ra.expires_at > now()
       )::int AS active
       FROM access_request ar
       LEFT JOIN request_activation ra ON ra.request_id = ar.id

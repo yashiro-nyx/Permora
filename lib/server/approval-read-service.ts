@@ -117,6 +117,8 @@ type QueueRow = QueryResultRow & {
   submitted_at: Date | string;
   assigned_at: Date | string;
   status: ReviewQueueStatus;
+  activation_status: "activating" | "activated" | "failed" | "expired" | "revoked" | null;
+  activation_retryable: string | null;
   version: number;
   total_count: number;
 };
@@ -193,7 +195,9 @@ export async function listAssignedReviewRequests(
             resource.name AS resource_name, request.permission_id,
             permission.label AS permission_label, request.starts_at,
             request.expires_at, request.submitted_at, assignment.assigned_at,
-            request.status, request.version, count(*) OVER()::int AS total_count
+            request.status, request.version, activation.status AS activation_status,
+            failure.metadata ->> 'retryable' AS activation_retryable,
+            count(*) OVER()::int AS total_count
        FROM access_request request
        JOIN request_review_assignment assignment ON assignment.request_id = request.id
        JOIN approver_responsibility responsibility
@@ -201,8 +205,17 @@ export async function listAssignedReviewRequests(
         AND responsibility.approver_user_id = assignment.approver_user_id
        JOIN "user" requester ON requester.id = request.requester_user_id
        JOIN user_profile profile ON profile.user_id = requester.id
-       JOIN catalog_resource resource ON resource.id = request.resource_id
-       JOIN catalog_permission permission ON permission.id = request.permission_id
+            JOIN catalog_resource resource ON resource.id = request.resource_id
+            JOIN catalog_permission permission ON permission.id = request.permission_id
+       LEFT JOIN request_activation activation ON activation.request_id = request.id
+       LEFT JOIN LATERAL (
+         SELECT event.metadata
+           FROM activation_event event
+          WHERE event.activation_id = activation.id
+            AND event.event_type = 'activation_failed'
+          ORDER BY event.occurred_at DESC, event.id DESC
+          LIMIT 1
+       ) failure ON true
       WHERE ${where.join(" AND ")}
       ORDER BY request.submitted_at DESC, request.id DESC
       LIMIT $${values.length - 1} OFFSET $${values.length}`,
@@ -221,6 +234,11 @@ export async function listAssignedReviewRequests(
     submittedAt: iso(row.submitted_at),
     assignedAt: iso(row.assigned_at),
     status: row.status,
+    activationStatus: row.activation_status,
+    activationRetryable:
+      row.activation_retryable === null
+        ? null
+        : row.activation_retryable === "true",
     version: row.version,
     total_count: row.total_count,
   }));
@@ -317,6 +335,8 @@ type DetailRow = QueryResultRow & {
   submitted_at: Date | string;
   assigned_at: Date | string;
   status: ReviewQueueStatus;
+  activation_status: "activating" | "activated" | "failed" | "expired" | "revoked" | null;
+  activation_retryable: string | null;
   version: number;
   scopes: unknown;
   timeline: unknown;
@@ -382,7 +402,8 @@ export async function getAssignedReviewRequest(
                WHERE event.request_id = request.id
             ), '[]'::jsonb) AS timeline,
             decision.action AS decision_action, decision.reason AS decision_reason,
-            decision.decided_at
+            decision.decided_at, activation.status AS activation_status,
+            failure.metadata ->> 'retryable' AS activation_retryable
        FROM access_request request
        JOIN request_review_assignment assignment ON assignment.request_id = request.id
        JOIN approver_responsibility responsibility
@@ -393,6 +414,15 @@ export async function getAssignedReviewRequest(
        JOIN catalog_resource resource ON resource.id = request.resource_id
        JOIN catalog_permission permission ON permission.id = request.permission_id
        LEFT JOIN request_decision decision ON decision.request_id = request.id
+       LEFT JOIN request_activation activation ON activation.request_id = request.id
+       LEFT JOIN LATERAL (
+         SELECT event.metadata
+           FROM activation_event event
+          WHERE event.activation_id = activation.id
+            AND event.event_type = 'activation_failed'
+          ORDER BY event.occurred_at DESC, event.id DESC
+          LIMIT 1
+       ) failure ON true
       WHERE assignment.approver_user_id = $1
         AND (request.id::text = $2 OR request.display_id = $2)
         AND responsibility.valid_from <= now()
@@ -442,6 +472,11 @@ export async function getAssignedReviewRequest(
     submittedAt: iso(row.submitted_at),
     assignment: { assignedAt: iso(row.assigned_at) },
     status: row.status,
+    activationStatus: row.activation_status,
+    activationRetryable:
+      row.activation_retryable === null
+        ? null
+        : row.activation_retryable === "true",
     version: row.version,
     timeline,
     decision: row.decision_action

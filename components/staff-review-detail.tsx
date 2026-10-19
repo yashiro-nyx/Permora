@@ -3,6 +3,7 @@ import { dateLabel, initials, statusLabels, timeLabel } from "@/lib/model";
 import type { ReviewRequestDetailDto } from "@/lib/server/approval-read-types";
 import { Badge, Card, Icon, PageHeading } from "./ui";
 import { ReviewDecisionPanel } from "./review-decision-panel";
+import { activationStatusSummary } from "@/lib/activation-presentation";
 
 function eventLabel(type: string) {
   const labels: Record<string, string> = {
@@ -22,6 +23,12 @@ export function StaffReviewDetail({
   request: ReviewRequestDetailDto;
 }) {
   const pending = request.status === "pending_review";
+  const lifecycle = activationStatusSummary(
+    request.status,
+    request.activationStatus,
+    request.activationRetryable,
+    Date.parse(request.requestedValidity.startsAt) > Date.now(),
+  );
   return (
     <>
       <PageHeading
@@ -38,7 +45,7 @@ export function StaffReviewDetail({
         <div className="stack">
           <Card
             title="Request details"
-            action={<Badge status={request.status} />}
+            action={<Badge label={lifecycle.label} tone={lifecycle.tone} />}
           >
             <div className="detail-body">
               <section className="requester-profile" aria-label="Requester">
@@ -167,7 +174,7 @@ export function StaffReviewDetail({
               <div>
                 <strong>No decision controls available</strong>
                 <p>
-                  This request is {statusLabels[request.status].toLowerCase()} and
+                  This request is {lifecycle.label.toLowerCase()} and
                   no longer accepts an approval decision.
                 </p>
               </div>

@@ -12,6 +12,7 @@ export interface StaffDashboardData {
   unassigned?: number;
   recent: ReviewQueueItemDto[];
   awaitingActivation?: number;
+  scheduledProvisioning?: number;
   activationIssues?: number;
   unreadNotifications?: number;
 }
@@ -49,6 +50,13 @@ export function StaffDashboard({
           value: data?.awaitingActivation ?? 0,
           icon: "key",
           tone: "success",
+          href: "/admin/activations",
+        },
+        {
+          label: "Scheduled provisioning",
+          value: data?.scheduledProvisioning ?? 0,
+          icon: "clock",
+          tone: "info",
           href: "/admin/activations",
         },
         {

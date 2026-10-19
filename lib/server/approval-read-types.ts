@@ -28,6 +28,8 @@ export interface ReviewQueueItemDto {
   submittedAt: string;
   assignedAt: string;
   status: ReviewQueueStatus;
+  activationStatus: "activating" | "activated" | "failed" | "expired" | "revoked" | null;
+  activationRetryable: boolean | null;
   version: number;
 }
 
@@ -92,6 +94,8 @@ export interface ReviewRequestDetailDto {
     assignedAt: string;
   };
   status: ReviewQueueStatus;
+  activationStatus: "activating" | "activated" | "failed" | "expired" | "revoked" | null;
+  activationRetryable: boolean | null;
   version: number;
   timeline: ReviewTimelineEventDto[];
   decision: null | {

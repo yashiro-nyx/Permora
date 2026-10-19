@@ -75,7 +75,14 @@ export default async function Page() {
             returnedForRevision: returned?.pagination.total ?? 0,
             unassigned: unassigned?.pagination.total,
             recent: pending?.items ?? [],
-            awaitingActivation: activations?.length,
+            awaitingActivation: activations?.filter(
+              (item) => item.activationStatus === null,
+            ).length,
+            scheduledProvisioning: activations?.filter(
+              (item) =>
+                item.activationStatus === "activated" &&
+                Date.parse(item.startsAt) > Date.now(),
+            ).length,
             activationIssues: activations?.filter(
               (item) => item.activationStatus === "failed",
             ).length,
