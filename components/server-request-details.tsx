@@ -15,7 +15,6 @@ export function ServerRequestDetails({
   identity: TrustedIdentity & { requesterRole: "student" | "faculty" };
   submitted?: boolean;
 }) {
-  const badgeStatus = request.status;
   const activationSummary = activationStatusSummary(
     request.status,
     request.activation?.status ?? null,
@@ -40,11 +39,19 @@ export function ServerRequestDetails({
         eyebrow={`REQUESTS  ›  ${request.displayId}`}
         title="Request details"
         description="This record is visible only to its owner in Stage 2A."
-        action={<Badge status={badgeStatus} />}
+        action={
+          <div className="current-status" aria-label="Current access status">
+            <span className="eyebrow">Current access status</span>
+            <Badge label={activationSummary.label} tone={activationSummary.tone} />
+          </div>
+        }
       />
       <div className="detail-grid">
         <div className="stack">
-          <Card title="Request details" action={<Badge status={badgeStatus} />}>
+          <Card
+            title="Request details"
+            action={<Badge label={activationSummary.label} tone={activationSummary.tone} />}
+          >
             <div className="card-body detail-body">
               <div className="requester-profile">
                 <span className="avatar large">{initials(identity.name)}</span>
@@ -84,14 +91,22 @@ export function ServerRequestDetails({
                   <dt>Requested start</dt>
                   <dd>
                     {dateLabel(request.startsAt)}
-                    <small>Requested period; no active grant</small>
+                    <small>
+                      {request.activation
+                        ? "Provisioned access validity window"
+                        : "Requested period; no active grant"}
+                    </small>
                   </dd>
                 </div>
                 <div>
                   <dt>Requested expiration</dt>
                   <dd>
                     {dateLabel(request.expiresAt)}
-                    <small>Not a completed expiration event</small>
+                    <small>
+                      {request.activation
+                        ? "Provisioned access expires at this time"
+                        : "Not a completed expiration event"}
+                    </small>
                   </dd>
                 </div>
               </dl>
@@ -124,7 +139,7 @@ export function ServerRequestDetails({
                   </p>
                 )}
                 <p className="small muted">
-                  Approval state: {request.status.replaceAll("_", " ")}
+                  Approval decision: {request.status === "approved_pending_activation" ? "Approved" : request.status.replaceAll("_", " ")}
                 </p>
               </div>
             </Card>

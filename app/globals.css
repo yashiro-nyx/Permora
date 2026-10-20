@@ -1044,8 +1044,53 @@ a.notification-popover-item:hover {
   display: grid;
   gap: 1rem;
   padding: 1.25rem 1.5rem 1.5rem;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  text-align: left;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
+}
+.activation-form .alert {
+  align-items: flex-start;
+  text-align: left;
+  margin: 0;
+}
+.activation-form .alert > div {
+  min-width: 0;
+}
+.activation-form .alert strong,
+.activation-form .alert p,
+.activation-form .alert > div > div {
+  text-align: left;
+}
+.activation-form .field {
+  width: 100%;
+  gap: 0.45rem;
+  text-align: left;
+}
+.activation-form .field input,
+.activation-form .field textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+.activation-form .field-hint {
+  text-align: left;
+}
+.activation-form .checkbox-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+  margin: 0.1rem 0;
+  text-align: left;
+  line-height: 1.5;
+}
+.activation-form .checkbox-field input {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  margin: 0.2rem 0 0;
 }
 .activation-form-heading,
 .activation-form-summary {
@@ -1078,15 +1123,33 @@ a.notification-popover-item:hover {
 }
 .activation-form-actions {
   display: flex;
+  justify-content: flex-end;
+  align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--border);
+}
+.activation-form-actions .button {
+  min-height: 40px;
+  padding: 8px 14px;
 }
 @media (max-width: 640px) {
   .activation-form {
     padding: 1rem;
+    width: calc(100vw - 2rem);
+    max-width: calc(100vw - 2rem);
+    box-sizing: border-box;
   }
   .activation-form-heading {
     display: grid;
+    gap: 0.25rem;
+  }
+  .activation-form-actions {
+    justify-content: stretch;
+  }
+  .activation-form-actions .button {
+    flex: 1 1 9rem;
   }
   .activation-form-summary > div {
     min-width: min(100%, 14rem);

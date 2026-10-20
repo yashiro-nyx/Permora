@@ -191,7 +191,7 @@ export const statusLabels: Record<Status, string> = {
   pending_routing: "Pending configuration",
   pending_review: "Pending review",
   approved: "Approved",
-  approved_pending_activation: "Approved — awaiting activation",
+  approved_pending_activation: "Approved — awaiting provisioning",
   active: "Active",
   denied: "Denied",
   returned_for_revision: "Revision requested",

@@ -96,7 +96,7 @@ test("request submission, deterministic routing, approval, and requester status 
   await expect(submittedToast).toHaveCount(0, { timeout: 6500 });
   const requestId = new URL(requesterPage.url()).pathname.split("/").pop();
   expect(requestId).toBeTruthy();
-  const headingPath = await requesterPage.locator(".page-heading .eyebrow").textContent();
+  const headingPath = await requesterPage.locator(".page-heading .breadcrumb").textContent();
   const displayId = headingPath?.match(/REQ-\d{4}-\d{6}/)?.[0];
   expect(displayId).toBeTruthy();
   await expect(requesterPage.locator(".alert.tone-success")).toContainText(
@@ -125,7 +125,7 @@ test("request submission, deterministic routing, approval, and requester status 
     .getByRole("button", { name: "Confirm decision" })
     .click();
   await expect(
-    approverPage.getByText("Scheduled — awaiting start").first(),
+    approverPage.getByText("Approved — awaiting provisioning").first(),
   ).toBeVisible();
   await expect(
     approverPage.getByText(/does not activate access, create an entitlement/i),
@@ -133,10 +133,10 @@ test("request submission, deterministic routing, approval, and requester status 
 
   await requesterPage.reload();
   await expect(
-    requesterPage.getByText("Scheduled — awaiting start").first(),
+    requesterPage.getByText("Approved — awaiting provisioning").first(),
   ).toBeVisible();
   await expect(
-    requesterPage.getByText("Request approved — awaiting activation"),
+    requesterPage.getByText("Approval decision recorded"),
   ).toBeVisible();
   await expect(
     requesterPage.getByText(/lifecycle status above reflects/i),
@@ -155,10 +155,10 @@ test("request submission, deterministic routing, approval, and requester status 
     }).format(new Date(`${value}T00:00:00Z`));
   await expect(approvedRow).toContainText(formatDate(startsOn));
   await expect(approvedRow).toContainText(formatDate(expiresOn));
-  await expect(approvedRow).toContainText("Scheduled — awaiting start");
+  await expect(approvedRow).toContainText("Approved — awaiting provisioning");
   await expect(
     requesterPage.getByRole("region", { name: "Request summary" }),
-  ).toContainText("Approved requests awaiting activation");
+  ).toContainText("Approval recorded; provisioning tracked separately");
 
   const activationTable = activationAdminPage.getByRole("region", {
     name: "Activation lifecycle table",
@@ -166,12 +166,22 @@ test("request submission, deterministic routing, approval, and requester status 
   const activationRow = activationTable.getByRole("row", {
     name: new RegExp(displayId!),
   });
-  await expect(activationRow).toContainText("Scheduled — awaiting start");
+  await expect(activationRow).toContainText("Approved — awaiting provisioning");
   await activationRow.getByText("Start activation", { exact: true }).click();
   await activationRow
     .getByLabel("I confirm the requested access was provisioned.")
     .check();
   await activationRow.getByLabel("External reference").fill("E2E-MANUAL-WORKFLOW");
+  await activationAdminPage.screenshot({
+    path: testInfo.outputPath("admin-activation-form-desktop.png"),
+    fullPage: true,
+  });
+  await activationAdminPage.setViewportSize({ width: 390, height: 844 });
+  await activationAdminPage.screenshot({
+    path: testInfo.outputPath("admin-activation-form-mobile.png"),
+    fullPage: true,
+  });
+  await activationAdminPage.setViewportSize({ width: 1440, height: 1000 });
   await activationRow.getByRole("button", { name: "Record activation" }).click();
   // The confirmation is surfaced at the queue level (the "Activation outcome"
   // banner) so it survives the refresh that transitions this row to a terminal
@@ -189,17 +199,46 @@ test("request submission, deterministic routing, approval, and requester status 
 
   await requesterPage.goto(`/requests/${requestId}`);
   await expect(
-    requesterPage.getByText("Provisioned — scheduled start", { exact: true }),
+    requesterPage
+      .getByLabel("Current access status")
+      .getByText("Provisioned — scheduled start", { exact: true }),
   ).toBeVisible();
-  await expect(requesterPage.getByText("approved pending activation")).toBeVisible();
+  await expect(requesterPage.getByText("Approval decision: Approved")).toBeVisible();
+  await expect(
+    requesterPage.getByLabel("Current access status"),
+  ).not.toContainText("Approved — awaiting activation");
+  await requesterPage.screenshot({
+    path: testInfo.outputPath("student-request-detail.png"),
+    fullPage: true,
+  });
   await requesterPage.goto("/requests");
   await expect(
     requesterPage.getByRole("row", { name: new RegExp(displayId!) }),
   ).toContainText("Provisioned — scheduled start");
+  await requesterPage.screenshot({
+    path: testInfo.outputPath("student-request-list.png"),
+    fullPage: true,
+  });
   await approverPage.goto("/review");
   await expect(
     approverPage.getByRole("row", { name: new RegExp(displayId!) }),
   ).toContainText("Provisioned — scheduled start");
+  await approverPage.screenshot({
+    path: testInfo.outputPath("approver-review-list.png"),
+    fullPage: true,
+  });
+  await approverPage.goto(`/review/${requestId}`);
+  await expect(
+    approverPage.getByRole("heading", { name: "Approval decision history" }),
+  ).toBeVisible();
+  await expect(approverPage.getByText("Approval decision: Approved")).toBeVisible();
+  await expect(
+    approverPage.getByText("Provisioned — scheduled start", { exact: true }).first(),
+  ).toBeVisible();
+  await approverPage.screenshot({
+    path: testInfo.outputPath("approver-request-detail.png"),
+    fullPage: true,
+  });
   await requesterPage.goto("/notifications");
   await expect(
     requesterPage.getByRole("heading", { name: "Access provisioned — scheduled start" }),

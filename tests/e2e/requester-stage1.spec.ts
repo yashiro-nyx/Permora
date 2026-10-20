@@ -41,7 +41,7 @@ test("request history, filters, and accessible details use persisted records", a
   ).toContainText("07");
   await expect(
     page.getByRole("region", { name: "Request summary" }),
-  ).toContainText("Approved requests awaiting activation");
+  ).toContainText("Approval recorded; provisioning tracked separately");
 
   await page.getByLabel("Search requests").fill("E2E-RETRY");
   await page.getByRole("button", { name: "Apply filters" }).click();

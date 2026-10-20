@@ -53,7 +53,7 @@ export function ServerRequestsList({
             value: counts.approved,
             icon: "check",
             tone: "success",
-            hint: "Approved requests awaiting activation",
+            hint: "Approval recorded; provisioning tracked separately",
           },
           {
             label: "Expired",

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { TrustedIdentity } from "@/lib/auth-types";
 import { dateLabel } from "@/lib/model";
+import { activationStatusSummary } from "@/lib/activation-presentation";
 import type { ReviewQueueItemDto } from "@/lib/server/approval-read-types";
 import { Alert, Badge, Card, Icon, LinkButton, PageHeading } from "./ui";
 
@@ -90,7 +91,7 @@ export function StaffDashboard({
           href: "/review?status=pending_review",
         },
         {
-          label: "Approved — awaiting activation",
+          label: "Approved decisions",
           value: data?.approvedPendingActivation ?? 0,
           icon: "check",
           tone: "success",
@@ -162,7 +163,7 @@ export function StaffDashboard({
           {administrator ? (
             <div className="quick-actions dashboard-priority-list">
               <LinkButton href="/admin/activations">
-                <span className="row"><Icon name="key" /> Approved requests awaiting activation</span>
+                <span className="row"><Icon name="key" /> Approved requests awaiting provisioning</span>
                 <span aria-hidden="true">→</span>
               </LinkButton>
               <LinkButton href="/admin/unassigned" variant="outline">
@@ -206,7 +207,17 @@ export function StaffDashboard({
                         <small className="table-secondary">{request.permission.label}</small>
                       </td>
                       <td className="date-cell">{dateLabel(request.submittedAt)}</td>
-                      <td><Badge status={request.status} /></td>
+                      <td>
+                        {(() => {
+                          const lifecycle = activationStatusSummary(
+                            request.status,
+                            request.activationStatus,
+                            request.activationRetryable,
+                            Date.parse(request.requestedValidity.startsAt) > Date.now(),
+                          );
+                          return <Badge label={lifecycle.label} tone={lifecycle.tone} />;
+                        })()}
+                      </td>
                       <td>
                         <Link className="table-link" href={`/review/${request.requestId}`}>
                           Review<span className="sr-only"> {request.displayId}</span>

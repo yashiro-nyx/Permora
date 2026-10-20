@@ -8,7 +8,7 @@ import type { AnalyticsSummaryDto } from "@/lib/server/admin-governance-types";
 const REQUEST_STATUS_LABELS: Record<string, string> = {
   pending_routing: "Pending configuration",
   pending_review: "Pending review",
-  approved_pending_activation: "Approved — awaiting activation",
+  approved_pending_activation: "Approval decision recorded",
   denied: "Denied",
   returned_for_revision: "Revision requested",
   expired: "Expired",
@@ -134,7 +134,7 @@ export const reportableRequestStatuses: ReadonlyArray<{
 }> = [
   { value: "pending_routing", label: "Pending configuration" },
   { value: "pending_review", label: "Pending review" },
-  { value: "approved_pending_activation", label: "Approved — awaiting activation" },
+  { value: "approved_pending_activation", label: "Approval decision recorded" },
   { value: "denied", label: "Denied" },
   { value: "returned_for_revision", label: "Revision requested" },
   { value: "expired", label: "Expired" },

@@ -468,7 +468,7 @@ test("approve commits state, immutable records, and activation-ready notificatio
   assert.equal(requesterNotification?.recipient_user_id, requester);
   assert.equal(
     requesterNotification?.title,
-    "Request approved — awaiting activation",
+    "Approval decision recorded",
   );
 });
 

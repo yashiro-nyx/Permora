@@ -95,7 +95,7 @@ export function ReviewDecisionPanel({
       setAttempt(null);
       const successText =
         attempt.decision === "approve"
-          ? "The request is approved and awaiting activation. No access has been activated."
+          ? "The approval decision is recorded. Access remains unavailable until an administrator confirms provisioning."
           : "The requester-visible decision and audit event were recorded.";
       setMessage({
         tone: "success",

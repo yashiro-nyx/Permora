@@ -85,7 +85,7 @@ test("status breakdown labels, computes percentages, and sorts by count", () => 
       ["denied", 2, 20],
     ],
   );
-  assert.equal(rows[0].label, "Approved — awaiting activation");
+  assert.equal(rows[0].label, "Approval decision recorded");
 });
 
 test("request status label maps known keys and humanizes unknown ones", () => {

@@ -1274,8 +1274,8 @@ export async function applyApprovalDecision(
     input.decision === "approve"
       ? {
           type: "request_approved_pending_activation",
-          title: "Request approved — awaiting activation",
-          body: "Your request was approved. Access is not active until activation is completed.",
+          title: "Approval decision recorded",
+          body: "Your request was approved. Access remains unavailable until provisioning is confirmed.",
         }
       : input.decision === "deny"
         ? {

@@ -156,15 +156,15 @@ test("confirmed approval records a decision without claiming activation", async 
   await expect(approve).toBeFocused();
   await approve.click();
   await page.getByRole("button", { name: "Confirm decision" }).click();
-  await expect(page.getByText("Scheduled — awaiting start").first()).toBeVisible();
+  await expect(page.getByText("Approved — awaiting provisioning").first()).toBeVisible();
   await expect(page.getByText("No decision controls available")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Immutable decision history" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Approval decision history" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Deny", exact: true })).toHaveCount(0);
 
   await page.goto("/review");
   const terminalRow = page.getByRole("row", { name: /E2E-APPROVE/ });
-  await expect(terminalRow).toContainText("Scheduled — awaiting start");
+  await expect(terminalRow).toContainText("Approved — awaiting provisioning");
   await expect(
     terminalRow.getByRole("link", { name: "View details E2E-APPROVE" }),
   ).toBeVisible();

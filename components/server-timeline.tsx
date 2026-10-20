@@ -14,7 +14,7 @@ export function ServerTimeline({
     renewal_submitted: "Renewal submitted",
     request_routed: "Assigned for review",
     request_routing_unavailable: "Awaiting routing configuration",
-    review_approved: "Request approved — awaiting activation",
+    review_approved: "Approval decision recorded",
     review_denied: "Request denied",
     review_returned_for_revision: "Revision requested",
     activation_succeeded: "Access activated",

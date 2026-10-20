@@ -34,7 +34,7 @@ test.afterAll(async () => {
 test("requester notification center filters and marks persisted records read", async () => {
     await requester.goto("/notifications");
     await expect(requester.getByRole("heading", { name: "Notifications" })).toBeVisible();
-    await expect(requester.getByRole("heading", { name: "Request approved — awaiting activation" })).toBeVisible();
+    await expect(requester.getByRole("heading", { name: "Approval decision recorded" })).toBeVisible();
     await expect(requester.getByRole("heading", { name: "Access request denied" })).toBeVisible();
     await expect(requester.getByRole("heading", { name: "Access activation failed" })).toBeVisible();
     await expect(requester.getByRole("heading", { name: "Access activated" })).toBeVisible();
@@ -47,7 +47,7 @@ test("requester notification center filters and marks persisted records read", a
     await expect(requester.getByText("Notification updated")).toBeVisible();
     await requester.getByRole("link", { name: /Unread/ }).click();
     await expect(requester.getByRole("heading", { name: "Access request denied" })).toHaveCount(0);
-    await expect(requester.getByRole("heading", { name: "Request approved — awaiting activation" })).toBeVisible();
+    await expect(requester.getByRole("heading", { name: "Approval decision recorded" })).toBeVisible();
     await expect(requester.getByRole("heading", { name: "Access activation failed" })).toBeVisible();
     await expect(requester.getByRole("heading", { name: "Access activated" })).toBeVisible();
 });

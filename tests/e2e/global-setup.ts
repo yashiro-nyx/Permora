@@ -388,7 +388,7 @@ export default async function globalSetup() {
       `INSERT INTO user_notification
         (id,recipient_user_id,request_id,request_event_id,notification_type,title,body,created_at)
        VALUES
-        ($1,$3,$4,$6,'request_approved_pending_activation','Request approved — awaiting activation','Your request was approved. Access is not active until activation is completed.',now() - interval '30 minutes'),
+        ($1,$3,$4,$6,'request_approved_pending_activation','Approval decision recorded','Your request was approved. Access remains unavailable until provisioning is confirmed.',now() - interval '30 minutes'),
         ($2,$3,$5,$7,'request_denied','Access request denied','Additional justification is required.',now() - interval '15 minutes'),
         ($8,$3,$4,$9,'activation_failed','Access activation failed','The first activation attempt was not confirmed. An administrator retried after verification.',now() - interval '23 minutes'),
         ($10,$3,$4,$11,'activation_succeeded','Access activated','Your approved access has been activated.',now() - interval '15 minutes')`,

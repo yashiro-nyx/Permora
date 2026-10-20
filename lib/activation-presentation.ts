@@ -50,10 +50,10 @@ export function activationStatusSummary(
   }
   if (!lifecycleStatus)
     return {
-      label: startsAtFuture ? "Scheduled — awaiting start" : "Awaiting activation",
+      label: "Approved — awaiting provisioning",
       description: startsAtFuture
-        ? "Approved; the requested validity period starts in the future. Record activation only after provisioning is confirmed."
-        : "Approved, but access is not active yet.",
+        ? "Approval is recorded, but provisioning must be confirmed before the future validity period can begin."
+        : "Approval is recorded, but provisioning has not been confirmed yet.",
       tone: "warning",
       canStart: true,
       actionLabel: "Start activation",

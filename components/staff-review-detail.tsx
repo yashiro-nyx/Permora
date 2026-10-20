@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { dateLabel, initials, statusLabels, timeLabel } from "@/lib/model";
+import { dateLabel, initials, timeLabel } from "@/lib/model";
 import type { ReviewRequestDetailDto } from "@/lib/server/approval-read-types";
 import { Badge, Card, Icon, PageHeading } from "./ui";
 import { ReviewDecisionPanel } from "./review-decision-panel";
@@ -7,12 +7,20 @@ import { activationStatusSummary } from "@/lib/activation-presentation";
 
 function eventLabel(type: string) {
   const labels: Record<string, string> = {
+    submitted: "Request submitted",
+    renewal_submitted: "Renewal request submitted",
     request_submitted: "Request submitted",
     request_routed: "Assigned for review",
     request_routing_unavailable: "Routing unavailable",
-    review_approved: "Request approved",
+    review_approved: "Approval decision recorded",
     review_denied: "Request denied",
     review_returned_for_revision: "Returned for revision",
+    activation_started: "Provisioning started",
+    activation_succeeded: "Access provisioned",
+    activation_failed: "Provisioning failed",
+    activation_expired: "Access expired",
+    activation_revoked: "Access revoked",
+    activation_reconciled: "Activation reconciled",
   };
   return labels[type] ?? "Request updated";
 }
@@ -133,11 +141,11 @@ export function StaffReviewDetail({
             </div>
           </Card>
           {request.decision && (
-            <Card title="Immutable decision history">
+            <Card title="Approval decision history">
               <div className="card-body decision-history">
                 <Badge
-                  status={request.status}
-                  label={statusLabels[request.status]}
+                  label={`Approval decision: ${request.decision.action === "approve" ? "Approved" : request.decision.action === "deny" ? "Denied" : "Returned for revision"}`}
+                  tone={request.decision.action === "approve" ? "success" : request.decision.action === "deny" ? "danger" : "warning"}
                 />
                 <dl className="detail-fields">
                   <div>

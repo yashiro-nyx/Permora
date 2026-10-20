@@ -9,8 +9,8 @@ test("activation summary distinguishes approval from each lifecycle state", () =
   assert.deepEqual(
     activationStatusSummary("approved_pending_activation", null),
     {
-      label: "Awaiting activation",
-      description: "Approved, but access is not active yet.",
+      label: "Approved — awaiting provisioning",
+      description: "Approval is recorded, but provisioning has not been confirmed yet.",
       tone: "warning",
       canStart: true,
       actionLabel: "Start activation",
@@ -76,9 +76,9 @@ test("future-dated approval remains visible with scheduled guidance", () => {
     null,
     true,
   );
-  assert.equal(summary.label, "Scheduled — awaiting start");
+  assert.equal(summary.label, "Approved — awaiting provisioning");
   assert.equal(summary.canStart, true);
-  assert.match(summary.description, /starts in the future/);
+  assert.match(summary.description, /provisioning must be confirmed/);
 });
 
 test("notification rendering metadata distinguishes activation success and failure", () => {
