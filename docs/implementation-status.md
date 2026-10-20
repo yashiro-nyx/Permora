@@ -30,6 +30,8 @@ Audited against the working tree on 2026-10-03; resource/permission catalog, del
 
 **October 20, 2026 (official Permora branding):** Added the reusable `Brand` component backed by the supplied `public/assets/Logo.png` for login, requester headers, staff/admin sidebars, and the mobile navigation drawer. Added a generated 64px `public/favicon.png` derivative for browser-tab use and declared it through root metadata without modifying the original asset. Browser screenshots and focused logo checks passed; full verification passed with 133 unit, 114 integration, and 87 Playwright tests. No authentication, workflow, migration, or data changes.
 
+**October 20, 2026 (favicon correction):** Browser inspection found no conflicting `app/favicon.ico`, `app/icon.png`, or `public/favicon.ico`; the prior implementation relied only on a manually declared public PNG path. Replaced that non-canonical registration with the Next.js App Router `app/icon.png` convention, using the same 64px derivative of the official logo and removing the duplicate metadata declarations. A fresh Playwright context verified exactly one `/icon.png` link, HTTP 200, `image/png`, and byte identity with `app/icon.png` on Login; the complete suite passed 87/87. No database, workflow, authentication, authorization, or production changes.
+
 This status distinguishes verified UI, backend-only services, and deferred work.
 
 Status key: **Completed**, **In progress**, **Planned**, **Blocked**.

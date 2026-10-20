@@ -6,11 +6,6 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: { default: "Permora — Access made clear", template: "%s | Permora" },
   description: "Secure access requests for students and faculty.",
-  icons: {
-    icon: "/favicon.png",
-    shortcut: "/favicon.png",
-    apple: "/favicon.png",
-  },
 };
 export default function RootLayout({
   children,

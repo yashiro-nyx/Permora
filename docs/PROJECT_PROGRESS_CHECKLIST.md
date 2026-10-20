@@ -475,3 +475,10 @@ Never place credentials in source code, Git history, screenshots, issue comments
 - [x] Added the generated 64px `public/favicon.png` derivative and declared one consistent favicon/apple-touch icon set in root metadata; the original logo remains unchanged.
 - [x] Captured and inspected desktop and mobile browser screenshots; focused logo coverage passed 3/3 and the complete Playwright suite passed 87/87.
 - [x] No database schema, records, authentication, authorization, approval, or activation behavior changed.
+
+## Browser favicon correction — October 20, 2026
+
+- [x] Confirmed there are no conflicting App Router or public favicon files; the former public-path metadata registration was not the canonical App Router icon convention.
+- [x] Added `app/icon.png` as the single framework-managed favicon source, generated from the official `public/assets/Logo.png`; removed duplicate root icon declarations.
+- [x] Fresh-browser verification confirms one `/icon.png` link, HTTP 200, `image/png`, and served bytes matching the official derivative on Login; Dashboard and other routes inherit the same root metadata.
+- [x] Focused favicon checks passed 3/3; complete verification passed 133 unit, 114 integration, and 87 Playwright tests. No data or production changes.

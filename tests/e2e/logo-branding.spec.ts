@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { E2E, e2eClientHeaders, signIn } from "./staff-fixture";
 
@@ -6,7 +8,16 @@ test.describe.configure({ mode: "serial" });
 test("login page exposes the official logo and favicon", async ({ page }) => {
   await page.goto("/login");
   await expect(page.locator('img[alt="Permora logo"]')).toHaveCount(2);
-  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", /favicon\.png/);
+  const iconLinks = page.locator('link[rel="icon"]');
+  await expect(iconLinks).toHaveCount(1);
+  const iconHref = await iconLinks.getAttribute("href");
+  expect(iconHref).toMatch(/^\/icon\.png(?:\?.*)?$/);
+  const iconResponse = await page.request.get(new URL(iconHref!, page.url()).toString());
+  expect(iconResponse.status()).toBe(200);
+  expect(iconResponse.headers()["content-type"]).toMatch(/^image\/png/);
+  const servedIconHash = createHash("sha256").update(await iconResponse.body()).digest("hex");
+  const sourceIconHash = createHash("sha256").update(readFileSync("app/icon.png")).digest("hex");
+  expect(servedIconHash).toBe(sourceIconHash);
   for (const logo of await page.locator('img[alt="Permora logo"]').all()) {
     await expect(logo).toHaveAttribute("src", /Logo\.png/i);
   }
