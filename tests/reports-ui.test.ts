@@ -22,11 +22,14 @@ function summary(overrides: Partial<AnalyticsSummaryDto> = {}): AnalyticsSummary
       pendingRouting: 0,
       approvedPendingActivation: 0,
       awaitingActivation: 0,
+      scheduledProvisioning: 0,
     },
     entitlements: { active: 0, expired: 0, revoked: 0 },
     activation: { activated: 0, failed: 0, activating: 0 },
     approvalTurnaroundHours: null,
     approverWorkload: [],
+    requestTrends: [],
+    resourceCategories: [],
     ...overrides,
   };
 }
@@ -45,6 +48,7 @@ test("derived request counts come only from the DTO, never invented", () => {
     pendingRouting: 1,
     approvedPendingActivation: 4,
     awaitingActivation: 1,
+    scheduledProvisioning: 0,
   });
   assert.deepEqual(counts, {
     total: 12,
@@ -76,6 +80,7 @@ test("status breakdown labels, computes percentages, and sorts by count", () => 
     pendingRouting: 0,
     approvedPendingActivation: 5,
     awaitingActivation: 0,
+    scheduledProvisioning: 0,
   });
   assert.deepEqual(
     rows.map((r) => [r.status, r.count, r.percentage]),

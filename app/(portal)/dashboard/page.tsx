@@ -14,6 +14,7 @@ import {
 } from "@/lib/server/approval-read-service";
 import { listAdministratorActivations } from "@/lib/server/activation-read-service";
 import { listStaffNotifications } from "@/lib/server/operations-service";
+import { getAnalyticsSummary } from "@/lib/server/admin-governance-service";
 
 export const metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
@@ -24,7 +25,7 @@ export default async function Page() {
     try {
       const canReview = await hasActiveApprovalResponsibility(identity.id);
       const filters = { page: 1, pageSize: 5 };
-      const [pending, approved, denied, returned, unassigned, activations, notifications] =
+      const [pending, approved, denied, returned, unassigned, activations, notifications, analytics] =
         await Promise.all([
           canReview
             ? listAssignedReviewRequests(identity, {
@@ -63,6 +64,9 @@ export default async function Page() {
                 pageSize: 1,
               })
             : null,
+          identity.roles.includes("admin")
+            ? getAnalyticsSummary(new URLSearchParams())
+            : null,
         ]);
       return (
         <StaffDashboard
@@ -87,6 +91,7 @@ export default async function Page() {
               (item) => item.activationStatus === "failed",
             ).length,
             unreadNotifications: notifications?.unreadTotal,
+            analytics: analytics ?? undefined,
           }}
         />
       );

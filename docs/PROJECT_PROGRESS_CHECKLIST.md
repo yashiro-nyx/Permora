@@ -460,3 +460,11 @@ Never place credentials in source code, Git history, screenshots, issue comments
 - [x] Renamed the navigation label `Unassigned Requests` to `Request Routing` while preserving `/admin/unassigned`.
 - [x] Updated the Administrator dashboard heading to `Access Management Overview` and restyled the operational attention card; screenshots verified at desktop and 390px mobile widths.
 - [x] Added rendered Playwright coverage for the six-item shell, nested settings, profile menu, mobile drawer, route access, and keyboard Escape behavior. No migrations or production data changes.
+
+## Unified role navigation and dashboard statistics — October 20, 2026
+
+- [x] Student, Faculty, and Approver sidebars now share the grouped Main Menu / Settings structure while retaining their role-specific destinations and server authorization.
+- [x] Header bells remain the notification entry point; account settings, notification preferences, Help & Support, and Logout are available through the keyboard-accessible profile menu and mobile drawer footer.
+- [x] Administrator Dashboard now presents authorized live analytics for total requests, approval outcomes, current active access, scheduled provisioning, request trends, and resource-category distribution. Future validity periods are excluded from active counts.
+- [x] Added isolated Playwright coverage for Student, Faculty, Approver, Administrator navigation/profile/statistics and captured screenshots at desktop; existing responsive suites cover 320px, 390px, 768px, and 1440px surfaces.
+- [x] Full baseline verification remains green: 133 unit tests, 114 integration tests, 80 Playwright tests; the new unified slice passed 4/4. No migrations, production queries, or development record mutations were introduced.

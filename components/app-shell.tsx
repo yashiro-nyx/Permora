@@ -10,10 +10,11 @@ import { NotificationBell } from "./notification-bell";
 import { StaffNotificationBell } from "./staff-notification-bell";
 import { initials, roleLabels } from "@/lib/model";
 import {
+  approverSettingsNavigation,
   administratorSettingsNavigation,
   navigationForIdentity,
   primaryRole,
-  requesterNavigation,
+  requesterSettingsNavigation,
 } from "@/lib/navigation";
 import type { NavigationItem } from "@/lib/navigation";
 
@@ -54,7 +55,12 @@ export function AppShell({
     }
   }, []);
 
-  const adminSettingsPath = administratorSettingsNavigation.some(
+  const settingsPaths = role === "admin"
+    ? administratorSettingsNavigation
+    : role === "approver"
+      ? approverSettingsNavigation
+      : requesterSettingsNavigation;
+  const adminSettingsPath = settingsPaths.some(
     ([href]) => path === href || path.startsWith(`${href}/`),
   ) || (role === "admin" && canReview && adminReviewEnabled && path.startsWith("/review"));
 
@@ -105,27 +111,29 @@ export function AppShell({
       <span className="nav-link-label">{label}</span>
     </Link>
   );
-  const settingsGroup = role === "admin" ? (
+  const settingsNavigation = settingsPaths;
+  const settingsLabel = role === "admin" ? "System Settings" : "Settings";
+  const settingsGroup = (
     <div className={`nav-group ${settingsOpen ? "open" : ""}`}>
       <button
         type="button"
         className={`nav-link nav-group-toggle ${adminSettingsPath ? "selected" : ""}`}
         onClick={() => setSettingsOpen((open) => !open)}
         aria-expanded={settingsOpen}
-        title="System Settings"
+        title={settingsLabel}
       >
         <Icon name="settings" />
-        <span className="nav-link-label">System Settings</span>
+        <span className="nav-link-label">{settingsLabel}</span>
         <span className="nav-group-chevron" aria-hidden="true">{settingsOpen ? "⌃" : "⌄"}</span>
       </button>
       {settingsOpen && (
         <div className="nav-group-items">
-          {canReview && adminReviewEnabled && navLink(["/review", "Review Requests", "requests"])}
-          {administratorSettingsNavigation.map(navLink)}
+          {role === "admin" && canReview && adminReviewEnabled && navLink(["/review", "Review Requests", "requests"])}
+          {settingsNavigation.map(navLink)}
         </div>
       )}
     </div>
-  ) : null;
+  );
   const navLinks = (
     <>
       {navigation.map(navLink)}
@@ -177,19 +185,6 @@ export function AppShell({
           <span className="portal-name">
             {requester ? "Access workspace" : `${roleLabels[role]} workspace`}
           </span>
-          {requester && (
-            <nav className="top-nav" aria-label="Quick navigation">
-              {requesterNavigation.slice(0, 3).map(([href, label]) => (
-                <Link
-                  key={href}
-                  href={href}
-                  aria-current={active(href) ? "page" : undefined}
-                >
-                  {label}
-                </Link>
-              ))}
-            </nav>
-          )}
         </div>
         <div className="header-right">
           {requester ? (
@@ -197,8 +192,7 @@ export function AppShell({
           ) : (
             <StaffNotificationBell />
           )}
-          {role === "admin" ? (
-            <div className="profile-menu" ref={profileRef}>
+          <div className="profile-menu" ref={profileRef}>
               <button
                 type="button"
                 className="profile-trigger"
@@ -215,7 +209,7 @@ export function AppShell({
                 <span className="profile-chevron" aria-hidden="true">⌄</span>
               </button>
               {profileOpen && (
-                <div className="profile-popover" role="menu" aria-label="Administrator profile menu">
+                <div className="profile-popover" role="menu" aria-label={`${roleLabels[role]} profile menu`}>
                   <div className="profile-popover-heading">
                     <strong>{identity.name}</strong>
                     <small>{identity.email}</small>
@@ -233,16 +227,7 @@ export function AppShell({
                   {logout}
                 </div>
               )}
-            </div>
-          ) : (
-            <>
-              <div className="header-user">
-                <strong>{identity.name}</strong>
-                <small>{roleLabels[role]}</small>
-              </div>
-              <span className="avatar">{initials(identity.name)}</span>
-            </>
-          )}
+          </div>
         </div>
       </header>
       {!focused && (
@@ -269,12 +254,6 @@ export function AppShell({
           <nav aria-label="Main navigation">{navLinks}</nav>
           <div className="sidebar-bottom">
             <span className="eyebrow">Support</span>
-            {requester && (
-              <Link className="nav-link" href="/help">
-                <Icon name="help" />
-                <span className="nav-link-label">Help & guidelines</span>
-              </Link>
-            )}
             {logout}
           </div>
         </aside>
@@ -305,16 +284,6 @@ export function AppShell({
           <div className="navigation-drawer-content">
             <nav aria-label="Mobile navigation">
               {navLinks}
-              {requester && (
-                <Link
-                  href="/help"
-                  className="nav-link"
-                  onClick={() => setDrawer(false)}
-                >
-                  <Icon name="help" />
-                  Help & guidelines
-                </Link>
-              )}
             </nav>
             <div className="navigation-drawer-footer">{logout}</div>
           </div>

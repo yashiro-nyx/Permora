@@ -11,17 +11,20 @@ export const requesterNavigation: readonly NavigationItem[] = [
   ["/dashboard", "Dashboard", "dashboard"],
   ["/requests", "My Requests", "requests"],
   ["/requests/new", "Request Access", "key"],
-  ["/notifications", "Notifications", "bell"],
-  ["/account/notifications", "Notification Settings", "bell"],
+];
+
+export const requesterSettingsNavigation: readonly NavigationItem[] = [
+  ["/account/notifications", "Notification Preferences", "bell"],
   ["/account/password", "Change Password", "key"],
 ];
 
 export const approverNavigation: readonly NavigationItem[] = [
   ["/dashboard", "Dashboard", "dashboard"],
   ["/review", "Review Requests", "requests"],
-  ["/notifications/staff", "Notifications", "bell"],
-  ["/help", "Help & Support", "help"],
-  ["/account/notifications", "Notification Settings", "bell"],
+];
+
+export const approverSettingsNavigation: readonly NavigationItem[] = [
+  ["/account/notifications", "Notification Preferences", "bell"],
   ["/account/password", "Change Password", "key"],
 ];
 

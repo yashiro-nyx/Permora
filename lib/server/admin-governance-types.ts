@@ -76,6 +76,7 @@ export interface AnalyticsSummaryDto {
     pendingRouting: number;
     approvedPendingActivation: number;
     awaitingActivation: number;
+    scheduledProvisioning: number;
   };
   entitlements: {
     active: number;
@@ -89,6 +90,8 @@ export interface AnalyticsSummaryDto {
   };
   approvalTurnaroundHours: number | null;
   approverWorkload: Array<{ approverName: string; openAssignments: number }>;
+  requestTrends: Array<{ month: string; count: number }>;
+  resourceCategories: Array<{ category: string; count: number }>;
 }
 
 export interface NotificationPreferenceDto {

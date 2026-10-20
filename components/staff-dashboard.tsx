@@ -3,6 +3,7 @@ import type { TrustedIdentity } from "@/lib/auth-types";
 import { dateLabel } from "@/lib/model";
 import { activationStatusSummary } from "@/lib/activation-presentation";
 import type { ReviewQueueItemDto } from "@/lib/server/approval-read-types";
+import type { AnalyticsSummaryDto } from "@/lib/server/admin-governance-types";
 import { Alert, Badge, Card, Icon, LinkButton, PageHeading } from "./ui";
 
 export interface StaffDashboardData {
@@ -16,6 +17,7 @@ export interface StaffDashboardData {
   scheduledProvisioning?: number;
   activationIssues?: number;
   unreadNotifications?: number;
+  analytics?: AnalyticsSummaryDto;
 }
 
 export function StaffDashboard({
@@ -111,7 +113,16 @@ export function StaffDashboard({
           tone: "neutral",
           href: "/review?status=returned_for_revision",
         },
-      ];
+    ];
+  const analytics = administrator ? data?.analytics : undefined;
+  const trendMax = Math.max(1, ...(analytics?.requestTrends.map((row) => row.count) ?? []));
+  const categoryMax = Math.max(1, ...(analytics?.resourceCategories.map((row) => row.count) ?? []));
+  const adminStats = analytics ? [
+    ["Total requests", analytics.requests.total, "All submitted requests"],
+    ["Approval decisions", (analytics.requests.byStatus.approved_pending_activation ?? 0) + (analytics.requests.byStatus.denied ?? 0), "Approved or denied"],
+    ["Active access", analytics.entitlements.active, "Currently within validity"],
+    ["Scheduled access", analytics.requests.scheduledProvisioning, "Provisioned; start date pending"],
+  ] as const : [];
   return (
     <>
       <PageHeading
@@ -147,6 +158,54 @@ export function StaffDashboard({
           </Link>
         ))}
       </section>
+      {administrator && analytics && (
+        <section className="admin-statistics" aria-labelledby="system-statistics-heading">
+          <div className="section-heading-row">
+            <div>
+              <div className="eyebrow">SYSTEM REPORTING</div>
+              <h2 id="system-statistics-heading">System statistics</h2>
+            </div>
+            <Link href="/reports" className="text-link">Open Reports &amp; Analytics →</Link>
+          </div>
+          <div className="admin-stat-cards">
+            {adminStats.map(([label, value, note]) => (
+              <div className="card admin-stat-card" key={label}>
+                <span className="metric-label">{label}</span>
+                <strong className="admin-stat-value">{value.toLocaleString("en-PH")}</strong>
+                <span className="metric-note">{note}</span>
+              </div>
+            ))}
+          </div>
+          <div className="admin-stat-charts">
+            <Card title="Request trends">
+              {analytics.requestTrends.length ? (
+                <div className="mini-bar-chart" aria-label="Requests by month">
+                  {analytics.requestTrends.slice(-6).map((row) => (
+                    <div className="mini-bar-row" key={row.month}>
+                      <span>{row.month}</span>
+                      <div className="mini-bar-track"><span style={{ width: `${(row.count / trendMax) * 100}%` }} /></div>
+                      <strong>{row.count}</strong>
+                    </div>
+                  ))}
+                </div>
+              ) : <div className="compact-empty"><p>No request trend data yet.</p></div>}
+            </Card>
+            <Card title="Requests by resource category">
+              {analytics.resourceCategories.length ? (
+                <div className="mini-bar-chart" aria-label="Requests by resource category">
+                  {analytics.resourceCategories.map((row) => (
+                    <div className="mini-bar-row" key={row.category}>
+                      <span>{row.category}</span>
+                      <div className="mini-bar-track"><span style={{ width: `${(row.count / categoryMax) * 100}%` }} /></div>
+                      <strong>{row.count}</strong>
+                    </div>
+                  ))}
+                </div>
+              ) : <div className="compact-empty"><p>No resource category data yet.</p></div>}
+            </Card>
+          </div>
+        </section>
+      )}
       <div className="dashboard-grid">
         <Card
           title={administrator ? "Operational attention" : "Requests awaiting your review"}

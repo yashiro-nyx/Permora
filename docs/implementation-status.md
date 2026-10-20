@@ -26,6 +26,8 @@ Audited against the working tree on 2026-10-03; resource/permission catalog, del
 
 **Administrator navigation cleanup:** The Administrator shell now presents five direct destinations plus one System Settings group: Dashboard, Activations, Request Routing, Audit Logs, User Management, and System Settings. Existing configuration routes remain available in the auto-opening group, authorized fallback review remains conditional, and account/support links are available from the profile menu. The header staff bell remains the notification entry point.
 
+**October 20, 2026 (unified navigation and dashboard reporting):** Student, Faculty, and Approver shells now use the same grouped-navigation pattern: role-specific Main Menu items, an auto-opening Settings group for notification preferences/password, a shared accessible profile menu for account/support/logout, and the existing header notification bell. The server role and route guards remain unchanged. Administrator Dashboard now reuses the authorized analytics aggregation for live total requests, approval outcomes, current active access, scheduled provisioning, monthly request trends, and resource-category distribution; scheduled entitlements require `valid_from <= now()` and are not counted as active. Added `tests/e2e/unified-navigation.spec.ts` and captured/inspected Student, Faculty, Approver, and Administrator dashboard screenshots. Final verification for this slice: 133 unit, 114 integration, 80 baseline Playwright plus 4 targeted unified-navigation tests; lint, typecheck, build, and diff checks pass. No migration or data changes.
+
 This status distinguishes verified UI, backend-only services, and deferred work.
 
 Status key: **Completed**, **In progress**, **Planned**, **Blocked**.

@@ -29,6 +29,7 @@ import {
 } from "@/lib/pagination";
 import { query, transaction } from "./db";
 import type { TrustedIdentity } from "@/lib/auth-types";
+import { getCatalogResource } from "@/lib/resource-catalog";
 import type {
   AnalyticsSummaryDto,
   ApproverResponsibilityDto,
@@ -814,7 +815,16 @@ export async function getAnalyticsSummary(
     requestWhere.push(`request.status = $${values.length}`);
   }
   const whereSql = requestWhere.join(" AND ");
-  const [users, requestGroups, entitlements, activations, turnaround, workload] =
+  const [
+    users,
+    requestGroups,
+    entitlements,
+    activations,
+    turnaround,
+    workload,
+    requestTrends,
+    resourceCategories,
+  ] =
     await Promise.all([
       query<{ total: number; active: number; inactive: number }>(
         `SELECT count(*)::int AS total,
@@ -832,7 +842,8 @@ export async function getAnalyticsSummary(
       query<{ active: number; expired: number }>(
         `SELECT
             count(*) FILTER (
-              WHERE valid_until IS NULL OR valid_until > now()
+              WHERE valid_from <= now()
+                AND (valid_until IS NULL OR valid_until > now())
             )::int AS active,
             count(*) FILTER (
               WHERE valid_until IS NOT NULL AND valid_until <= now()
@@ -864,6 +875,24 @@ export async function getAnalyticsSummary(
           ORDER BY open_assignments DESC, lower(approver.name)
           LIMIT 20`,
       ),
+      query<{ month: string; count: number }>(
+        `SELECT to_char(date_trunc('month', request.created_at AT TIME ZONE 'Asia/Manila'), 'YYYY-MM') AS month,
+                count(*)::int AS count
+           FROM access_request request
+          WHERE ${whereSql}
+          GROUP BY 1
+          ORDER BY 1`,
+        values,
+      ),
+      query<{ resource_id: string; count: number }>(
+        `SELECT request.resource_id, count(*)::int AS count
+           FROM access_request request
+          WHERE ${whereSql}
+          GROUP BY request.resource_id
+          ORDER BY count(*) DESC, request.resource_id
+          LIMIT 12`,
+        values,
+      ),
     ]);
   const byStatus: Record<string, number> = {};
   let total = 0;
@@ -877,8 +906,20 @@ export async function getAnalyticsSummary(
     `SELECT count(*)::int AS count
        FROM access_request request
        LEFT JOIN request_activation activation ON activation.request_id = request.id
-      WHERE request.status = 'approved_pending_activation'
+      WHERE ${whereSql}
+        AND request.status = 'approved_pending_activation'
         AND activation.id IS NULL`,
+    values,
+  );
+  const scheduledProvisioning = await query<{ count: number }>(
+    `SELECT count(*)::int AS count
+       FROM request_activation activation
+       JOIN access_request request ON request.id = activation.request_id
+      WHERE ${whereSql}
+        AND activation.status = 'activated'
+        AND request.starts_at > now()
+        AND request.expires_at > now()`,
+    values,
   );
   return {
     generatedAt: new Date().toISOString(),
@@ -891,6 +932,7 @@ export async function getAnalyticsSummary(
       pendingRouting: byStatus.pending_routing ?? 0,
       approvedPendingActivation: byStatus.approved_pending_activation ?? 0,
       awaitingActivation: Number(awaitingActivation.rows[0]?.count ?? 0),
+      scheduledProvisioning: Number(scheduledProvisioning.rows[0]?.count ?? 0),
     },
     entitlements: {
       active: Number(entitlementRow?.active ?? 0),
@@ -909,6 +951,14 @@ export async function getAnalyticsSummary(
     approverWorkload: workload.rows.map((row) => ({
       approverName: row.approver_name,
       openAssignments: row.open_assignments,
+    })),
+    requestTrends: requestTrends.rows.map((row) => ({
+      month: row.month,
+      count: Number(row.count),
+    })),
+    resourceCategories: resourceCategories.rows.map((row) => ({
+      category: getCatalogResource(row.resource_id)?.category ?? row.resource_id,
+      count: Number(row.count),
     })),
   };
 }
