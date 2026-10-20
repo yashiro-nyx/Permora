@@ -18,6 +18,38 @@ export interface SubmitRequestState {
   field?: string;
 }
 
+function requestFailureDiagnostics(error: unknown) {
+  const value = error as {
+    name?: unknown;
+    code?: unknown;
+    constraint?: unknown;
+  } | null;
+  const postgresCode =
+    typeof value?.code === "string" && /^[0-9A-Z]{5}$/.test(value.code)
+      ? value.code
+      : undefined;
+  const constraint =
+    typeof value?.constraint === "string" &&
+    /^[a-zA-Z0-9_]+$/.test(value.constraint)
+      ? value.constraint
+      : undefined;
+  return {
+    stage: "create_access_request_transaction",
+    errorType:
+      error instanceof Error && error.constructor.name
+        ? error.constructor.name
+        : typeof value?.name === "string"
+          ? value.name
+          : "UnknownError",
+    postgresCode,
+    constraint,
+    classification:
+      postgresCode === "23505"
+        ? "database_constraint_violation"
+        : "unexpected_request_submission_failure",
+  };
+}
+
 export async function submitRequestAction(
   _previous: SubmitRequestState,
   formData: FormData,
@@ -43,9 +75,7 @@ export async function submitRequestAction(
         field: error.field,
         attemptId,
       };
-    console.error("Request submission failed", {
-      error: error instanceof Error ? error.name : "UnknownError",
-    });
+    console.error("Request submission failed", requestFailureDiagnostics(error));
     return {
       ok: false,
       message:
