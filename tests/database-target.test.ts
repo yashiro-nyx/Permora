@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import test from "node:test";
 import {
+  assertPreviewIdentity,
   extractDatabaseTargetOptions,
   resolveCliDatabase,
 } from "../scripts/database-target";
@@ -117,6 +118,72 @@ test("development loads local configuration and validates the pair", () => {
   );
   assert.equal(loaded, true);
   assert.equal(resolved.databaseName, "permora_dev");
+});
+
+test("preview requires explicit Preview variables and never loads local configuration", () => {
+  let loaded = false;
+  assert.throws(
+    () =>
+      resolveCliDatabase(options(["--database-target", "preview"]), {
+        environment: {},
+        loadLocalEnvironment: () => {
+          loaded = true;
+        },
+      }),
+    /PREVIEW_DATABASE_URL is required/,
+  );
+  assert.equal(loaded, false);
+});
+
+test("preview rejects reuse of a configured development endpoint", () => {
+  assert.throws(
+    () =>
+      resolveCliDatabase(options(["--database-target", "preview"]), {
+        environment: {
+          PREVIEW_DATABASE_URL: developmentRuntime,
+          PREVIEW_DATABASE_MIGRATION_URL: developmentMigration,
+          PREVIEW_DATABASE_NAME: "permora_dev",
+          PREVIEW_NEON_PROJECT_ID: "preview-project",
+          PREVIEW_NEON_BRANCH_ID: "preview-branch",
+          PREVIEW_NEON_ENDPOINT_ID: "preview-endpoint",
+          DATABASE_URL: developmentRuntime,
+        },
+        loadLocalEnvironment: () => {
+          throw new Error("preview must not load .env.local");
+        },
+      }),
+    /reuses the endpoint\/database identified by DATABASE_URL/,
+  );
+});
+
+test("preview requires all explicit identity expectations", () => {
+  assert.throws(
+    () =>
+      resolveCliDatabase(options(["--database-target", "preview"]), {
+        environment: {
+          PREVIEW_DATABASE_URL:
+            "postgresql://app:secret@ep-preview-pooler.us-east-2.aws.neon.tech/neondb",
+          PREVIEW_DATABASE_MIGRATION_URL:
+            "postgresql://owner:secret@ep-preview.us-east-2.aws.neon.tech/neondb",
+          PREVIEW_DATABASE_NAME: "neondb",
+          PREVIEW_NEON_PROJECT_ID: "preview-project",
+          PREVIEW_NEON_BRANCH_ID: "preview-branch",
+        },
+      }),
+    /PREVIEW_NEON_ENDPOINT_ID is required/,
+  );
+});
+
+test("preview identity verification rejects a different Neon target", () => {
+  assert.throws(
+    () =>
+      assertPreviewIdentity(
+        { projectId: "p", branchId: "b", endpointId: "e" },
+        { databaseName: "neondb", projectId: "p", branchId: "other", endpointId: "e" },
+        "neondb",
+      ),
+    /Neon project, branch, or endpoint/,
+  );
 });
 
 for (const scriptName of [

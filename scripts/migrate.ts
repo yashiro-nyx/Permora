@@ -3,18 +3,22 @@ import path from "node:path";
 import { Pool } from "pg";
 import {
   extractDatabaseTargetOptions,
+  assertPreviewIdentity,
   resolveCliDatabase,
 } from "./database-target";
 
 const HELP = `Permora database migration
 
 Usage:
-  npm run db:migrate -- --database-target <development|test|production> [--confirm-production]
+  npm run db:migrate -- --database-target <development|test|preview|production> [--confirm-production]
 
 Targets:
   development  Loads DATABASE_URL and DATABASE_MIGRATION_URL from the current
                process or .env.local and verifies that both target the same database.
   test         Uses only TEST_DATABASE_URL and requires a database ending in _test.
+  preview      Uses only PREVIEW_DATABASE_URL, PREVIEW_DATABASE_MIGRATION_URL,
+               PREVIEW_DATABASE_NAME, and PREVIEW_NEON_{PROJECT,BRANCH,ENDPOINT}_ID.
+               It never loads .env.local and verifies Neon identity before writes.
   production   Requires DATABASE_URL and DATABASE_MIGRATION_URL in the current
                process plus --confirm-production. .env.local is not loaded.
 
@@ -30,13 +34,36 @@ async function main() {
   const { options, remaining } = extractDatabaseTargetOptions(argv);
   if (remaining.length)
     throw new Error(`Unknown argument ${remaining[0]}. Use --help for usage.`);
-  const { connectionString } = resolveCliDatabase(options);
+  const resolved = resolveCliDatabase(options);
+  const { connectionString } = resolved;
 
   const pool = new Pool({ connectionString, max: 1 });
   let client;
   try {
     client = await pool.connect();
     try {
+      if (resolved.expectedNeonIdentity) {
+        const identity = await client.query<{
+          database_name: string;
+          project_id: string | null;
+          branch_id: string | null;
+          endpoint_id: string | null;
+        }>(`SELECT current_database() AS database_name,
+                   current_setting('neon.project_id', true) AS project_id,
+                   current_setting('neon.branch_id', true) AS branch_id,
+                   current_setting('neon.endpoint_id', true) AS endpoint_id`);
+        const row = identity.rows[0];
+        assertPreviewIdentity(
+          resolved.expectedNeonIdentity,
+          {
+            databaseName: row.database_name,
+            projectId: row.project_id ?? "",
+            branchId: row.branch_id ?? "",
+            endpointId: row.endpoint_id ?? "",
+          },
+          resolved.databaseName,
+        );
+      }
       await client.query("BEGIN");
       await client.query("SELECT pg_advisory_xact_lock(73020421)");
       await client.query(`CREATE TABLE IF NOT EXISTS schema_migration (

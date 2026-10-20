@@ -1,6 +1,6 @@
 import { loadEnvConfig } from "@next/env";
 
-export type DatabaseTarget = "development" | "test" | "production";
+export type DatabaseTarget = "development" | "test" | "preview" | "production";
 
 export type DatabaseTargetOptions = {
   target?: DatabaseTarget;
@@ -11,7 +11,35 @@ export type ResolvedCliDatabase = {
   target: DatabaseTarget;
   connectionString: string;
   databaseName: string;
+  expectedNeonIdentity?: NeonIdentity;
 };
+
+export type NeonIdentity = {
+  projectId: string;
+  branchId: string;
+  endpointId: string;
+};
+
+export type ObservedDatabaseIdentity = NeonIdentity & {
+  databaseName: string;
+};
+
+export function assertPreviewIdentity(
+  expected: NeonIdentity,
+  observed: ObservedDatabaseIdentity,
+  expectedDatabaseName: string,
+) {
+  if (observed.databaseName !== expectedDatabaseName)
+    throw new Error("Preview identity mismatch: database name is not the expected Preview database.");
+  if (
+    observed.projectId !== expected.projectId ||
+    observed.branchId !== expected.branchId ||
+    observed.endpointId !== expected.endpointId
+  )
+    throw new Error(
+      "Preview identity mismatch: Neon project, branch, or endpoint does not match the explicit PREVIEW_* expectations.",
+    );
+}
 
 type ResolveOptions = {
   environment?: Record<string, string | undefined>;
@@ -21,6 +49,7 @@ type ResolveOptions = {
 const TARGETS = new Set<DatabaseTarget>([
   "development",
   "test",
+  "preview",
   "production",
 ]);
 
@@ -85,6 +114,45 @@ function validateMatchingEndpoints(runtimeUrl: string, migrationUrl: string) {
   return migration.databaseName;
 }
 
+function sameEndpoint(left: ParsedEndpoint, right: ParsedEndpoint) {
+  return (
+    left.protocol === right.protocol &&
+    left.normalizedHost === right.normalizedHost &&
+    left.databaseName === right.databaseName
+  );
+}
+
+function rejectPreviewReuse(
+  previewRuntimeUrl: string,
+  previewMigrationUrl: string,
+  environment: Record<string, string | undefined>,
+) {
+  const previewRuntime = parseEndpoint(previewRuntimeUrl, "PREVIEW_DATABASE_URL");
+  const previewMigration = parseEndpoint(
+    previewMigrationUrl,
+    "PREVIEW_DATABASE_MIGRATION_URL",
+  );
+  if (!sameEndpoint(previewRuntime, previewMigration))
+    throw new Error(
+      "PREVIEW_DATABASE_URL and PREVIEW_DATABASE_MIGRATION_URL must target the same PostgreSQL protocol, database, and normalized host.",
+    );
+
+  for (const variable of [
+    "DATABASE_URL",
+    "DATABASE_MIGRATION_URL",
+    "TEST_DATABASE_URL",
+  ]) {
+    const knownUrl = environment[variable]?.trim();
+    if (!knownUrl) continue;
+    const known = parseEndpoint(knownUrl, variable);
+    if (sameEndpoint(previewRuntime, known))
+      throw new Error(
+        `Refusing Preview target: it reuses the endpoint/database identified by ${variable}.`,
+      );
+  }
+  return previewMigration.databaseName;
+}
+
 export function extractDatabaseTargetOptions(argv: string[]) {
   const remaining: string[] = [];
   let target: DatabaseTarget | undefined;
@@ -100,7 +168,7 @@ export function extractDatabaseTargetOptions(argv: string[]) {
         throw new Error("Missing value for --database-target.");
       if (!TARGETS.has(value as DatabaseTarget))
         throw new Error(
-          "--database-target must be development, test, or production.",
+          "--database-target must be development, test, preview, or production.",
         );
       target = value as DatabaseTarget;
       index++;
@@ -124,7 +192,7 @@ export function extractDatabaseTargetOptions(argv: string[]) {
 export function requireDatabaseTarget(options: DatabaseTargetOptions) {
   if (!options.target)
     throw new Error(
-      "--database-target is required and must be development, test, or production.",
+      "--database-target is required and must be development, test, preview, or production.",
     );
   if (options.target === "production" && !options.confirmProduction)
     throw new Error(
@@ -144,7 +212,7 @@ export function resolveCliDatabase(
   const target = requireDatabaseTarget(options);
   const environment = resolveOptions.environment ?? process.env;
 
-  if (target !== "production")
+  if (target !== "production" && target !== "preview")
     (resolveOptions.loadLocalEnvironment ?? (() => loadEnvConfig(process.cwd())))();
 
   if (target === "test") {
@@ -158,6 +226,40 @@ export function resolveCliDatabase(
         "Refusing unsafe test target: database name must end with _test.",
       );
     return { target, connectionString, databaseName: endpoint.databaseName };
+  }
+
+  if (target === "preview") {
+    const runtimeUrl = requiredEnvironmentValue(
+      environment,
+      "PREVIEW_DATABASE_URL",
+    );
+    const migrationUrl = requiredEnvironmentValue(
+      environment,
+      "PREVIEW_DATABASE_MIGRATION_URL",
+    );
+    const databaseName = rejectPreviewReuse(
+      runtimeUrl,
+      migrationUrl,
+      environment,
+    );
+    const expectedDatabase = requiredEnvironmentValue(
+      environment,
+      "PREVIEW_DATABASE_NAME",
+    );
+    if (databaseName !== expectedDatabase)
+      throw new Error(
+        "Refusing Preview target: the connected database name does not match PREVIEW_DATABASE_NAME.",
+      );
+    return {
+      target,
+      connectionString: migrationUrl,
+      databaseName,
+      expectedNeonIdentity: {
+        projectId: requiredEnvironmentValue(environment, "PREVIEW_NEON_PROJECT_ID"),
+        branchId: requiredEnvironmentValue(environment, "PREVIEW_NEON_BRANCH_ID"),
+        endpointId: requiredEnvironmentValue(environment, "PREVIEW_NEON_ENDPOINT_ID"),
+      },
+    };
   }
 
   const runtimeUrl = requiredEnvironmentValue(environment, "DATABASE_URL");

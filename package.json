@@ -15,6 +15,7 @@
     "test:integration": "tsx scripts/run-integration-tests.ts",
     "test:e2e": "playwright test",
     "db:migrate": "tsx scripts/migrate.ts",
+    "db:preview:preflight": "tsx scripts/preview-preflight.ts",
     "account:provision": "tsx scripts/provision-account.ts",
     "access:configure": "tsx scripts/configure-access.ts",
     "approvals:reconcile": "tsx scripts/reconcile-approval-routing.ts",
