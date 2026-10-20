@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "./db";
-import { appUrl } from "./config";
+import { appUrl, trustedOrigins } from "./config";
 import { hashPassword, verifyPassword } from "./password";
 
 export const auth = betterAuth({
@@ -13,7 +13,7 @@ export const auth = betterAuth({
     process.env.AUTH_SECRET ??
     "build-only-placeholder-that-runtime-guards-must-never-serve",
   database: db,
-  trustedOrigins: [appUrl],
+  trustedOrigins,
   emailAndPassword: {
     enabled: true,
     disableSignUp: true,

@@ -1,8 +1,17 @@
 import "server-only";
+import { buildTrustedOrigins } from "../trusted-origins";
+
+export { buildTrustedOrigins } from "../trusted-origins";
 
 const DEVELOPMENT_URL = "http://localhost:3000";
 
 export const appUrl = process.env.APP_URL ?? DEVELOPMENT_URL;
+
+export const trustedOrigins = buildTrustedOrigins(
+  appUrl,
+  process.env.BETTER_AUTH_TRUSTED_ORIGINS,
+  process.env.VERCEL_URL,
+);
 
 export function backendConfigurationErrors() {
   const missing: string[] = [];
