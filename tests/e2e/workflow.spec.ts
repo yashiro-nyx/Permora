@@ -203,6 +203,10 @@ test("request submission, deterministic routing, approval, and requester status 
       .getByLabel("Current access status")
       .getByText("Provisioned — scheduled start", { exact: true }),
   ).toBeVisible();
+  await expect(
+    requesterPage.getByLabel("Current access status").locator(".badge"),
+  ).toHaveCount(1);
+  await expect(requesterPage.locator(".activation-status-card .badge")).toHaveCount(0);
   await expect(requesterPage.getByText("Approval decision: Approved")).toBeVisible();
   await expect(
     requesterPage.getByLabel("Current access status"),

@@ -20,6 +20,8 @@ Audited against the working tree on 2026-10-03; resource/permission catalog, del
 
 **October 20, 2026 (activation status/form correction):** Read-only verification of `REQ-2026-000036` found approval `approved_pending_activation`, activation `activated`, and entitlement validity 2027-03-19 through 2027-03-22. Student, Approver, and Admin current-state surfaces now use the effective lifecycle badge (`Provisioned — scheduled start` before validity begins; `Active` only during the validity window); approval history is explicitly labeled as a decision. The Admin form now has left-aligned notices/helpers, consistent controls, a non-clipped mobile width, and a compact action footer. Browser screenshots were captured and visually inspected at desktop and 390px mobile widths. Final verification passed 133 unit tests, 114 integration tests, and 71 Playwright tests; lint, typecheck, build, and `git diff --check` passed.
 
+**Demo readiness cleanup:** Student/Faculty request details now show one prominent current-lifecycle badge; the activation explanation remains text-based and approval history/timeline remain separate. The local demonstration runbook now documents the six-task Student → Approver → Administrator → notifications → audit → boundary walkthrough, development migration state through `0014`, and future-dated provisioning labels.
+
 This status distinguishes verified UI, backend-only services, and deferred work.
 
 Status key: **Completed**, **In progress**, **Planned**, **Blocked**.

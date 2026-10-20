@@ -17,7 +17,7 @@ prototype, which does not yet contain the latest features).
 - Dependencies installed for this platform: run `npm ci` once if `node_modules`
   was created on a different OS/architecture.
 - Verified state of the development database (`neondb`):
-  - Migrations `0001`–`0009` are **all applied**.
+  - Migrations `0001`–`0014` are **all applied**.
   - Four active, credentialed demo accounts exist (one per role).
   - Seed data: three `pending_review` requests, one `approved_pending_activation`,
     one already `activated`, four approver responsibilities, two requester
@@ -74,15 +74,17 @@ Each step lists what to click and what the audience should see.
 
 4. **Approval decision (approver).** `/review` → open a `pending_review` request
    → Approve (or Deny/Return with a reason). Expected: a confirmation dialog,
-   then the request becomes `Approved — awaiting activation`. The decision and an
-   immutable audit event are recorded. (Three `pending_review` requests are
+   then the request becomes `Approved — awaiting provisioning`. The decision and an
+   immutable audit event are recorded, the requester receives an in-app notification,
+   and eligible administrators receive an activation-ready notification. (Three `pending_review` requests are
    pre-seeded if you prefer not to submit a new one.)
 
-5. **Administrator activation (admin).** `/admin/activations` → find the
-   `approved_pending_activation` request → "Start activation" → check the
+5. **Administrator activation (admin).** Open the Admin staff notification or
+   `/admin/activations` and locate the `approved_pending_activation` request → "Start activation" → check the
    confirmation box, enter an external reference → "Record activation".
-   Expected: a queue-level "Access activation recorded." status and the row moves
-   to `Active`. **Emphasize: approval alone did not grant access; activation is a
+   Expected: a queue-level "Access activation recorded." status. The row is
+   `Provisioned — scheduled start` until the requested validity window begins,
+   then becomes `Active`. **Emphasize: approval alone did not grant access; activation is a
    separate, server-checked step and the admin cannot activate their own or an
    already-approved request.**
 
@@ -130,8 +132,37 @@ Each step lists what to click and what the audience should see.
 
 11. **Role boundary (optional).** As the approver or student, visit an admin URL
     (e.g. `/admin/retention`). Expected: redirect to
-    `/dashboard?unavailable=administrator` — the server enforces authorization, not
-    the hidden navigation.
+   `/dashboard?unavailable=administrator` — the server enforces authorization, not
+   the hidden navigation.
+
+## 3A. Six-task live walkthrough
+
+Use separate browser profiles so each session keeps its own authenticated
+identity. This is the recommended order for a short academic demonstration:
+
+1. **Submit:** Student creates a valid request and shows the pending-review
+   lifecycle badge and persisted timeline.
+2. **Decide:** Approver opens the assigned request, records approval, and shows
+   `Approved — awaiting provisioning`, the requester notification, and the
+   immutable approval decision history.
+3. **Activate:** Administrator opens the activation-ready notification, lands on
+   the matching activation row, records manual provisioning, and shows
+   `Provisioned — scheduled start` (or `Active` when the validity window is now).
+4. **Notify:** Refresh the Admin and requester notification centers; verify the
+   unread counters and recipient-specific messages. The original Approver must
+   not receive an activation recipient notification when separation-of-duties
+   rules exclude that account.
+5. **Audit:** Open `/audit` as Administrator and show the request, decision, and
+   provisioning events without editing immutable history.
+6. **Boundaries:** Show the same request in Student, Approver, and Admin views,
+   then demonstrate that a requester cannot open staff/admin routes.
+
+For a repeatable six-state preview, use existing development records rather than
+creating artificial production-like data: pending review, approved-awaiting-
+provisioning, provisioned future-dated, active, denied, and pending-routing are
+already represented by the development seed/fixtures. Verify with read-only
+queries before the presentation; do not run the E2E fixture setup against
+development.
 
 ## 4. Recovery procedures
 

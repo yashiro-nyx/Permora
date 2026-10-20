@@ -50,7 +50,6 @@ export function ServerRequestDetails({
         <div className="stack">
           <Card
             title="Request details"
-            action={<Badge label={activationSummary.label} tone={activationSummary.tone} />}
           >
             <div className="card-body detail-body">
               <div className="requester-profile">
@@ -123,10 +122,6 @@ export function ServerRequestDetails({
             request.activation) && (
             <Card title="Activation status" className="activation-status-card">
               <div className="card-body stack">
-                <Badge
-                  label={activationSummary.label}
-                  tone={activationSummary.tone}
-                />
                 <p>{activationSummary.description}</p>
                 {request.activation?.activatedAt && (
                   <p className="small muted">
