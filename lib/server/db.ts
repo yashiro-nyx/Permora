@@ -26,7 +26,12 @@ function createPool() {
   // transaction overlapping a page render), so it needs more than one
   // connection to avoid self-contention timeouts. The sequential integration
   // runner keeps a single connection. Production uses the full pool.
-  const testPoolMax = isBrowserTest ? 4 : 1;
+  // The isolated browser suite can issue concurrent page/API requests, but
+  // opening four Neon connections at once makes the remote test endpoint
+  // susceptible to local ephemeral-port exhaustion during a long run. Two
+  // connections still avoid transaction/render self-contention while keeping
+  // the browser-only pool bounded. Integration tests remain single-connection.
+  const testPoolMax = isBrowserTest ? 2 : 1;
   return new ResilientPool({
     connectionString,
     max: isTest ? testPoolMax : 10,
