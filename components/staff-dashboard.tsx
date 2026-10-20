@@ -116,8 +116,10 @@ export function StaffDashboard({
     <>
       <PageHeading
         eyebrow={`${administrator ? "ADMINISTRATOR" : "APPROVER"} › DASHBOARD`}
-        title={administrator ? "Approval overview" : "Your review workspace"}
-        description="Live counts from requests within your server-enforced approval responsibility."
+        title={administrator ? "Access Management Overview" : "Your review workspace"}
+        description={administrator
+          ? "Monitor provisioning, routing, auditability, and administrative oversight from one workspace."
+          : "Live counts from requests within your server-enforced approval responsibility."}
       />
       {!canReview && administrator && (
         <Alert title="No approval responsibility configured" tone="warning">
@@ -148,6 +150,7 @@ export function StaffDashboard({
       <div className="dashboard-grid">
         <Card
           title={administrator ? "Operational attention" : "Requests awaiting your review"}
+          className={administrator ? "admin-attention-card" : ""}
           action={
             administrator ? (
               <Link href="/admin/activations" className="text-link">

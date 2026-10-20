@@ -24,6 +24,8 @@ Audited against the working tree on 2026-10-03; resource/permission catalog, del
 
 **Faculty requester parity:** The live requester components already serve both `student` and `faculty` identities. A dedicated isolated Faculty browser fixture now verifies Faculty-only grading eligibility, assigned `CS301-A` scope selection, routing/approval/provisioning, notifications, lifecycle labels, responsive layouts, and Administrator-route rejection without widening Student eligibility.
 
+**Administrator navigation cleanup:** The Administrator shell now presents five direct destinations plus one System Settings group: Dashboard, Activations, Request Routing, Audit Logs, User Management, and System Settings. Existing configuration routes remain available in the auto-opening group, authorized fallback review remains conditional, and account/support links are available from the profile menu. The header staff bell remains the notification entry point.
+
 This status distinguishes verified UI, backend-only services, and deferred work.
 
 Status key: **Completed**, **In progress**, **Planned**, **Blocked**.

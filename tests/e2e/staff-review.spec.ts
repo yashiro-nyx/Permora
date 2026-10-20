@@ -208,7 +208,7 @@ test("only administrators can view unassigned routing failures", async () => {
   await expect(page.locator(".header-user")).toContainText("Administrator");
   await expect(page.getByText("Authenticated session")).toHaveCount(0);
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
-  await expect(navigation.getByText("Unassigned Requests")).toBeVisible();
+  await expect(navigation.getByText("Request Routing")).toBeVisible();
   await expect(navigation.getByText("Audit Logs")).toBeVisible();
   await expect(navigation.getByText("My Requests")).toHaveCount(0);
   await page.goto("/admin/unassigned");

@@ -451,3 +451,12 @@ Never place credentials in source code, Git history, screenshots, issue comments
 - [x] Admin activation queue refresh regression fixed: an already-open Admin tab now refreshes on focus, visibility changes, and a 15-second visible-tab interval. Future-dated approved requests remain visible with scheduled-start guidance.
 - [x] Full Playwright acceptance stabilized: reproduced the two setup failures as transient Next dev-server `ECONNRESET` responses during route compilation, added bounded UI sign-in retry coverage, and verified one complete run at **71 passed / 0 failed / 0 skipped**.
 - [x] Activation lifecycle presentation reconciled across Student, Approver, and Administrator surfaces; future-dated confirmed provisioning is labeled `Provisioned — scheduled start`, active counts exclude future starts, and the Admin activation form is a full-width accessible expansion row.
+
+## Current Administrator navigation cleanup — October 20, 2026
+
+- [x] Reduced the Administrator primary sidebar to Dashboard, Activations, Request Routing, Audit Logs, User Management, and System Settings.
+- [x] Grouped catalog, responsibility, delegation, identifier, permission, retention, and reporting pages under an auto-opening System Settings group; authorized Admin review fallback remains available inside the group only when policy and responsibility permit it.
+- [x] Moved Administrator notifications to the existing header bell and account/support destinations to an accessible profile menu; no underlying routes or server authorization were removed.
+- [x] Renamed the navigation label `Unassigned Requests` to `Request Routing` while preserving `/admin/unassigned`.
+- [x] Updated the Administrator dashboard heading to `Access Management Overview` and restyled the operational attention card; screenshots verified at desktop and 390px mobile widths.
+- [x] Added rendered Playwright coverage for the six-item shell, nested settings, profile menu, mobile drawer, route access, and keyboard Escape behavior. No migrations or production data changes.

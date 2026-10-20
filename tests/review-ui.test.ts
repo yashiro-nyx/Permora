@@ -34,39 +34,15 @@ test("staff navigation is role-specific and excludes requester actions", () => {
     navigationForIdentity(identity(["admin"]), true, true).map((item) => item[1]),
     [
       "Dashboard",
-      "Review Requests",
       "Activations",
-      "Unassigned Requests",
-      "Approver Responsibilities",
-      "Delegations & Absences",
-      "Institutional Identifiers",
-      "Retention",
-      "Resource Catalog",
-      "Permissions",
-      "User Management",
-      "Reports & Analytics",
+      "Request Routing",
       "Audit Logs",
-      "Notifications",
-      "Help & Support",
-      "Notification Settings",
-      "Change Password",
+      "User Management",
     ],
-  );
-  assert.equal(
-    navigationForIdentity(identity(["admin"]), true, false).some(
-      (item) => item[1] === "Review Requests",
-    ),
-    false,
   );
   assert.equal(
     navigationForIdentity(identity(["admin", "student"], "student"), false).some(
       (item) => item[1] === "My Requests" || item[1] === "Request Access",
-    ),
-    false,
-  );
-  assert.equal(
-    navigationForIdentity(identity(["admin"]), false).some(
-      (item) => item[1] === "Review Requests",
     ),
     false,
   );

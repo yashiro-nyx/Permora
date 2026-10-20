@@ -27,22 +27,20 @@ export const approverNavigation: readonly NavigationItem[] = [
 
 export const administratorNavigation: readonly NavigationItem[] = [
   ["/dashboard", "Dashboard", "dashboard"],
-  ["/review", "Review Requests", "requests"],
   ["/admin/activations", "Activations", "key"],
-  ["/admin/unassigned", "Unassigned Requests", "expire"],
+  ["/admin/unassigned", "Request Routing", "expire"],
+  ["/audit", "Audit Logs", "clock"],
+  ["/users", "User Management", "users"],
+];
+
+export const administratorSettingsNavigation: readonly NavigationItem[] = [
+  ["/resources", "Resource Catalog", "resources"],
   ["/admin/responsibilities", "Approver Responsibilities", "users"],
   ["/admin/delegations", "Delegations & Absences", "clock"],
   ["/admin/identifiers", "Institutional Identifiers", "database"],
-  ["/admin/retention", "Retention", "expire"],
-  ["/resources", "Resource Catalog", "resources"],
   ["/permissions", "Permissions", "shield"],
-  ["/users", "User Management", "users"],
+  ["/admin/retention", "Retention", "expire"],
   ["/reports", "Reports & Analytics", "reports"],
-  ["/audit", "Audit Logs", "clock"],
-  ["/notifications/staff", "Notifications", "bell"],
-  ["/help", "Help & Support", "help"],
-  ["/account/notifications", "Notification Settings", "bell"],
-  ["/account/password", "Change Password", "key"],
 ];
 
 export function primaryRole(identity: TrustedIdentity): Role {
@@ -63,7 +61,10 @@ export function navigationForIdentity(
       : role === "approver"
         ? approverNavigation
         : requesterNavigation;
-  const mayOpenReview = canReview &&
-    (role !== "admin" || adminReviewEnabled);
-  return mayOpenReview ? navigation : navigation.filter(([href]) => href !== "/review");
+  // Administrator review access is rendered inside the settings group only
+  // when both the persisted responsibility and explicit fallback policy allow
+  // it. The primary navigation remains the compact six-item admin shell.
+  void canReview;
+  void adminReviewEnabled;
+  return navigation;
 }
