@@ -468,3 +468,10 @@ Never place credentials in source code, Git history, screenshots, issue comments
 - [x] Administrator Dashboard now presents authorized live analytics for total requests, approval outcomes, current active access, scheduled provisioning, request trends, and resource-category distribution. Future validity periods are excluded from active counts.
 - [x] Added isolated Playwright coverage for Student, Faculty, Approver, Administrator navigation/profile/statistics and captured screenshots at desktop; existing responsive suites cover 320px, 390px, 768px, and 1440px surfaces.
 - [x] Full baseline verification remains green: 133 unit tests, 114 integration tests, 80 Playwright tests; the new unified slice passed 4/4. No migrations, production queries, or development record mutations were introduced.
+
+## Official Permora branding — October 20, 2026
+
+- [x] Added the reusable `Brand` component using the supplied `public/assets/Logo.png` in the login page, requester headers, staff/admin sidebars, and mobile drawer.
+- [x] Added the generated 64px `public/favicon.png` derivative and declared one consistent favicon/apple-touch icon set in root metadata; the original logo remains unchanged.
+- [x] Captured and inspected desktop and mobile browser screenshots; focused logo coverage passed 3/3 and the complete Playwright suite passed 87/87.
+- [x] No database schema, records, authentication, authorization, approval, or activation behavior changed.

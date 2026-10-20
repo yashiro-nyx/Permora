@@ -9,6 +9,7 @@ import {
   SIGN_IN_SERVICE_ERROR,
 } from "@/lib/login-error";
 import { Alert, Button, ErrorSummary, Field, Modal } from "./ui";
+import { Brand } from "./brand";
 
 export function LoginScreen() {
   const router = useRouter();
@@ -64,7 +65,7 @@ export function LoginScreen() {
         />
       </div>
       <header className="login-header">
-        <span className="wordmark">Permora</span>
+        <Brand size="header" className="login-brand" />
         <span className="header-divider" />
         <span>Access made clear.</span>
       </header>
@@ -89,6 +90,7 @@ export function LoginScreen() {
           </div>
           <div className="login-form-panel">
             <div className="login-intro">
+              <Brand size="login" className="login-intro-brand" />
               <span className="eyebrow">WELCOME TO PERMORA</span>
               <h1>Welcome back!</h1>
               <p>

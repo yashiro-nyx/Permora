@@ -157,6 +157,46 @@ h3 {
   letter-spacing: -1.2px;
   line-height: 1;
 }
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+.brand img {
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.brand-name {
+  font-size: 27px;
+  font-weight: 800;
+  letter-spacing: -1.2px;
+  line-height: 1;
+}
+.brand-sidebar {
+  gap: 10px;
+}
+.brand-sidebar .brand-name {
+  font-size: 22px;
+  letter-spacing: -0.8px;
+}
+.brand-drawer {
+  padding: 4px 0 14px;
+  border-bottom: 1px solid var(--border);
+}
+.brand-drawer .brand-name {
+  font-size: 22px;
+}
+.login-intro-brand {
+  margin-bottom: 20px;
+}
+.login-intro-brand .brand-name {
+  font-size: 24px;
+}
 .eyebrow {
   font-size: 12px;
   font-weight: 650;
@@ -1021,6 +1061,13 @@ a.notification-popover-item:hover {
   font-size: 12px;
   letter-spacing: 0.16em;
   color: var(--inverse-muted);
+}
+.admin-shell .sidebar-brand-link .brand-name {
+  color: white;
+}
+.admin-shell .sidebar-brand-link img {
+  width: 48px;
+  height: 48px;
 }
 .admin-shell .nav-link {
   color: var(--inverse-muted);
@@ -2660,6 +2707,10 @@ dd {
   min-height: 0;
   flex: 1;
   flex-direction: column;
+}
+.navigation-drawer-content > .brand {
+  flex-shrink: 0;
+  margin: 16px 16px 0;
 }
 .navigation-drawer nav {
   flex: 1;

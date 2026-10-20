@@ -8,6 +8,7 @@ import type { TrustedIdentity } from "@/lib/auth-types";
 import { Alert, Button, Icon, Modal } from "./ui";
 import { NotificationBell } from "./notification-bell";
 import { StaffNotificationBell } from "./staff-notification-bell";
+import { Brand } from "./brand";
 import { initials, roleLabels } from "@/lib/model";
 import {
   approverSettingsNavigation,
@@ -178,9 +179,7 @@ export function AppShell({
           >
             <span aria-hidden="true">☰</span>
           </Button>
-          <Link href="/dashboard" className="wordmark">
-            Permora
-          </Link>
+          <Brand size="header" className="header-brand" />
           <span className="header-divider" />
           <span className="portal-name">
             {requester ? "Access workspace" : `${roleLabels[role]} workspace`}
@@ -233,9 +232,7 @@ export function AppShell({
       {!focused && (
         <aside className="sidebar" aria-label="Main navigation">
           <div className="sidebar-brand">
-            <Link className="wordmark" href="/dashboard">
-              Permora
-            </Link>
+            <Brand size="sidebar" className="sidebar-brand-link" />
             <span>ACCESS MANAGEMENT</span>
           </div>
           <div className="sidebar-header-row">
@@ -282,6 +279,7 @@ export function AppShell({
           className="navigation-drawer"
         >
           <div className="navigation-drawer-content">
+            <Brand size="drawer" className="drawer-brand" />
             <nav aria-label="Mobile navigation">
               {navLinks}
             </nav>
