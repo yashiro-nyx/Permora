@@ -52,7 +52,7 @@ async function user(
     id: string;
     email: string;
     name: string;
-    role: "student" | "approver" | "admin";
+    role: "student" | "faculty" | "approver" | "admin";
   },
 ) {
   await client.query(
@@ -65,8 +65,12 @@ async function user(
      VALUES ($1,$2,$3)`,
     [
       input.id,
-      input.role === "student" ? "Engineering" : "Academic Services",
-      input.role === "student" ? "student" : null,
+      input.role === "student"
+        ? "Engineering"
+        : input.role === "faculty"
+          ? "Mathematics"
+          : "Academic Services",
+      input.role === "student" || input.role === "faculty" ? input.role : null,
     ],
   );
   await client.query("INSERT INTO user_role (user_id,role) VALUES ($1,$2)", [
@@ -85,12 +89,14 @@ async function responsibility(
   client: PoolClient,
   id: string,
   approverId: string,
+  resourceId = "r-library",
+  permissionId = "library:subscribed-materials",
 ) {
   await client.query(
     `INSERT INTO approver_responsibility
       (id,approver_user_id,resource_id,permission_id,valid_from,assigned_by)
-     VALUES ($1,$2,'r-library','library:subscribed-materials',now() - interval '1 day',$3)`,
-    [id, approverId, E2E.administrator.id],
+     VALUES ($1,$2,$3,$4,now() - interval '1 day',$5)`,
+    [id, approverId, resourceId, permissionId, E2E.administrator.id],
   );
 }
 
@@ -211,6 +217,11 @@ export default async function globalSetup() {
       name: "Sam Requester",
       role: "student",
     });
+    await user(client, passwordHash, {
+      ...E2E.faculty,
+      name: "Morgan Faculty",
+      role: "faculty",
+    });
     for (const workflowRequester of E2E.workflowRequesters) {
       await user(client, passwordHash, {
         ...workflowRequester,
@@ -222,9 +233,36 @@ export default async function globalSetup() {
       "e2000000-0000-4000-8000-000000000201";
     const otherResponsibility = "e2000000-0000-4000-8000-000000000202";
     const adminResponsibility = "e2000000-0000-4000-8000-000000000203";
+    const facultyResponsibility = "e2000000-0000-4000-8000-000000000204";
     await responsibility(client, approverResponsibility, E2E.approver.id);
     await responsibility(client, otherResponsibility, E2E.otherApprover.id);
     await responsibility(client, adminResponsibility, E2E.administrator.id);
+    await responsibility(
+      client,
+      facultyResponsibility,
+      E2E.approver.id,
+      "r-faculty-grading",
+      "grading:encode-assigned-section",
+    );
+    await client.query(
+      `INSERT INTO scope_option
+        (id,resource_id,field_name,institutional_code,display_name,active,valid_from)
+       VALUES ($1,'r-faculty-grading','courseSection','CS301-A','CS 301 - Section A',true,now())
+       ON CONFLICT (resource_id,field_name,institutional_code) DO NOTHING`,
+      [randomUUID()],
+    );
+    await client.query(
+      `INSERT INTO requester_assignment
+        (id,user_id,resource_id,scope_option_id,evidence,valid_from,assigned_by)
+       SELECT $1,$2,'r-faculty-grading',so.id,
+              'E2E fixture: Morgan Faculty is assigned to CS 301 Section A.',
+              now() - interval '1 day',$3
+         FROM scope_option so
+        WHERE so.resource_id = 'r-faculty-grading'
+          AND so.field_name = 'courseSection'
+          AND so.institutional_code = 'CS301-A'`,
+      [randomUUID(), E2E.faculty.id, E2E.administrator.id],
+    );
     await request(client, {
       id: E2E.requests.approve,
       displayId: "E2E-APPROVE",

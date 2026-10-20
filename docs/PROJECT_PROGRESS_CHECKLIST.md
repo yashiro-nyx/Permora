@@ -340,8 +340,9 @@ git diff --check
 4. **~~Propose and implement migration `0011`~~** — **completed** on `feature/notification-system` and applied to the isolated development database. Staff notifications (approver assignment, routing failure) now use the `user_notification` table via a composite uniqueness constraint. Production remains unchanged and must not receive this migration until the feature is reviewed and approved.
 5. **Add original-Approver provisioning notification** — **completed** via migration `0014`, applied to development only. Successful Admin provisioning sends the active assigned Approver one recipient-isolated, idempotent notification; requester notifications and activation authorization remain unchanged.
 6. **Correct effective lifecycle presentation and Admin activation form** — **completed (2026-10-20)**. Provisioned future-dated requests now use `Provisioned — scheduled start` as the primary current-state label across requester/staff/Admin surfaces; immutable approval history is explicit; screenshots verified desktop and 390px mobile form alignment.
-7. **Active-access filter:** the metric links to `/requests` (all). Add a dedicated active-access view or filter once the `request_activation` JOIN is established in the list service.
-8. **Production environment verification:** confirm `AUTH_SECRET` isolation between Preview and Production, `APP_URL` correctness, `TEST_DATABASE_URL` exclusion from Vercel deployments.
+7. **Synchronize Faculty requester workflow** — **implemented (2026-10-20)**. Faculty now has isolated Playwright coverage for role-specific catalog eligibility, assigned-scope submission, dedicated routing, approval/provisioning notifications, lifecycle presentation, responsive requester surfaces at 320/390/768/1440px, and Administrator-route rejection. The fixture uses a synthetic Faculty account and does not touch development or production data.
+8. **Active-access filter:** the metric links to `/requests` (all). Add a dedicated active-access view or filter once the `request_activation` JOIN is established in the list service.
+9. **Production environment verification:** confirm `AUTH_SECRET` isolation between Preview and Production, `APP_URL` correctness, `TEST_DATABASE_URL` exclusion from Vercel deployments.
 
 ### Deferred (institutional dependency)
 

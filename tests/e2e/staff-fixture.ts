@@ -70,6 +70,10 @@ export const E2E = {
     id: "e2000000-0000-4000-8000-000000000004",
     email: testEmail("requester"),
   },
+  faculty: {
+    id: "e2000000-0000-4000-8000-000000000010",
+    email: testEmail("faculty"),
+  },
   workflowRequesters: [
     {
       id: "e2000000-0000-4000-8000-000000000005",

@@ -22,6 +22,8 @@ Audited against the working tree on 2026-10-03; resource/permission catalog, del
 
 **Demo readiness cleanup:** Student/Faculty request details now show one prominent current-lifecycle badge; the activation explanation remains text-based and approval history/timeline remain separate. The local demonstration runbook now documents the six-task Student → Approver → Administrator → notifications → audit → boundary walkthrough, development migration state through `0014`, and future-dated provisioning labels.
 
+**Faculty requester parity:** The live requester components already serve both `student` and `faculty` identities. A dedicated isolated Faculty browser fixture now verifies Faculty-only grading eligibility, assigned `CS301-A` scope selection, routing/approval/provisioning, notifications, lifecycle labels, responsive layouts, and Administrator-route rejection without widening Student eligibility.
+
 This status distinguishes verified UI, backend-only services, and deferred work.
 
 Status key: **Completed**, **In progress**, **Planned**, **Blocked**.
