@@ -1,7 +1,53 @@
 import "server-only";
-import { Pool, type PoolClient, type QueryResultRow } from "pg";
+import { Pool, type ClientBase, type PoolClient, type QueryResultRow } from "pg";
 import { ResilientPool } from "../database-pool";
 import { queryWithTransientReadRetry } from "../database-connection";
+import { identityError } from "./config";
+
+const IDENTITY_TIMEOUT_MS = 5_000;
+
+/**
+ * Awaited pg-pool `onConnect` barrier: pg-pool waits for this promise before a
+ * new physical connection is handed to ANY caller (pool.query OR pool.connect,
+ * i.e. both the application and Better Auth). On rejection, pg-pool ends the
+ * client and fails the pending acquisition — so an unverified or wrongly
+ * identified connection can never execute a statement. Fail-closed.
+ *
+ * Uses the SAME client passed in (no recursive pool acquisition => no deadlock).
+ */
+async function verifyConnectionIdentity(client: ClientBase): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const queryPromise = client.query<{
+    p: string | null;
+    b: string | null;
+    e: string | null;
+    d: string;
+  }>(
+    `SELECT current_setting('neon.project_id', true)  AS p,
+            current_setting('neon.branch_id', true)   AS b,
+            current_setting('neon.endpoint_id', true) AS e,
+            current_database() AS d`,
+  );
+  // Swallow a late rejection if the timeout wins, so it never becomes unhandled.
+  queryPromise.catch(() => undefined);
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error("identity verification timed out")),
+      IDENTITY_TIMEOUT_MS,
+    );
+    timer.unref?.();
+  });
+
+  try {
+    const result = await Promise.race([queryPromise, timeoutPromise]);
+    const row = result.rows[0];
+    const reason = identityError(row?.p, row?.b, row?.e, row?.d);
+    if (reason) throw new Error(`refusing connection: ${reason}`);
+  } finally {
+    if (timer) clearTimeout(timer); // clear on success, failure, or timeout
+  }
+}
 
 declare global {
   var __permoraPool: Pool | undefined;
@@ -29,6 +75,11 @@ function createPool() {
     connectionTimeoutMillis: isTest ? 15_000 : 5_000,
     keepAlive: true,
     keepAliveInitialDelayMillis: 10_000,
+    // Non-test pools verify the live Neon identity on every new physical
+    // connection (awaited; fails closed). The isolated test pool is exempt so
+    // the guarded _test branch is never blocked. `onConnect` is a typed
+    // PoolConfig option (@types/pg 8.23.1) forwarded by pg.Pool to pg-pool.
+    ...(isTest ? {} : { onConnect: verifyConnectionIdentity }),
   }, isTest ? 3 : 1);
 }
 
