@@ -35,3 +35,7 @@ export function assertBackendConfigured() {
     );
   }
 }
+
+// Re-export the pure, dependency-free Neon identity guard (defined outside the
+// server-only module so it is unit-testable without server-only/pg).
+export { identityError, PRODUCTION_IDENTITY } from "../db-identity";
