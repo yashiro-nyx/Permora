@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import argon2 from "argon2";
 import { type PoolClient } from "pg";
 import { ResilientPool } from "../../lib/database-pool";
+import { assertTestDatabaseIsNotProduction } from "../../scripts/test-database-guard";
 import { E2E, e2ePassword } from "./staff-fixture";
 
 function safeTestDatabaseUrl() {
@@ -170,8 +171,16 @@ async function request(
 }
 
 export default async function globalSetup() {
+  const testDatabaseUrl = safeTestDatabaseUrl();
+  // Fail-closed Neon identity guard: refuse to DROP/seed the schema if the
+  // test target resolves to the Production project/branch/endpoint, or if its
+  // identity cannot be verified. Runs before the pool connects.
+  await assertTestDatabaseIsNotProduction({
+    testDatabaseUrl,
+    productionDatabaseUrl: process.env.DATABASE_URL,
+  });
   const pool = new ResilientPool({
-    connectionString: safeTestDatabaseUrl(),
+    connectionString: testDatabaseUrl,
     max: 1,
     connectionTimeoutMillis: 15_000,
     keepAlive: true,

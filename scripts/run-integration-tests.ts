@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { loadEnvConfig } from "@next/env";
 import { preferNeonPooler } from "../lib/database-connection";
+import { assertTestDatabaseIsNotProduction } from "./test-database-guard";
 
 function testDatabaseName(connectionString: string) {
   let parsed: URL;
@@ -31,6 +32,12 @@ async function main() {
     );
   }
   testDatabaseName(testDatabaseUrl);
+  // Fail-closed Neon identity guard: verify the test target is not the
+  // Production project/branch/endpoint before any destructive test runs.
+  await assertTestDatabaseIsNotProduction({
+    testDatabaseUrl,
+    productionDatabaseUrl: process.env.DATABASE_URL,
+  });
   const pooledTestDatabaseUrl = preferNeonPooler(testDatabaseUrl);
 
   const environment: NodeJS.ProcessEnv = {
