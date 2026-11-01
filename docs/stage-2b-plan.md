@@ -169,7 +169,7 @@ Current automated coverage includes:
 - Playwright requester, staff, manual admin activation/requester status and notification, audit, health, desktop, 768px, 390px, and 320px paths.
 - combined PostgreSQL lifecycle flow: retryable failure, new-key retry, successful entitlement/event/notification, expiry, new linked renewal request, and separate revocation branch.
 
-Latest Stage 2C verification on 2026-09-29 passed 53 unit tests, 60 isolated PostgreSQL integration tests, and 20 Playwright tests, plus lint, typecheck, and `git diff --check`. These latest runs used the current Node 24.21 environment; repeat them under the pinned Node 22 before release. A production build was not part of this Stage 2C verification. Integration/E2E data comes only from the guarded `_test` database.
+The latest repository verification on 2026-10-09 passed 63 unit tests, 83 isolated PostgreSQL integration tests, and 26 Playwright tests, plus lint, typecheck, the production build, and `git diff --check`, under Node.js 24.21.0. Repeat the suite under the pinned Node.js 22 runtime before release. Integration/E2E data comes only from the guarded `_test` database.
 
 Still required before a production claim: screen-reader/browser-matrix accessibility work, load/resilience testing, backup/restore exercise, security review, monitoring/alerting, automatic job scheduling, and integration with real university systems.
 

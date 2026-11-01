@@ -314,6 +314,8 @@ git diff --check
 ```
 
 **Verified October 15, 2026** — `feature/ui-ux-modernization` HEAD `d1f260f`, Node.js 22.23.2, isolated `permora_test` database:
+- [ ] Verify all checks under the repository-pinned Node.js 22 runtime.
+- [ ] A teammate reviews authorization, ownership, and database-target boundaries before production release.
 
 - [x] `npm test`: **120 passed / 0 failed**.
 - [x] `npm run test:integration`: **96 passed / 0 failed** (9 files, all against `permora_test` with `_test` suffix confirmed).
